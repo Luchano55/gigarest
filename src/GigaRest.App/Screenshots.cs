@@ -29,11 +29,11 @@ internal static class Screenshots
         window.UseDesignSizeForCapture();
 
         window.ShowPlan(programs, hasSecondMonitor: true, notice: null);
-        await Capture(window, Path.Combine(dir, "1-perehod.png"));
+        await Capture(window.Root, Path.Combine(dir, "1-perehod.png"));
 
         window.ShowProgress(programs);
         window.UpdateProgress(new SwitchProgress("Закрываем Outlook…", 2, 4));
-        await Capture(window, Path.Combine(dir, "2-progress.png"));
+        await Capture(window.Root, Path.Combine(dir, "2-progress.png"));
 
         var results = programs.Where(p => p.Action == ProgramAction.Close).Select(p => p.Id switch
         {
@@ -44,21 +44,36 @@ internal static class Screenshots
         var report = new RestReport(results, 4, (long)(4.3 * (1L << 30)),
             results.Where(r => !r.IsGone).Select(r => r.Message).ToList());
         window.ShowRest(report);
-        await Capture(window, Path.Combine(dir, "3-otdyh.png"));
+        await Capture(window.Root, Path.Combine(dir, "3-otdyh.png"));
 
         window.ShowWork(new ReturnReport(["Битрикс24", "Outlook", "Chrome"], ["1С:Предприятие"], 4));
-        await Capture(window, Path.Combine(dir, "4-rabota.png"));
+        await Capture(window.Root, Path.Combine(dir, "4-rabota.png"));
 
         window.CloseForGood();
+
+        // Окно «Рабочие программы» с ярлыками меню «Пуск».
+        var programsWindow = new ProgramsWindow();
+        programsWindow.Present();
+        programsWindow.SizeToDesign(fitScreen: false);
+        programsWindow.UseDesignSizeForCapture();
+        var settings = new AppSettings
+        {
+            Programs = { new ProgramSetting { Id = "1cv8.exe", DisplayName = "1С:Предприятие", Action = ProgramAction.Close } },
+        };
+        var running = ProgramScanner.Scan(processes, windows, settings, selfPid: 1);
+        running.Single(p => p.Id == "bitrix24.exe").AllowTerminate = true;
+        programsWindow.SetRows(ProgramCatalog.BuildRows(settings, running, DemoData.Shortcuts));
+        await Capture(programsWindow.Root, Path.Combine(dir, "5-programmy.png"));
+        programsWindow.CloseForGood();
         return true;
     }
 
-    private static async Task Capture(SwitcherWindow window, string path)
+    private static async Task Capture(FrameworkElement root, string path)
     {
         // Дать разметке и отрисовке пройти.
         for (var i = 0; i < 3; i++) await Task.Delay(300);
         var rtb = new RenderTargetBitmap();
-        await rtb.RenderAsync(window.Root);
+        await rtb.RenderAsync(root);
         var pixels = await rtb.GetPixelsAsync();
         using var stream = new InMemoryRandomAccessStream();
         var encoder = await BitmapEncoder.CreateAsync(BitmapEncoder.PngEncoderId, stream);

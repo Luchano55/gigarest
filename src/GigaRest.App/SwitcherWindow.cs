@@ -42,6 +42,7 @@ public sealed class SwitcherWindow : Window
     private readonly TextBlock _progressText;
     private readonly ProgressBar _progressBar;
     private readonly Button _cancel;
+    private readonly HyperlinkButton _choose;
     private Mode _mode;
     private bool _closingForGood;
     private bool _hasSecondMonitor = true;
@@ -52,6 +53,7 @@ public sealed class SwitcherWindow : Window
     public event Action? GoRequested;
     public event Action? ReturnRequested;
     public event Action? CancelRequested;
+    public event Action? ProgramsRequested;
 
     public IReadOnlyList<RunningProgram> Programs { get; private set; } = [];
     public FrameworkElement Root => _root;
@@ -143,6 +145,9 @@ public sealed class SwitcherWindow : Window
         _panelHint = Text("щёлкните, чтобы поменять", 13, Muted, wrap: true);
         header.Children.Add(_panelTitle);
         header.Children.Add(_panelHint);
+        _choose = new HyperlinkButton { Content = "Выбрать рабочие программы, в том числе незапущенные…", Padding = new Thickness(0, 4, 0, 0), FontSize = 13 };
+        _choose.Click += (_, _) => ProgramsRequested?.Invoke();
+        header.Children.Add(_choose);
         panel.Children.Add(header);
 
         _progressBox = new StackPanel { Spacing = 10, Visibility = Visibility.Collapsed };
@@ -521,6 +526,7 @@ public sealed class SwitcherWindow : Window
         _panelHint.Text = hint;
         _progressBox.Visibility = progress ? Visibility.Visible : Visibility.Collapsed;
         _panelNote.Visibility = _mode == Mode.Plan ? Visibility.Visible : Visibility.Collapsed;
+        _choose.Visibility = _mode == Mode.Plan ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private static Border Screen(UIElement child, double height) => new()

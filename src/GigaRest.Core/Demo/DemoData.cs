@@ -20,6 +20,17 @@ public static class DemoData
         ("steam.exe", "Steam", 310, 1),
     ];
 
+    /// <summary>Ярлыки меню «Пуск» для скриншота окна «Рабочие программы».</summary>
+    public static readonly IReadOnlyList<Programs.ShortcutInfo> Shortcuts =
+    [
+        new("Яндекс Браузер", @"C:\Users\User\AppData\Local\Yandex\YandexBrowser\Application\browser.exe"),
+        new("Visual Studio Code", @"C:\Users\User\AppData\Local\Programs\Microsoft VS Code\Code.exe"),
+        new("Блокнот", @"C:\Windows\System32\notepad.exe"),
+        new("Zoom", @"C:\Users\User\AppData\Roaming\Zoom\bin\Zoom.exe"),
+        new("Удалить Zoom", @"C:\Users\User\AppData\Roaming\Zoom\uninstall\Installer.exe"),
+        new("Battle.net", @"C:\Program Files (x86)\Battle.net\Battle.net Launcher.exe"),
+    ];
+
     public static (List<ProcessInfo> Processes, List<WindowInfo> Windows, List<MonitorInfo> Monitors) Create()
     {
         var processes = new List<ProcessInfo>();
@@ -39,8 +50,8 @@ public static class DemoData
         }
         var monitors = new List<MonitorInfo>
         {
-            new() { Id = @"\\.\DISPLAY1", IsPrimary = true, Bounds = new Rect(0, 0, 3840, 2160), WorkArea = new Rect(0, 0, 3840, 2100), ScalePercent = 150 },
-            new() { Id = @"\\.\DISPLAY2", Bounds = new Rect(3840, 0, 6400, 1440), WorkArea = new Rect(3840, 0, 6400, 1400), ScalePercent = 100 },
+            new() { Id = @"\.\DISPLAY1", IsPrimary = true, Bounds = new Rect(0, 0, 3840, 2160), WorkArea = new Rect(0, 0, 3840, 2100), ScalePercent = 150 },
+            new() { Id = @"\.\DISPLAY2", Bounds = new Rect(3840, 0, 6400, 1440), WorkArea = new Rect(3840, 0, 6400, 1400), ScalePercent = 100 },
         };
         return (processes, windows, monitors);
     }

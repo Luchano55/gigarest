@@ -21,7 +21,7 @@ namespace GigaRest.App;
 public sealed partial class App : Application, IXamlMetadataProvider
 {
     private const int HotkeyToggle = 1;
-    private const int MenuToggle = 1, MenuShow = 2, MenuLogs = 3, MenuExit = 9;
+    private const int MenuToggle = 1, MenuShow = 2, MenuPrograms = 4, MenuLogs = 3, MenuExit = 9;
 
     private readonly XamlControlsXamlMetaDataProvider _metadata = new();
     private readonly string[] _args;
@@ -34,6 +34,7 @@ public sealed partial class App : Application, IXamlMetadataProvider
     private RestSwitcher _switcher = null!;
     private TrayAndHotkeys? _tray;
     private SwitcherWindow? _window;
+    private ProgramsWindow? _programs;
     private bool _busy;
     private CancellationTokenSource? _cts;
     private string? _hotkeyProblem;
@@ -134,6 +135,7 @@ public sealed partial class App : Application, IXamlMetadataProvider
     [
         new TrayMenuItem(MenuToggle, _switcher.IsResting ? "Вернуться к работе" : "Перейти в отдых…", !_busy, Bold: true),
         new TrayMenuItem(MenuShow, "Показать окно"),
+        new TrayMenuItem(MenuPrograms, "Рабочие программы…"),
         null,
         new TrayMenuItem(MenuLogs, "Открыть журнал"),
         null,
@@ -146,6 +148,7 @@ public sealed partial class App : Application, IXamlMetadataProvider
         {
             case MenuToggle: Toggle(); break;
             case MenuShow: ShowWindow(); break;
+            case MenuPrograms: _ = ShowProgramsAsync(); break;
             case MenuLogs:
                 var psi = new System.Diagnostics.ProcessStartInfo("explorer.exe") { UseShellExecute = false };
                 psi.ArgumentList.Add(_paths.LogsDir);
@@ -168,6 +171,7 @@ public sealed partial class App : Application, IXamlMetadataProvider
             _window.GoRequested += () => _ = GoToRestAsync(_window.Programs);
             _window.ReturnRequested += () => _ = ReturnToWorkAsync();
             _window.CancelRequested += () => _cts?.Cancel();
+            _window.ProgramsRequested += () => _ = ShowProgramsAsync();
         }
         return _window;
     }
@@ -181,6 +185,36 @@ public sealed partial class App : Application, IXamlMetadataProvider
             else w.ShowPlan(Scan(), _desktop.GetMonitors().Count > 1, _hotkeyProblem);
         }
         w.Present();
+    }
+
+    /// <summary>Окно «Рабочие программы»: запущенные, настроенные и установленные (ярлыки «Пуск» читаем в фоне).</summary>
+    private async Task ShowProgramsAsync()
+    {
+        if (_programs is null)
+        {
+            _programs = new ProgramsWindow();
+            _programs.Saved += rows =>
+            {
+                ProgramCatalog.Save(_settings, rows);
+                SaveSettings();
+                Log.Info($"Рабочие программы: закрывать {rows.Count(r => r.Action == ProgramAction.Close)}, на второй монитор {rows.Count(r => r.Action == ProgramAction.SecondMonitor)}");
+                if (!_busy && !_switcher.IsResting && _window is not null)
+                    _window.ShowPlan(Scan(), _desktop.GetMonitors().Count > 1, _hotkeyProblem);
+            };
+        }
+        _programs.ShowLoading();
+        _programs.Present();
+        try
+        {
+            var running = Scan();
+            var shortcuts = await Task.Run(StartMenu.ReadShortcuts);
+            _programs.SetRows(ProgramCatalog.BuildRows(_settings, running, shortcuts));
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Список программ", ex);
+            _programs.SetRows(ProgramCatalog.BuildRows(_settings, Scan(), []));
+        }
     }
 
     private List<RunningProgram> Scan()
@@ -263,6 +297,7 @@ public sealed partial class App : Application, IXamlMetadataProvider
         _tray?.Dispose();
         _tray = null;
         _window?.CloseForGood();
+        _programs?.CloseForGood();
         Log.Info("Выход");
         Exit();
     }

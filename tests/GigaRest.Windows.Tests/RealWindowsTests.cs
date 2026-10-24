@@ -176,3 +176,15 @@ public sealed class SyncProgress<T>(Action<T> action) : IProgress<T>
 {
     public void Report(T value) => action(value);
 }
+
+public class StartMenuTests
+{
+    [WindowsFact]
+    public void ReadsStartMenuShortcuts()
+    {
+        var shortcuts = StartMenu.ReadShortcuts();
+        Assert.NotEmpty(shortcuts);
+        Assert.Contains(shortcuts, s => s.TargetPath.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) && File.Exists(s.TargetPath));
+        Assert.NotEmpty(GigaRest.Core.Programs.ProgramCatalog.CleanShortcuts(shortcuts));
+    }
+}

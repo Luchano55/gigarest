@@ -17,6 +17,10 @@
 
 ![Переход в отдых](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/claude-system-management-requirements-nobkxi/1-perehod.png)
 
+Какие программы рабочие — выбирается в отдельном окне, в том числе те, что сейчас не запущены.
+
+![Рабочие программы](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/claude-system-management-requirements-nobkxi/5-programmy.png)
+
 Программы закрываются вежливо: если какая-то спросит «Сохранить?», GigaRest подождёт ответа.
 
 ![Переход идёт](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/claude-system-management-requirements-nobkxi/2-progress.png)
