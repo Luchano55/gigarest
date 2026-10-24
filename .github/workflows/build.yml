@@ -67,7 +67,7 @@ jobs:
           Get-ChildItem $shots
           if (Test-Path "$shots\error.txt") { Get-Content "$shots\error.txt"; throw "Скриншоты: ошибка" }
           if ($p.ExitCode -ne 0) { throw "Скриншоты: код $($p.ExitCode)" }
-          if ((Get-ChildItem $shots -Filter *.png).Count -lt 4) { throw "Скриншотов меньше четырёх" }
+          if ((Get-ChildItem $shots -Filter *.png).Count -lt 5) { throw "Скриншотов меньше пяти" }
       - name: Скриншоты — артефакт
         if: always()
         uses: actions/upload-artifact@v4

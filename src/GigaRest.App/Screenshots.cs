@@ -49,8 +49,6 @@ internal static class Screenshots
         window.ShowWork(new ReturnReport(["Битрикс24", "Outlook", "Chrome"], ["1С:Предприятие"], 4));
         await Capture(window.Root, Path.Combine(dir, "4-rabota.png"));
 
-        window.CloseForGood();
-
         // Окно «Рабочие программы» с ярлыками меню «Пуск».
         var programsWindow = new ProgramsWindow();
         programsWindow.Present();
@@ -64,7 +62,9 @@ internal static class Screenshots
         running.Single(p => p.Id == "bitrix24.exe").AllowTerminate = true;
         programsWindow.SetRows(ProgramCatalog.BuildRows(settings, running, DemoData.Shortcuts));
         await Capture(programsWindow.Root, Path.Combine(dir, "5-programmy.png"));
+        // Последнее закрытое окно завершает программу — поэтому закрываем оба только в конце.
         programsWindow.CloseForGood();
+        window.CloseForGood();
         return true;
     }
 
