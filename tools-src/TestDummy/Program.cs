@@ -44,8 +44,8 @@ internal static class Program
             var form = new Form { Text = windows == 1 ? title : $"{title} {n + 1}", Width = 400, Height = 300, StartPosition = FormStartPosition.Manual, Left = 100 + n * 50, Top = 100 + n * 50 };
             form.FormClosing += (_, e) =>
             {
-                // WM_CLOSE от другой программы приходит с CloseReason.None — это тоже «крестик».
-                if (e.CloseReason is CloseReason.ApplicationExitCall or CloseReason.WindowsShutDown or CloseReason.TaskManagerClosing) return;
+                // WinForms помечает WM_CLOSE от другой программы как TaskManagerClosing — для нас это «крестик».
+                if (e.CloseReason is CloseReason.ApplicationExitCall or CloseReason.WindowsShutDown) return;
                 if (ignore) { e.Cancel = true; return; }
                 if (tray) { e.Cancel = true; form.Hide(); return; }
                 if (ask)
