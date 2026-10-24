@@ -26,6 +26,7 @@ internal static class Screenshots
         var window = new SwitcherWindow();
         window.Present();
         window.SizeToDesign(fitScreen: false);
+        window.UseDesignSizeForCapture();
 
         window.ShowPlan(programs, hasSecondMonitor: true, notice: null);
         await Capture(window, Path.Combine(dir, "1-perehod.png"));

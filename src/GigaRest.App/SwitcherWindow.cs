@@ -126,7 +126,9 @@ public sealed class SwitcherWindow : Window
         _notice = Text("", 14, Lead, wrap: true);
         _notice.LineHeight = 21;
         left.Children.Add(_notice);
-        _root.Children.Add(left);
+        // На маленьком экране левая колонка прокручивается, кнопка не теряется.
+        var leftScroll = new ScrollViewer { Content = left, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Padding = new Thickness(0, 0, 12, 0) };
+        _root.Children.Add(leftScroll);
 
         // ---------- правая колонка ----------
         var panel = new Grid { RowSpacing = 16 };
@@ -444,7 +446,7 @@ public sealed class SwitcherWindow : Window
         ToolTipService.SetToolTip(_ramValue, "Примерно освободится. Точную цифру покажем после перехода.");
 
         var tiles = Programs.Where(p => p.Action == ProgramAction.SecondMonitor).ToList();
-        _secondValue.Text = !_hasSecondMonitor ? "нет" : tiles.Count == 0 ? "пусто" : Sizes.Plural(tiles.Count, "программа", "программы", "программ");
+        _secondValue.Text = !_hasSecondMonitor ? "нет" : tiles.Count == 0 ? "пусто" : tiles.Count.ToString();
         _secondScreen.Children.Clear();
         var i = 0;
         foreach (var t in tiles.Take(4))
@@ -558,6 +560,14 @@ public sealed class SwitcherWindow : Window
         var h = (int)(fitScreen ? Math.Min(DesignHeight * scale, area.Height * 0.95) : DesignHeight * scale);
         AppWindow.Resize(new SizeInt32(w, h));
         AppWindow.Move(new PointInt32(area.X + (area.Width - w) / 2, area.Y + (area.Height - h) / 2));
+    }
+
+    /// <summary>Для скриншотов: корень ровно по макету, даже если окно меньше (холст не обрезает).</summary>
+    public void UseDesignSizeForCapture()
+    {
+        _root.Width = DesignWidth;
+        _root.Height = DesignHeight;
+        Content = new Canvas { Children = { _root } };
     }
 
     public void Present()
