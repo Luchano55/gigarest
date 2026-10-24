@@ -50,8 +50,8 @@ public static class DemoData
         }
         var monitors = new List<MonitorInfo>
         {
-            new() { Id = @"\.\DISPLAY1", IsPrimary = true, Bounds = new Rect(0, 0, 3840, 2160), WorkArea = new Rect(0, 0, 3840, 2100), ScalePercent = 150 },
-            new() { Id = @"\.\DISPLAY2", Bounds = new Rect(3840, 0, 6400, 1440), WorkArea = new Rect(3840, 0, 6400, 1400), ScalePercent = 100 },
+            new() { Id = @"\\.\DISPLAY1", IsPrimary = true, Bounds = new Rect(0, 0, 3840, 2160), WorkArea = new Rect(0, 0, 3840, 2100), ScalePercent = 150 },
+            new() { Id = @"\\.\DISPLAY2", Bounds = new Rect(3840, 0, 6400, 1440), WorkArea = new Rect(3840, 0, 6400, 1400), ScalePercent = 100 },
         };
         return (processes, windows, monitors);
     }
