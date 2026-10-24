@@ -39,6 +39,8 @@ public sealed partial class App : Application, IXamlMetadataProvider
     private DispatcherQueueTimer? _scheduleTimer;
     private DateTime _lastScheduleCheck = DateTime.Now;
     private DateTime? _snoozeUntil;
+    private DateTime? _restOfferRetry;
+    private DateTime? _restOfferUntil;
     private bool _busy;
     private CancellationTokenSource? _cts;
     private string? _hotkeyProblem;
@@ -89,6 +91,7 @@ public sealed partial class App : Application, IXamlMetadataProvider
         _tray = new TrayAndHotkeys();
         _tray.ShowIcon(Path.Combine(AppContext.BaseDirectory, "Assets", "GigaRest.ico"), TrayTip);
         _tray.TrayClicked += () => queue.TryEnqueue(ShowWindow);
+        _tray.BalloonClicked += () => queue.TryEnqueue(OnBalloonClicked);
         _tray.HotkeyPressed += id => { if (id == HotkeyToggle) queue.TryEnqueue(Toggle); };
         _tray.MenuItems = MenuItems;
         _tray.MenuCommand += id => queue.TryEnqueue(() => OnMenu(id));
@@ -124,19 +127,50 @@ public sealed partial class App : Application, IXamlMetadataProvider
 
     private static string ExePath => Environment.ProcessPath ?? Path.Combine(AppContext.BaseDirectory, "GigaRest.exe");
 
+    /// <summary>
+    /// Раз в 30 секунд: вечером — мягкое предложение отдыха (уведомление у значка), утром — «Пора за работу».
+    /// Во время игры или фильма на весь экран ничего не показываем — откладываем на 15 минут.
+    /// </summary>
     private void CheckSchedule()
     {
         var now = DateTime.Now;
         var previous = _lastScheduleCheck;
         _lastScheduleCheck = now;
-        if (_busy || !_switcher.IsResting) { _snoozeUntil = null; return; }
-        var snoozeDue = _snoozeUntil is { } until && now >= until;
-        if (!snoozeDue && !_settings.ReturnSchedule.IsDue(previous, now)) return;
-        _snoozeUntil = null;
-        Log.Info("Расписание: предлагаем вернуться к работе");
-        var w = Window();
-        w.ShowReturnOffer(_settings.ReturnSchedule.Describe(), ClosedInSession());
-        w.Present();
+        if (_busy) return;
+
+        if (_switcher.IsResting)
+        {
+            _restOfferUntil = null;
+            var due = _snoozeUntil is { } until && now >= until || _settings.ReturnSchedule.IsDue(previous, now);
+            if (!due) return;
+            if (UserState.ShouldNotDisturb()) { _snoozeUntil = now.AddMinutes(15); Log.Info("Расписание: занят (игра/презентация), «Пора за работу» — через 15 минут"); return; }
+            _snoozeUntil = null;
+            Log.Info("Расписание: предлагаем вернуться к работе");
+            var w = Window();
+            w.ShowReturnOffer(_settings.ReturnSchedule.Describe(), ClosedInSession());
+            w.Present();
+        }
+        else
+        {
+            _snoozeUntil = null;
+            var due = _restOfferRetry is { } retry && now >= retry || _settings.RestOffer.IsDue(previous, now);
+            if (!due) return;
+            if (UserState.ShouldNotDisturb()) { _restOfferRetry = now.AddMinutes(15); return; }
+            _restOfferRetry = null;
+            // Мягко: одно уведомление. Не щёлкнули — до следующего раза по расписанию больше не напоминаем.
+            _restOfferUntil = now.AddMinutes(30);
+            Log.Info("Расписание: мягко предлагаем отдых");
+            _tray?.ShowBalloon("Вечер", "Перейти в отдых? Щёлкните здесь — покажем, что закроется.");
+        }
+    }
+
+    private void OnBalloonClicked()
+    {
+        if (_restOfferUntil is { } until && DateTime.Now <= until && !_switcher.IsResting)
+        {
+            _restOfferUntil = null;
+            ShowWindow();
+        }
     }
 
     /// <summary>Что закрыто в этом отдыхе — из session.json.</summary>
@@ -151,6 +185,7 @@ public sealed partial class App : Application, IXamlMetadataProvider
             _settingsWindow.Saved += r =>
             {
                 _settings.ReturnSchedule = r.Schedule;
+                _settings.RestOffer = r.RestOffer;
                 _settings.ConfirmBeforeRest = r.ConfirmBeforeRest;
                 var hotkeyChanged = r.Hotkey != _settings.Hotkey;
                 _settings.Hotkey = r.Hotkey;
@@ -158,7 +193,7 @@ public sealed partial class App : Application, IXamlMetadataProvider
                 if (hotkeyChanged) RegisterHotkey();
                 try { Autostart.Set(ExePath, r.Autostart); }
                 catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or System.Security.SecurityException) { Log.Error("Автозапуск", ex); }
-                Log.Info($"Настройки сохранены: расписание {r.Schedule.Describe()}, клавиша {r.Hotkey}");
+                Log.Info($"Настройки сохранены: отдых {r.RestOffer.Describe()}, возврат {r.Schedule.Describe()}, клавиша {r.Hotkey}");
                 _tray?.ShowBalloon("Настройки сохранены", _hotkeyProblem ?? $"Возврат: {r.Schedule.Describe()}. Клавиша: {r.Hotkey}.");
             };
         }

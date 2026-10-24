@@ -18,6 +18,7 @@ public sealed class TrayAndHotkeys : IDisposable
     private const int WM_LBUTTONUP = 0x0202;
     private const int WM_RBUTTONUP = 0x0205;
     private const int WM_CONTEXTMENU = 0x007B;
+    private const int NIN_BALLOONUSERCLICK = 0x0405;
     private const int WM_NULL = 0;
     private const int NIM_ADD = 0, NIM_MODIFY = 1, NIM_DELETE = 2;
     private const int NIF_MESSAGE = 1, NIF_ICON = 2, NIF_TIP = 4, NIF_INFO = 0x10;
@@ -38,6 +39,8 @@ public sealed class TrayAndHotkeys : IDisposable
     public event Action<int>? HotkeyPressed;
     public event Action? TrayClicked;
     public event Action<int>? MenuCommand;
+    /// <summary>Щёлкнули по всплывающему уведомлению.</summary>
+    public event Action? BalloonClicked;
     /// <summary>Пункты меню по правому щелчку — спрашиваем каждый раз, они зависят от режима.</summary>
     public Func<IReadOnlyList<TrayMenuItem?>>? MenuItems { get; set; }
 
@@ -127,6 +130,7 @@ public sealed class TrayAndHotkeys : IDisposable
                 var ev = (int)(lParam & 0xFFFF);
                 if (ev == WM_LBUTTONUP) TrayClicked?.Invoke();
                 else if (ev is WM_RBUTTONUP or WM_CONTEXTMENU) ShowMenu();
+                else if (ev == NIN_BALLOONUSERCLICK) BalloonClicked?.Invoke();
                 return 0;
             }
             if (msg == _taskbarCreated && _taskbarCreated != 0)

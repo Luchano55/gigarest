@@ -12,19 +12,18 @@ using static GigaRest.App.Ui;
 
 namespace GigaRest.App;
 
-public sealed record SettingsResult(ReturnSchedule Schedule, string Hotkey, bool ConfirmBeforeRest, bool Autostart);
+public sealed record SettingsResult(DaySchedule Schedule, DaySchedule RestOffer, string Hotkey, bool ConfirmBeforeRest, bool Autostart);
 
 /// <summary>Настройки: расписание возврата, горячая клавиша, окно перехода, автозапуск.</summary>
 public sealed class SettingsWindow : Window
 {
-    public const double DesignWidth = 720, DesignHeight = 900;
+    public const double DesignWidth = 720, DesignHeight = 1180;
 
     private readonly Grid _root;
-    private readonly ToggleSwitch _scheduleOn, _confirm, _autostart;
-    private readonly Dictionary<DayOfWeek, ToggleButton> _days = [];
-    private readonly TimePicker _time;
+    private readonly ToggleSwitch _confirm, _autostart;
+    private readonly ScheduleEditor _return, _rest;
     private readonly TextBox _hotkey;
-    private readonly TextBlock _hotkeyHint, _scheduleHint;
+    private readonly TextBlock _hotkeyHint;
     private bool _closingForGood;
 
     public event Action<SettingsResult>? Saved;
@@ -42,30 +41,17 @@ public sealed class SettingsWindow : Window
 
         var body = new StackPanel { Spacing = 16 };
 
-        // Расписание
-        var schedule = new StackPanel { Spacing = 12 };
-        schedule.Children.Add(Text("Возврат к работе", 18, Ink, FontWeights.Bold));
-        schedule.Children.Add(Text("Кнопка и горячая клавиша работают всегда. По расписанию GigaRest не переключит молча, " +
-                                   "а предложит: «Пора за работу · Вернуться / Через 15 минут».", 13, Lead, wrap: true));
-        _scheduleOn = new ToggleSwitch { Header = null, OnContent = "По расписанию — включено", OffContent = "По расписанию — выключено" };
-        _scheduleOn.Toggled += (_, _) => UpdateScheduleHint();
-        schedule.Children.Add(_scheduleOn);
-        var days = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
-        foreach (var d in ReturnSchedule.Order)
-        {
-            var b = new ToggleButton { Content = ReturnSchedule.Short(d), MinWidth = 48, CornerRadius = new CornerRadius(999) };
-            b.Checked += (_, _) => UpdateScheduleHint();
-            b.Unchecked += (_, _) => UpdateScheduleHint();
-            _days[d] = b;
-            days.Children.Add(b);
-        }
-        schedule.Children.Add(days);
-        _time = new TimePicker { ClockIdentifier = "24HourClock", MinuteIncrement = 5, Header = "Время" };
-        _time.SelectedTimeChanged += (_, _) => UpdateScheduleHint();
-        schedule.Children.Add(_time);
-        _scheduleHint = Text("", 13, Muted, wrap: true);
-        schedule.Children.Add(_scheduleHint);
-        body.Children.Add(CardBorder(schedule, radius: 18, padding: 22));
+        // Вечером — мягко предложить отдых, утром — вернуться к работе.
+        _rest = new ScheduleEditor("Предложение отдыха",
+            "Мягко: вечером у значка в трее появится уведомление «Перейти в отдых?». Не щёлкнули — ничего не произойдёт. " +
+            "Во время игры или фильма на весь экран подождём.",
+            "Предлагать отдых", "Предложим отдых");
+        body.Children.Add(_rest.Card);
+        _return = new ScheduleEditor("Возврат к работе",
+            "Кнопка и горячая клавиша работают всегда. По расписанию GigaRest не переключит молча, " +
+            "а предложит: «Пора за работу · Вернуться / Через 15 минут».",
+            "Возвращать по расписанию", "Предложим вернуться");
+        body.Children.Add(_return.Card);
 
         // Горячая клавиша
         var keys = new StackPanel { Spacing = 10 };
@@ -110,31 +96,12 @@ public sealed class SettingsWindow : Window
 
     public void Load(AppSettings settings, bool autostart, string? hotkeyProblem)
     {
-        var s = settings.ReturnSchedule;
-        _scheduleOn.IsOn = s.Enabled;
-        foreach (var (d, b) in _days) b.IsChecked = s.Days.Contains(d);
-        _time.SelectedTime = s.TimeOfDay;
+        _return.Load(settings.ReturnSchedule);
+        _rest.Load(settings.RestOffer);
         _hotkey.Text = settings.Hotkey;
         _confirm.IsOn = settings.ConfirmBeforeRest;
         _autostart.IsOn = autostart;
-        UpdateScheduleHint();
         UpdateHotkeyHint(hotkeyProblem);
-    }
-
-    private ReturnSchedule CurrentSchedule() => new()
-    {
-        Enabled = _scheduleOn.IsOn,
-        Days = _days.Where(kv => kv.Value.IsChecked == true).Select(kv => kv.Key).ToList(),
-        Time = (_time.SelectedTime ?? new TimeSpan(9, 0, 0)).ToString(@"hh\:mm"),
-    };
-
-    private void UpdateScheduleHint()
-    {
-        var s = CurrentSchedule();
-        var next = s.NextAfter(DateTime.Now);
-        _scheduleHint.Text = !s.Enabled ? "Только кнопкой и горячей клавишей."
-            : s.Days.Count == 0 ? "Выберите хотя бы один день."
-            : $"Предложим вернуться {s.Describe()}. Ближайший раз — {next?.ToString("dddd, d MMMM, HH:mm", System.Globalization.CultureInfo.GetCultureInfo("ru-RU"))}.";
     }
 
     private void UpdateHotkeyHint(string? problem = null)
@@ -151,7 +118,7 @@ public sealed class SettingsWindow : Window
             UpdateHotkeyHint();
             return;
         }
-        Saved?.Invoke(new SettingsResult(CurrentSchedule(), hotkey.ToString(), _confirm.IsOn, _autostart.IsOn));
+        Saved?.Invoke(new SettingsResult(_return.Current(), _rest.Current(), hotkey.ToString(), _confirm.IsOn, _autostart.IsOn));
         AppWindow.Hide();
     }
 
@@ -188,4 +155,67 @@ public sealed class SettingsWindow : Window
 
     [DllImport("user32.dll")] private static extern uint GetDpiForWindow(nint hwnd);
     [DllImport("user32.dll")] private static extern bool SetForegroundWindow(nint hwnd);
+}
+
+/// <summary>Карточка расписания: переключатель, дни недели, время и подсказка «ближайший раз».</summary>
+internal sealed class ScheduleEditor
+{
+    private readonly ToggleSwitch _on;
+    private readonly Dictionary<DayOfWeek, ToggleButton> _days = [];
+    private readonly TimePicker _time;
+    private readonly TextBlock _hint;
+    private readonly string _verb;
+
+    public Border Card { get; }
+
+    public ScheduleEditor(string title, string description, string toggle, string verb)
+    {
+        _verb = verb;
+        var panel = new StackPanel { Spacing = 12 };
+        panel.Children.Add(Text(title, 18, Ink, FontWeights.Bold));
+        panel.Children.Add(Text(description, 13, Lead, wrap: true));
+        _on = new ToggleSwitch { OnContent = toggle + " — включено", OffContent = toggle + " — выключено" };
+        _on.Toggled += (_, _) => UpdateHint();
+        panel.Children.Add(_on);
+        var days = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+        foreach (var d in DaySchedule.Order)
+        {
+            var b = new ToggleButton { Content = DaySchedule.Short(d), MinWidth = 48, CornerRadius = new CornerRadius(999) };
+            b.Checked += (_, _) => UpdateHint();
+            b.Unchecked += (_, _) => UpdateHint();
+            _days[d] = b;
+            days.Children.Add(b);
+        }
+        panel.Children.Add(days);
+        _time = new TimePicker { ClockIdentifier = "24HourClock", MinuteIncrement = 5, Header = "Время" };
+        _time.SelectedTimeChanged += (_, _) => UpdateHint();
+        panel.Children.Add(_time);
+        _hint = Text("", 13, Muted, wrap: true);
+        panel.Children.Add(_hint);
+        Card = CardBorder(panel, radius: 18, padding: 22);
+    }
+
+    public void Load(DaySchedule s)
+    {
+        _on.IsOn = s.Enabled;
+        foreach (var (d, b) in _days) b.IsChecked = s.Days.Contains(d);
+        _time.SelectedTime = s.TimeOfDay;
+        UpdateHint();
+    }
+
+    public DaySchedule Current() => new()
+    {
+        Enabled = _on.IsOn,
+        Days = _days.Where(kv => kv.Value.IsChecked == true).Select(kv => kv.Key).ToList(),
+        Time = (_time.SelectedTime ?? new TimeSpan(9, 0, 0)).ToString(@"hh\:mm"),
+    };
+
+    private void UpdateHint()
+    {
+        var s = Current();
+        var next = s.NextAfter(DateTime.Now);
+        _hint.Text = !s.Enabled ? "Выключено."
+            : s.Days.Count == 0 ? "Выберите хотя бы один день."
+            : $"{_verb} {s.Describe()}. Ближайший раз — {next?.ToString("dddd, d MMMM, HH:mm", System.Globalization.CultureInfo.GetCultureInfo("ru-RU"))}.";
+    }
 }

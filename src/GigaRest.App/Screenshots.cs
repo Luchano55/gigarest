@@ -67,7 +67,11 @@ internal static class Screenshots
         settingsWindow.Present();
         settingsWindow.SizeToDesign(fitScreen: false);
         settingsWindow.UseDesignSizeForCapture();
-        settingsWindow.Load(new AppSettings { ReturnSchedule = new ReturnSchedule { Enabled = true, Time = "09:00" } }, autostart: true, hotkeyProblem: null);
+        settingsWindow.Load(new AppSettings
+        {
+            ReturnSchedule = new DaySchedule { Enabled = true, Time = "09:00" },
+            RestOffer = new DaySchedule { Enabled = true, Time = "19:30" },
+        }, autostart: true, hotkeyProblem: null);
         await Capture(settingsWindow.Root, Path.Combine(dir, "6-nastroyki.png"));
 
         // Предложение по расписанию.

@@ -3,10 +3,10 @@ using System.Globalization;
 namespace GigaRest.Core.Settings;
 
 /// <summary>
-/// Возврат к работе по расписанию (решение D-SCHEDULE): дни недели и время.
-/// Не переключает молча — предлагает «Пора за работу · Вернуться / Через 15 мин».
+/// Расписание «дни недели + время» (решение D-SCHEDULE). Им заданы и возврат к работе,
+/// и мягкое вечернее предложение отдыха. Ничего не переключает само — только предлагает.
 /// </summary>
-public sealed class ReturnSchedule
+public sealed class DaySchedule
 {
     public bool Enabled { get; set; }
     public List<DayOfWeek> Days { get; set; } =

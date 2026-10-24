@@ -4,7 +4,7 @@ namespace GigaRest.Core.Tests;
 
 public class ReturnScheduleTests
 {
-    private static readonly ReturnSchedule Weekdays9 = new() { Enabled = true, Time = "09:00" };
+    private static readonly DaySchedule Weekdays9 = new() { Enabled = true, Time = "09:00" };
 
     [Fact]
     public void NextIsTomorrowMorningOnWeekday()
@@ -37,9 +37,9 @@ public class ReturnScheduleTests
     [Fact]
     public void DisabledOrNoDaysNeverDue()
     {
-        var off = new ReturnSchedule { Enabled = false };
+        var off = new DaySchedule { Enabled = false };
         Assert.Null(off.NextAfter(DateTime.Now));
-        var noDays = new ReturnSchedule { Enabled = true, Days = [] };
+        var noDays = new DaySchedule { Enabled = true, Days = [] };
         Assert.False(noDays.IsDue(new DateTime(2026, 10, 26, 8, 0, 0), new DateTime(2026, 10, 26, 10, 0, 0)));
     }
 
@@ -48,13 +48,34 @@ public class ReturnScheduleTests
     [InlineData("ерунда", "по будням в 09:00")]
     [InlineData("25:00", "по будням в 09:00")]
     public void DescribesInRussian(string time, string expected) =>
-        Assert.Equal(expected, new ReturnSchedule { Enabled = true, Time = time }.Describe());
+        Assert.Equal(expected, new DaySchedule { Enabled = true, Time = time }.Describe());
 
     [Fact]
     public void DescribesCustomDays()
     {
-        Assert.Equal("пн, ср в 10:00", new ReturnSchedule { Enabled = true, Time = "10:00", Days = [DayOfWeek.Wednesday, DayOfWeek.Monday] }.Describe());
-        Assert.Equal("каждый день в 09:00", new ReturnSchedule { Enabled = true, Days = [.. ReturnSchedule.Order] }.Describe());
-        Assert.Equal("выключено", new ReturnSchedule().Describe());
+        Assert.Equal("пн, ср в 10:00", new DaySchedule { Enabled = true, Time = "10:00", Days = [DayOfWeek.Wednesday, DayOfWeek.Monday] }.Describe());
+        Assert.Equal("каждый день в 09:00", new DaySchedule { Enabled = true, Days = [.. DaySchedule.Order] }.Describe());
+        Assert.Equal("выключено", new DaySchedule().Describe());
+    }
+}
+
+public class RestOfferSettingsTests
+{
+    [Fact]
+    public void OldSettingsFileGetsDefaultsForSchedules()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "gigarest-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var path = Path.Combine(dir, "settings.json");
+        File.WriteAllText(path, """{ "hotkey": "Ctrl+Alt+End", "restOffer": null }""");
+
+        var s = new SettingsStore(path).Load();
+
+        Assert.Equal("Ctrl+Alt+End", s.Hotkey);
+        Assert.False(s.ReturnSchedule.Enabled);
+        Assert.False(s.RestOffer.Enabled);
+        Assert.Equal("19:00", s.RestOffer.Time);
+        Assert.Equal(5, s.RestOffer.Days.Count);
+        Directory.Delete(dir, true);
     }
 }

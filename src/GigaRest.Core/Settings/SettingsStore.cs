@@ -23,9 +23,10 @@ public sealed class SettingsStore
     internal static void Normalize(AppSettings s)
     {
         s.Programs ??= [];
-        s.ReturnSchedule ??= new ReturnSchedule();
-        s.ReturnSchedule.Days ??= [];
-        s.ReturnSchedule.Days = s.ReturnSchedule.Days.Distinct().ToList();
+        s.ReturnSchedule ??= new DaySchedule();
+        s.RestOffer ??= new DaySchedule { Time = "19:00" };
+        foreach (var schedule in new[] { s.ReturnSchedule, s.RestOffer })
+            schedule.Days = (schedule.Days ?? []).Distinct().ToList();
         s.Programs.RemoveAll(p => string.IsNullOrWhiteSpace(p.Id));
         // Дубликаты по ключу: оставляем первую запись.
         s.Programs = s.Programs

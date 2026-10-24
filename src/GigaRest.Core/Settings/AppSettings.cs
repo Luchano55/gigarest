@@ -35,7 +35,9 @@ public sealed class AppSettings
     public int CloseTimeoutSeconds { get; set; } = 30;
     public List<ProgramSetting> Programs { get; set; } = [];
     /// <summary>Возврат к работе по расписанию — в дополнение к кнопке и горячей клавише.</summary>
-    public ReturnSchedule ReturnSchedule { get; set; } = new();
+    public DaySchedule ReturnSchedule { get; set; } = new();
+    /// <summary>Мягкое вечернее предложение отдыха — уведомление у значка в трее.</summary>
+    public DaySchedule RestOffer { get; set; } = new() { Time = "19:00" };
 
     public ProgramSetting? Find(string id) =>
         Programs.FirstOrDefault(p => string.Equals(p.Id, id, StringComparison.OrdinalIgnoreCase));
