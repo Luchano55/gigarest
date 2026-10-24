@@ -77,6 +77,7 @@ public sealed class SwitcherWindow : Window
         _headline = Text("Работа → Отдых", 40, Ink, FontWeights.ExtraBold, wrap: true);
         _lead = Text("", 16, Lead, wrap: true);
         _lead.MaxWidth = 600;
+        _lead.HorizontalAlignment = HorizontalAlignment.Left;
         _lead.LineHeight = 24;
         head.Children.Add(kicker);
         head.Children.Add(_headline);
