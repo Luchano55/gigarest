@@ -1,1 +1,10 @@
+# ТЗ — личное, в репозиторий не кладётся
 docs/spec.md
+
+bin/
+obj/
+out/
+*.user
+.vs/
+TestResults/
+screenshots/
