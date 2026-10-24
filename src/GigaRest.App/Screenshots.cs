@@ -62,6 +62,20 @@ internal static class Screenshots
         running.Single(p => p.Id == "bitrix24.exe").AllowTerminate = true;
         programsWindow.SetRows(ProgramCatalog.BuildRows(settings, running, DemoData.Shortcuts));
         await Capture(programsWindow.Root, Path.Combine(dir, "5-programmy.png"));
+        // Пробный режим: четыре тестовых окна.
+        var testProcesses = TestPrograms.All.Select((t, i) => new GigaRest.Core.Desktop.ProcessInfo
+        {
+            Pid = 5000 + i, ExeName = t.ExeName, ExePath = $@"C:\GigaRest\{t.ExeName}",
+            StartTimeUtc = new DateTime(2026, 10, 24, 20, 0, 0, DateTimeKind.Utc), PrivateBytes = 12L << 20,
+        }).ToList();
+        var testWindows = TestPrograms.All.Select((t, i) => new GigaRest.Core.Desktop.WindowInfo
+        {
+            Handle = 0x50000 + i, Pid = 5000 + i, Title = t.Title, IsVisible = true,
+        }).ToList();
+        var tests = TestPrograms.Pick(ProgramScanner.Scan(testProcesses, testWindows, new AppSettings(), selfPid: 1));
+        window.ShowPlan(tests, hasSecondMonitor: true, notice: null, test: true);
+        await Capture(window.Root, Path.Combine(dir, "8-proba.png"));
+
         // Настройки с включённым расписанием.
         var settingsWindow = new SettingsWindow();
         settingsWindow.Present();
