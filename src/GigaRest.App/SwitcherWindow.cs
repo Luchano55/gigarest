@@ -25,6 +25,7 @@ public sealed class SwitcherWindow : Window
     public const double DesignWidth = 1440, DesignHeight = 900;
 
     private readonly Grid _root;
+    private readonly TextBlock _kicker;
     private readonly TextBlock _headline;
     private readonly TextBlock _lead;
     private readonly Border _mainScreen;
@@ -43,6 +44,7 @@ public sealed class SwitcherWindow : Window
     private readonly ProgressBar _progressBar;
     private readonly Button _cancel;
     private readonly HyperlinkButton _choose;
+    private readonly HyperlinkButton _test;
     private Mode _mode;
     private bool _closingForGood;
     private bool _hasSecondMonitor = true;
@@ -54,8 +56,11 @@ public sealed class SwitcherWindow : Window
     public event Action? ReturnRequested;
     public event Action? CancelRequested;
     public event Action? ProgramsRequested;
+    public event Action? TestRequested;
 
     public IReadOnlyList<RunningProgram> Programs { get; private set; } = [];
+    /// <summary>Пробный режим: в списке только тестовые окна.</summary>
+    public bool IsTest { get; private set; }
     public FrameworkElement Root => _root;
 
     public SwitcherWindow()
@@ -74,7 +79,7 @@ public sealed class SwitcherWindow : Window
         // ---------- левая колонка ----------
         var left = new StackPanel { Spacing = 26 };
         var head = new StackPanel { Spacing = 8 };
-        var kicker = Text("ОДНА КНОПКА", 13, Muted, FontWeights.Bold);
+        var kicker = _kicker = Text("ОДНА КНОПКА", 13, Muted, FontWeights.Bold);
         kicker.CharacterSpacing = 120;
         _headline = Text("Работа → Отдых", 40, Ink, FontWeights.ExtraBold, wrap: true);
         _lead = Text("", 16, Lead, wrap: true);
@@ -148,6 +153,9 @@ public sealed class SwitcherWindow : Window
         _choose = new HyperlinkButton { Content = "Выбрать рабочие программы, в том числе незапущенные…", Padding = new Thickness(0, 4, 0, 0), FontSize = 13 };
         _choose.Click += (_, _) => ProgramsRequested?.Invoke();
         header.Children.Add(_choose);
+        _test = new HyperlinkButton { Content = "Попробовать на тестовых окнах — ваши программы не тронем", Padding = new Thickness(0, 0, 0, 0), FontSize = 13 };
+        _test.Click += (_, _) => TestRequested?.Invoke();
+        header.Children.Add(_test);
         panel.Children.Add(header);
 
         _progressBox = new StackPanel { Spacing = 10, Visibility = Visibility.Collapsed };
@@ -190,14 +198,19 @@ public sealed class SwitcherWindow : Window
 
     // ---------- состояния ----------
 
-    public void ShowPlan(IReadOnlyList<RunningProgram> programs, bool hasSecondMonitor, string? notice)
+    public void ShowPlan(IReadOnlyList<RunningProgram> programs, bool hasSecondMonitor, string? notice, bool test = false)
     {
         _mode = Mode.Plan;
         Programs = programs;
         _hasSecondMonitor = hasSecondMonitor;
-        _headline.Text = "Работа → Отдых";
-        _lead.Text = "Нажмите кнопку — рабочие программы закроются и освободят память, " +
-                     "на втором мониторе останется только то, что вы разрешили.";
+        IsTest = test;
+        _kicker.Text = test ? "ПРОБНЫЙ РЕЖИМ" : "ОДНА КНОПКА";
+        _headline.Text = test ? "Проба на тестовых окнах" : "Работа → Отдых";
+        _lead.Text = test
+            ? "Ваши программы не трогаем — только четыре тестовых окна. Одно закроется само, второе спросит «Сохранить?», " +
+              "третье спрячется в трей, четвёртое переедет на второй монитор. Нажмите кнопку и смотрите."
+            : "Нажмите кнопку — рабочие программы закроются и освободят память, " +
+              "на втором мониторе останется только то, что вы разрешили.";
         SetMainScreen(rest: false);
         _dndValue.Text = "Как сейчас";
         _goText.Text = "Перейти в отдых";
@@ -526,7 +539,8 @@ public sealed class SwitcherWindow : Window
         _panelHint.Text = hint;
         _progressBox.Visibility = progress ? Visibility.Visible : Visibility.Collapsed;
         _panelNote.Visibility = _mode == Mode.Plan ? Visibility.Visible : Visibility.Collapsed;
-        _choose.Visibility = _mode == Mode.Plan ? Visibility.Visible : Visibility.Collapsed;
+        _choose.Visibility = _mode == Mode.Plan && !IsTest ? Visibility.Visible : Visibility.Collapsed;
+        _test.Visibility = _choose.Visibility;
     }
 
     private static Border Screen(UIElement child, double height) => new()

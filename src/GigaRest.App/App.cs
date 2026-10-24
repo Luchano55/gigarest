@@ -21,7 +21,7 @@ namespace GigaRest.App;
 public sealed partial class App : Application, IXamlMetadataProvider
 {
     private const int HotkeyToggle = 1;
-    private const int MenuToggle = 1, MenuShow = 2, MenuPrograms = 4, MenuLogs = 3, MenuExit = 9;
+    private const int MenuToggle = 1, MenuShow = 2, MenuPrograms = 4, MenuTest = 5, MenuTestClose = 6, MenuLogs = 3, MenuExit = 9;
 
     private readonly XamlControlsXamlMetaDataProvider _metadata = new();
     private readonly string[] _args;
@@ -137,6 +137,9 @@ public sealed partial class App : Application, IXamlMetadataProvider
         new TrayMenuItem(MenuShow, "Показать окно"),
         new TrayMenuItem(MenuPrograms, "Рабочие программы…"),
         null,
+        new TrayMenuItem(MenuTest, "Пробный режим — на тестовых окнах…", !_busy && !_switcher.IsResting),
+        new TrayMenuItem(MenuTestClose, "Закрыть тестовые окна", !_busy),
+        null,
         new TrayMenuItem(MenuLogs, "Открыть журнал"),
         null,
         new TrayMenuItem(MenuExit, "Выход"),
@@ -149,6 +152,8 @@ public sealed partial class App : Application, IXamlMetadataProvider
             case MenuToggle: Toggle(); break;
             case MenuShow: ShowWindow(); break;
             case MenuPrograms: _ = ShowProgramsAsync(); break;
+            case MenuTest: _ = StartTestAsync(); break;
+            case MenuTestClose: CloseTestWindows(); break;
             case MenuLogs:
                 var psi = new System.Diagnostics.ProcessStartInfo("explorer.exe") { UseShellExecute = false };
                 psi.ArgumentList.Add(_paths.LogsDir);
@@ -172,6 +177,7 @@ public sealed partial class App : Application, IXamlMetadataProvider
             _window.ReturnRequested += () => _ = ReturnToWorkAsync();
             _window.CancelRequested += () => _cts?.Cancel();
             _window.ProgramsRequested += () => _ = ShowProgramsAsync();
+            _window.TestRequested += () => _ = StartTestAsync();
         }
         return _window;
     }
@@ -217,9 +223,69 @@ public sealed partial class App : Application, IXamlMetadataProvider
         }
     }
 
+    /// <summary>
+    /// Пробный режим: четыре тестовых окна (копии GigaRest.exe под своими именами) и окно перехода только с ними.
+    /// </summary>
+    private async Task StartTestAsync()
+    {
+        if (_busy || _switcher.IsResting) { ShowWindow(); return; }
+        var w = Window();
+        try
+        {
+            var appDir = AppContext.BaseDirectory;
+            var source = Environment.ProcessPath ?? Path.Combine(appDir, "GigaRest.exe");
+            var specs = TestPrograms.All;
+            for (var i = 0; i < specs.Count; i++)
+            {
+                var exe = Path.Combine(appDir, specs[i].ExeName);
+                if (!File.Exists(exe) || new FileInfo(exe).Length != new FileInfo(source).Length)
+                    File.Copy(source, exe, overwrite: true);
+                var running = _desktop.GetProcesses().Any(p => string.Equals(p.ExeName, specs[i].ExeName, StringComparison.OrdinalIgnoreCase));
+                if (!running)
+                {
+                    var error = _desktop.Launch(new LaunchSpec { FileName = exe, Arguments = TestPrograms.Arguments(specs[i], i), WorkingDirectory = appDir });
+                    if (error is not null) throw new IOException($"{specs[i].Title}: {error}");
+                }
+            }
+
+            // Ждём, пока все четыре окна появятся.
+            List<RunningProgram> picked = [];
+            for (var attempt = 0; attempt < 40; attempt++)
+            {
+                picked = TestPrograms.Pick(ProgramScanner.Scan(_desktop.GetProcesses(), _desktop.GetWindows(), _settings, _desktop.CurrentProcessId))
+                    .Where(p => p.Windows.Count > 0).ToList();
+                if (picked.Count == specs.Count) break;
+                await Task.Delay(250);
+            }
+            Log.Info($"Пробный режим: тестовых окон {picked.Count}");
+            var hasSecond = _desktop.GetMonitors().Count > 1;
+            w.ShowPlan(picked, hasSecond,
+                hasSecond ? null : "Второго монитора сейчас нет — тест 4 просто останется на месте.", test: true);
+            w.Present();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Log.Error("Пробный режим", ex);
+            w.ShowPlan(Scan(), _desktop.GetMonitors().Count > 1,
+                "Не получилось открыть тестовые окна: " + ex.Message + ". Если программа лежит в папке только для чтения — распакуйте её, например, в «Документы».");
+            w.Present();
+        }
+    }
+
+    /// <summary>Закрыть все тестовые окна — их процессы наши, завершаем без вопросов.</summary>
+    private void CloseTestWindows()
+    {
+        var count = 0;
+        foreach (var p in _desktop.GetProcesses().Where(p => TestPrograms.IsTest(p.ExeName)))
+            if (_desktop.Terminate(p.Key)) count++;
+        Log.Info($"Тестовые окна закрыты: {count}");
+        _tray?.ShowBalloon("Пробный режим", count > 0 ? "Тестовые окна закрыты." : "Тестовых окон нет.");
+    }
+
     private List<RunningProgram> Scan()
     {
-        var programs = ProgramScanner.Scan(_desktop.GetProcesses(), _desktop.GetWindows(), _settings, _desktop.CurrentProcessId);
+        var programs = ProgramScanner.Scan(_desktop.GetProcesses(), _desktop.GetWindows(), _settings, _desktop.CurrentProcessId)
+            .Where(p => !TestPrograms.IsTest(p.Id)).ToList();
         if (ProgramScanner.RememberNew(_settings, programs)) SaveSettings();
         return programs;
     }

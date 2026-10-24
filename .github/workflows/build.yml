@@ -68,6 +68,19 @@ jobs:
           if (Test-Path "$shots\error.txt") { Get-Content "$shots\error.txt"; throw "Скриншоты: ошибка" }
           if ($p.ExitCode -ne 0) { throw "Скриншоты: код $($p.ExitCode)" }
           if ((Get-ChildItem $shots -Filter *.png).Count -lt 5) { throw "Скриншотов меньше пяти" }
+      - name: Пробный режим — тестовое окно запускается
+        # Копия GigaRest.exe под другим именем с --test-window должна показать окно с заголовком.
+        shell: pwsh
+        run: |
+          Copy-Item out/GigaRest/GigaRest.exe "out/GigaRest/Тест 1 — закроется.exe"
+          $p = Start-Process "out/GigaRest/Тест 1 — закроется.exe" -ArgumentList @('--test-window', '--mode', 'normal', '--title', '"Тест окно"') -PassThru
+          $title = ""
+          for ($i = 0; $i -lt 40 -and -not $title; $i++) { Start-Sleep -Milliseconds 250; $p.Refresh(); $title = $p.MainWindowTitle }
+          Write-Host "Заголовок: '$title'"
+          if ($title -ne "Тест окно") { if (-not $p.HasExited) { $p.Kill() }; throw "Тестовое окно не появилось" }
+          if (-not $p.CloseMainWindow()) { throw "CloseMainWindow не сработал" }
+          if (-not $p.WaitForExit(5000)) { $p.Kill(); throw "Тестовое окно не закрылось на крестик" }
+          Remove-Item "out/GigaRest/Тест 1 — закроется.exe"
       - name: Скриншоты — артефакт
         if: always()
         uses: actions/upload-artifact@v4

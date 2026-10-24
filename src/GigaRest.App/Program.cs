@@ -8,6 +8,10 @@ public static class Program
     [STAThread]
     private static int Main(string[] args)
     {
+        // Пробный режим: копия GigaRest.exe под другим именем рисует тестовое окно и больше ничего.
+        if (args.Contains("--test-window"))
+            return GigaRest.Windows.TestWindow.Run(args);
+
         WinRT.ComWrappersSupport.InitializeComWrappers();
 
         var screenshots = ScreenshotDir(args);
