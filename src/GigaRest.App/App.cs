@@ -21,7 +21,7 @@ namespace GigaRest.App;
 public sealed partial class App : Application, IXamlMetadataProvider
 {
     private const int HotkeyToggle = 1;
-    private const int MenuToggle = 1, MenuShow = 2, MenuPrograms = 4, MenuTest = 5, MenuTestClose = 6, MenuAutostart = 7, MenuLogs = 3, MenuExit = 9;
+    private const int MenuToggle = 1, MenuShow = 2, MenuPrograms = 4, MenuTest = 5, MenuTestClose = 6, MenuAutostart = 7, MenuSettings = 8, MenuLogs = 3, MenuExit = 9;
 
     private readonly XamlControlsXamlMetaDataProvider _metadata = new();
     private readonly string[] _args;
@@ -35,6 +35,10 @@ public sealed partial class App : Application, IXamlMetadataProvider
     private TrayAndHotkeys? _tray;
     private SwitcherWindow? _window;
     private ProgramsWindow? _programs;
+    private SettingsWindow? _settingsWindow;
+    private DispatcherQueueTimer? _scheduleTimer;
+    private DateTime _lastScheduleCheck = DateTime.Now;
+    private DateTime? _snoozeUntil;
     private bool _busy;
     private CancellationTokenSource? _cts;
     private string? _hotkeyProblem;
@@ -91,6 +95,12 @@ public sealed partial class App : Application, IXamlMetadataProvider
         RegisterHotkey();
         _single?.Listen(queue, ShowWindow);
 
+        // Расписание возврата: проверяем раз в 30 секунд (и сразу после пробуждения ПК — по разнице времени).
+        _scheduleTimer = queue.CreateTimer();
+        _scheduleTimer.Interval = TimeSpan.FromSeconds(30);
+        _scheduleTimer.Tick += (_, _) => CheckSchedule();
+        _scheduleTimer.Start();
+
         if (!_args.Contains("--tray") || _switcher.IsResting)
             ShowWindow();
     }
@@ -113,6 +123,44 @@ public sealed partial class App : Application, IXamlMetadataProvider
     }
 
     private static string ExePath => Environment.ProcessPath ?? Path.Combine(AppContext.BaseDirectory, "GigaRest.exe");
+
+    private void CheckSchedule()
+    {
+        var now = DateTime.Now;
+        var previous = _lastScheduleCheck;
+        _lastScheduleCheck = now;
+        if (_busy || !_switcher.IsResting) { _snoozeUntil = null; return; }
+        var snoozeDue = _snoozeUntil is { } until && now >= until;
+        if (!snoozeDue && !_settings.ReturnSchedule.IsDue(previous, now)) return;
+        _snoozeUntil = null;
+        Log.Info("Расписание: предлагаем вернуться к работе");
+        var w = Window();
+        w.ShowReturnOffer(_settings.ReturnSchedule.Describe());
+        w.Present();
+    }
+
+    private void ShowSettings()
+    {
+        if (_settingsWindow is null)
+        {
+            _settingsWindow = new SettingsWindow();
+            _settingsWindow.Saved += r =>
+            {
+                _settings.ReturnSchedule = r.Schedule;
+                _settings.ConfirmBeforeRest = r.ConfirmBeforeRest;
+                var hotkeyChanged = r.Hotkey != _settings.Hotkey;
+                _settings.Hotkey = r.Hotkey;
+                SaveSettings();
+                if (hotkeyChanged) RegisterHotkey();
+                try { Autostart.Set(ExePath, r.Autostart); }
+                catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or System.Security.SecurityException) { Log.Error("Автозапуск", ex); }
+                Log.Info($"Настройки сохранены: расписание {r.Schedule.Describe()}, клавиша {r.Hotkey}");
+                _tray?.ShowBalloon("Настройки сохранены", _hotkeyProblem ?? $"Возврат: {r.Schedule.Describe()}. Клавиша: {r.Hotkey}.");
+            };
+        }
+        _settingsWindow.Load(_settings, Autostart.IsEnabled(ExePath), _hotkeyProblem);
+        _settingsWindow.Present();
+    }
 
     private string TrayTip => _switcher.IsResting ? "GigaRest — отдых" : "GigaRest — работа";
 
@@ -142,6 +190,7 @@ public sealed partial class App : Application, IXamlMetadataProvider
         new TrayMenuItem(MenuTest, "Пробный режим — на тестовых окнах…", !_busy && !_switcher.IsResting),
         new TrayMenuItem(MenuTestClose, "Закрыть тестовые окна", !_busy),
         null,
+        new TrayMenuItem(MenuSettings, "Настройки…"),
         new TrayMenuItem(MenuAutostart, "Запускать вместе с Windows", Checked: Autostart.IsEnabled(ExePath)),
         new TrayMenuItem(MenuLogs, "Открыть журнал"),
         null,
@@ -157,6 +206,7 @@ public sealed partial class App : Application, IXamlMetadataProvider
             case MenuPrograms: _ = ShowProgramsAsync(); break;
             case MenuTest: _ = StartTestAsync(); break;
             case MenuTestClose: CloseTestWindows(); break;
+            case MenuSettings: ShowSettings(); break;
             case MenuAutostart:
                 var enable = !Autostart.IsEnabled(ExePath);
                 try
@@ -195,6 +245,11 @@ public sealed partial class App : Application, IXamlMetadataProvider
             _window.CancelRequested += () => _cts?.Cancel();
             _window.ProgramsRequested += () => _ = ShowProgramsAsync();
             _window.TestRequested += () => _ = StartTestAsync();
+            _window.SnoozeRequested += () =>
+            {
+                _snoozeUntil = DateTime.Now.AddMinutes(15);
+                Log.Info("Расписание: отложено на 15 минут");
+            };
         }
         return _window;
     }
@@ -381,6 +436,8 @@ public sealed partial class App : Application, IXamlMetadataProvider
         _tray = null;
         _window?.CloseForGood();
         _programs?.CloseForGood();
+        _settingsWindow?.CloseForGood();
+        _scheduleTimer?.Stop();
         Log.Info("Выход");
         Exit();
     }

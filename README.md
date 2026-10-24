@@ -31,6 +31,10 @@
 
 ![Снова работа](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/claude-system-management-requirements-nobkxi/4-rabota.png)
 
+Настройки: возврат к работе по расписанию, горячая клавиша, автозапуск.
+
+![Настройки](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/claude-system-management-requirements-nobkxi/6-nastroyki.png)
+
 Что нового — [docs/CHANGELOG.md](docs/CHANGELOG.md).
 
 Работает офлайн, без прав администратора, ничего не завершает принудительно без разрешения.

@@ -34,6 +34,8 @@ public sealed class AppSettings
     /// <summary>Сколько ждать, пока программа закроется (вопросы «Сохранить?» не считаются).</summary>
     public int CloseTimeoutSeconds { get; set; } = 30;
     public List<ProgramSetting> Programs { get; set; } = [];
+    /// <summary>Возврат к работе по расписанию — в дополнение к кнопке и горячей клавише.</summary>
+    public ReturnSchedule ReturnSchedule { get; set; } = new();
 
     public ProgramSetting? Find(string id) =>
         Programs.FirstOrDefault(p => string.Equals(p.Id, id, StringComparison.OrdinalIgnoreCase));

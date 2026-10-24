@@ -36,6 +36,7 @@ public sealed class SwitcherWindow : Window
     private readonly TextBlock _ramTitle;
     private readonly Button _go;
     private readonly TextBlock _goText;
+    private readonly Button _snooze;
     private readonly TextBlock _notice;
     private readonly TextBlock _panelTitle, _panelHint, _panelNote;
     private readonly StackPanel _list;
@@ -57,6 +58,7 @@ public sealed class SwitcherWindow : Window
     public event Action? CancelRequested;
     public event Action? ProgramsRequested;
     public event Action? TestRequested;
+    public event Action? SnoozeRequested;
 
     public IReadOnlyList<RunningProgram> Programs { get; private set; } = [];
     /// <summary>Пробный режим: в списке только тестовые окна.</summary>
@@ -130,6 +132,9 @@ public sealed class SwitcherWindow : Window
         _go = ColoredButton(_goText, Accent, AccentDark, Colors.White);
         _go.Click += (_, _) => OnGo();
         left.Children.Add(_go);
+        _snooze = new Button { Content = "Через 15 минут", HorizontalAlignment = HorizontalAlignment.Stretch, Padding = new Thickness(16, 12, 16, 12), CornerRadius = new CornerRadius(16), Visibility = Visibility.Collapsed };
+        _snooze.Click += (_, _) => { _snooze.Visibility = Visibility.Collapsed; SnoozeRequested?.Invoke(); AppWindow.Hide(); };
+        left.Children.Add(_snooze);
 
         _notice = Text("", 14, Lead, wrap: true);
         _notice.LineHeight = 21;
@@ -291,8 +296,18 @@ public sealed class SwitcherWindow : Window
         _list.Children.Clear();
     }
 
+    /// <summary>Расписание: «Пора за работу» — вернуться или отложить на 15 минут.</summary>
+    public void ShowReturnOffer(string when)
+    {
+        ShowRestWaiting();
+        _headline.Text = "Пора за работу";
+        _lead.Text = $"По расписанию ({when}). Вернуть рабочие программы сейчас?";
+        _snooze.Visibility = Visibility.Visible;
+    }
+
     public void ShowReturning()
     {
+        _snooze.Visibility = Visibility.Collapsed;
         _mode = Mode.Returning;
         _headline.Text = "Возвращаемся к работе…";
         _lead.Text = "Открываем закрытое и ставим окна на место.";

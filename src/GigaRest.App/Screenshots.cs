@@ -62,8 +62,21 @@ internal static class Screenshots
         running.Single(p => p.Id == "bitrix24.exe").AllowTerminate = true;
         programsWindow.SetRows(ProgramCatalog.BuildRows(settings, running, DemoData.Shortcuts));
         await Capture(programsWindow.Root, Path.Combine(dir, "5-programmy.png"));
+        // Настройки с включённым расписанием.
+        var settingsWindow = new SettingsWindow();
+        settingsWindow.Present();
+        settingsWindow.SizeToDesign(fitScreen: false);
+        settingsWindow.UseDesignSizeForCapture();
+        settingsWindow.Load(new AppSettings { ReturnSchedule = new ReturnSchedule { Enabled = true, Time = "09:00" } }, autostart: true, hotkeyProblem: null);
+        await Capture(settingsWindow.Root, Path.Combine(dir, "6-nastroyki.png"));
+
+        // Предложение по расписанию.
+        window.ShowReturnOffer("по будням в 09:00");
+        await Capture(window.Root, Path.Combine(dir, "7-pora.png"));
+
         // Последнее закрытое окно завершает программу — поэтому закрываем оба только в конце.
         programsWindow.CloseForGood();
+        settingsWindow.CloseForGood();
         window.CloseForGood();
         return true;
     }
