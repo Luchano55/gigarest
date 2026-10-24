@@ -135,9 +135,13 @@ public sealed partial class App : Application, IXamlMetadataProvider
         _snoozeUntil = null;
         Log.Info("Расписание: предлагаем вернуться к работе");
         var w = Window();
-        w.ShowReturnOffer(_settings.ReturnSchedule.Describe());
+        w.ShowReturnOffer(_settings.ReturnSchedule.Describe(), ClosedInSession());
         w.Present();
     }
+
+    /// <summary>Что закрыто в этом отдыхе — из session.json.</summary>
+    private List<(string Id, string Name)> ClosedInSession() =>
+        new SessionStore(_paths.SessionFile).Load()?.Closed.Where(c => c.Gone).Select(c => (c.Id, c.DisplayName)).ToList() ?? [];
 
     private void ShowSettings()
     {
@@ -259,7 +263,7 @@ public sealed partial class App : Application, IXamlMetadataProvider
         var w = Window();
         if (!_busy)
         {
-            if (_switcher.IsResting) w.ShowRestWaiting();
+            if (_switcher.IsResting) w.ShowRestWaiting(ClosedInSession());
             else w.ShowPlan(Scan(), _desktop.GetMonitors().Count > 1, _hotkeyProblem);
         }
         w.Present();

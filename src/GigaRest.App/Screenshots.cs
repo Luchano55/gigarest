@@ -71,7 +71,7 @@ internal static class Screenshots
         await Capture(settingsWindow.Root, Path.Combine(dir, "6-nastroyki.png"));
 
         // Предложение по расписанию.
-        window.ShowReturnOffer("по будням в 09:00");
+        window.ShowReturnOffer("по будням в 09:00", [("bitrix24.exe", "Битрикс24"), ("chrome.exe", "Chrome"), ("1cv8.exe", "1С:Предприятие")]);
         await Capture(window.Root, Path.Combine(dir, "7-pora.png"));
 
         // Последнее закрытое окно завершает программу — поэтому закрываем оба только в конце.

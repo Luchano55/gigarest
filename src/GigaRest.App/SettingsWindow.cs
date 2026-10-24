@@ -17,7 +17,7 @@ public sealed record SettingsResult(ReturnSchedule Schedule, string Hotkey, bool
 /// <summary>Настройки: расписание возврата, горячая клавиша, окно перехода, автозапуск.</summary>
 public sealed class SettingsWindow : Window
 {
-    public const double DesignWidth = 720, DesignHeight = 820;
+    public const double DesignWidth = 720, DesignHeight = 900;
 
     private readonly Grid _root;
     private readonly ToggleSwitch _scheduleOn, _confirm, _autostart;

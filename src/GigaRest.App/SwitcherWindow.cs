@@ -280,7 +280,7 @@ public sealed class SwitcherWindow : Window
     }
 
     /// <summary>Отдых продолжается (например, после перезагрузки).</summary>
-    public void ShowRestWaiting()
+    public void ShowRestWaiting(IReadOnlyList<(string Id, string Name)>? closed = null)
     {
         _mode = Mode.Rest;
         _headline.Text = "Отдых";
@@ -292,14 +292,18 @@ public sealed class SwitcherWindow : Window
         _goText.Text = "Вернуться к работе — запустить закрытое";
         SetGo(enabled: true, dark: true);
         _notice.Text = "";
-        ShowPanel("Отдых", "", progress: false);
+        ShowPanel("Откроется снова", "", progress: false);
         _list.Children.Clear();
+        foreach (var (id, name) in closed ?? [])
+            _list.Children.Add(StatusRow(name, id, "закрыта", Muted));
+        if (closed is null || closed.Count == 0)
+            _list.Children.Add(Text("Закрытых программ нет — открывать ничего не придётся.", 14, Muted, wrap: true));
     }
 
     /// <summary>Расписание: «Пора за работу» — вернуться или отложить на 15 минут.</summary>
-    public void ShowReturnOffer(string when)
+    public void ShowReturnOffer(string when, IReadOnlyList<(string Id, string Name)>? closed = null)
     {
-        ShowRestWaiting();
+        ShowRestWaiting(closed);
         _headline.Text = "Пора за работу";
         _lead.Text = $"По расписанию ({when}). Вернуть рабочие программы сейчас?";
         _snooze.Visibility = Visibility.Visible;
