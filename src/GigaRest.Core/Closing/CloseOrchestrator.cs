@@ -126,8 +126,9 @@ public sealed class CloseOrchestrator
                                     : Finish(CloseOutcome.StillOpen, everAsked);
                             }
                         }
-                        else if (program.Known is { HidesToTray: true })
+                        else if (program.Known is { HidesToTray: true } && hiddenFor >= ExitGrace)
                         {
+                            // Ждём не меньше ExitGrace: большая программа может просто долго выходить.
                             return Finish(CloseOutcome.InBackground, everAsked);
                         }
                     }

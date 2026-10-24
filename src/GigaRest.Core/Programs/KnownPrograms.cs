@@ -43,7 +43,7 @@ public static class KnownPrograms
         new()
         {
             Exe = "chrome.exe", DisplayName = "Chrome", DefaultAction = ProgramAction.Close, IsChromium = true,
-            HidesToTray = true, TrayWaitSeconds = 5,
+            HidesToTray = true, TrayWaitSeconds = 10,
             // Вкладки и окна всех профилей откроются как были.
             RelaunchAddArgs = ["--restore-last-session"],
             RelaunchDropArgs = ["--no-startup-window"],

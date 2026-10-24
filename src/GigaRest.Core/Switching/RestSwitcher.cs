@@ -90,6 +90,7 @@ public sealed class RestSwitcher
                 Id = p.Id,
                 DisplayName = p.DisplayName,
                 Launch = launch,
+                Roots = p.Roots.Select(r => r.Key).ToList(),
                 Placements = p.Windows.Select(w => _desktop.GetPlacement(w.Handle)).OfType<WindowPlacementData>().ToList(),
             });
         }
@@ -158,7 +159,8 @@ public sealed class RestSwitcher
             var entry = session.Closed.FirstOrDefault(c => c.Id == r.ProgramId);
             if (entry is null) continue;
             if (r.IsGone) entry.Gone = true;
-            else session.Closed.Remove(entry); // не закрылась — запускать при возврате нечего
+            // В трее осталась — запись храним: если к возврату она выйдет сама, запустим.
+            else if (r.Outcome != CloseOutcome.InBackground) session.Closed.Remove(entry);
             if (!r.IsGone) problems.Add(r.Message);
         }
         _sessions.Save(session);
@@ -186,7 +188,9 @@ public sealed class RestSwitcher
 
         var launched = new List<string>();
         var failed = new List<string>();
-        var toLaunch = session.Closed.Where(c => c.Gone).ToList();
+        var toLaunch = session.Closed
+            .Where(c => c.Gone || c.Roots.Count > 0 && !c.Roots.Any(_desktop.IsAlive))
+            .ToList();
         var startedUtc = _clock.UtcNow;
         var index = 0;
         foreach (var c in toLaunch)

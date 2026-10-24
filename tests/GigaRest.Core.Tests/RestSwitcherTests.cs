@@ -94,6 +94,35 @@ public sealed class RestSwitcherTests : IDisposable
     }
 
     [Fact]
+    public async Task TrayProgramStillInTrayIsNotRelaunched()
+    {
+        _d.AddProcess("bitrix24.exe", 10);
+        var w = _d.AddWindow(10, "Битрикс24");
+        _d.OnClose[w.Handle] = () => _d.RemoveWindow(w.Handle); // спряталась в трей, галочки нет
+
+        var report = await Switcher().GoToRestAsync(Scan(), null, default);
+        Assert.Equal(CloseOutcome.InBackground, report.Results.Single().Outcome);
+
+        // Всё ещё в трее — запускать не нужно.
+        new RestSwitcher(_d, _clock, _store).ReturnToWork(null, default);
+        Assert.Empty(_d.Launched);
+    }
+
+    [Fact]
+    public async Task TrayProgramClosedByUserDuringRestIsRelaunched()
+    {
+        _d.AddProcess("bitrix24.exe", 10);
+        var w = _d.AddWindow(10, "Битрикс24");
+        _d.OnClose[w.Handle] = () => _d.RemoveWindow(w.Handle);
+        await Switcher().GoToRestAsync(Scan(), null, default);
+        _d.Kill(10); // вечером вышла из трея
+
+        var back = Switcher().ReturnToWork(null, default);
+        Assert.Single(_d.Launched);
+        Assert.Equal("Всё вернули.", back.Summary);
+    }
+
+    [Fact]
     public async Task FailedLaunchIsReported()
     {
         _d.AddProcess("outlook.exe", 10);

@@ -125,7 +125,22 @@ public class CloseOrchestratorTests
 
         Assert.Equal(CloseOutcome.InBackground, result.Outcome);
         Assert.Empty(_desktop.Terminated);
-        Assert.True(_clock.UtcNow - start < TimeSpan.FromSeconds(10), "известная программа трея не должна держать 30 с");
+        Assert.True(_clock.UtcNow - start < TimeSpan.FromSeconds(12), "известная программа трея не должна держать 30 с");
+    }
+
+    [Fact]
+    public async Task SlowExitingChromeIsNotMistakenForTray()
+    {
+        // Chrome с сотней вкладок выходит 8 секунд — это не «спрятался в трей».
+        _desktop.AddProcess("chrome.exe", 32);
+        var w = _desktop.AddWindow(32, "Вкладки");
+        var closedAt = (DateTime?)null;
+        _desktop.OnClose[w.Handle] = () => { _desktop.RemoveWindow(w.Handle); closedAt = _clock.UtcNow; };
+        _clock.Ticked += () => { if (closedAt is not null && _clock.UtcNow - closedAt > TimeSpan.FromSeconds(8)) _desktop.Kill(32); };
+
+        var result = await Orchestrator().CloseAsync(Program("chrome.exe"), null, default);
+
+        Assert.Equal(CloseOutcome.Closed, result.Outcome);
     }
 
     [Fact]

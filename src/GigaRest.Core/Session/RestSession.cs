@@ -26,6 +26,8 @@ public sealed class ClosedProgram
     public List<WindowPlacementData> Placements { get; set; } = [];
     /// <summary>false, пока программа закрывается; true — закрылась, при возврате запускаем.</summary>
     public bool Gone { get; set; }
+    /// <summary>Корневые процессы на момент закрытия. Если программа ушла в трей, а потом сама вышла, — тоже запускаем.</summary>
+    public List<ProcessKey> Roots { get; set; } = [];
 }
 
 public sealed class MovedWindow
