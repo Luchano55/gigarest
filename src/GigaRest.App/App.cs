@@ -21,7 +21,7 @@ namespace GigaRest.App;
 public sealed partial class App : Application, IXamlMetadataProvider
 {
     private const int HotkeyToggle = 1;
-    private const int MenuToggle = 1, MenuShow = 2, MenuPrograms = 4, MenuTest = 5, MenuTestClose = 6, MenuLogs = 3, MenuExit = 9;
+    private const int MenuToggle = 1, MenuShow = 2, MenuPrograms = 4, MenuTest = 5, MenuTestClose = 6, MenuAutostart = 7, MenuLogs = 3, MenuExit = 9;
 
     private readonly XamlControlsXamlMetaDataProvider _metadata = new();
     private readonly string[] _args;
@@ -112,6 +112,8 @@ public sealed partial class App : Application, IXamlMetadataProvider
         }
     }
 
+    private static string ExePath => Environment.ProcessPath ?? Path.Combine(AppContext.BaseDirectory, "GigaRest.exe");
+
     private string TrayTip => _switcher.IsResting ? "GigaRest — отдых" : "GigaRest — работа";
 
     private void RegisterHotkey()
@@ -140,6 +142,7 @@ public sealed partial class App : Application, IXamlMetadataProvider
         new TrayMenuItem(MenuTest, "Пробный режим — на тестовых окнах…", !_busy && !_switcher.IsResting),
         new TrayMenuItem(MenuTestClose, "Закрыть тестовые окна", !_busy),
         null,
+        new TrayMenuItem(MenuAutostart, "Запускать вместе с Windows", Checked: Autostart.IsEnabled(ExePath)),
         new TrayMenuItem(MenuLogs, "Открыть журнал"),
         null,
         new TrayMenuItem(MenuExit, "Выход"),
@@ -154,6 +157,20 @@ public sealed partial class App : Application, IXamlMetadataProvider
             case MenuPrograms: _ = ShowProgramsAsync(); break;
             case MenuTest: _ = StartTestAsync(); break;
             case MenuTestClose: CloseTestWindows(); break;
+            case MenuAutostart:
+                var enable = !Autostart.IsEnabled(ExePath);
+                try
+                {
+                    Autostart.Set(ExePath, enable);
+                    Log.Info($"Автозапуск: {(enable ? "включён" : "выключен")}");
+                    _tray?.ShowBalloon("Автозапуск", enable ? "GigaRest будет запускаться вместе с Windows, в трее." : "Автозапуск выключен.");
+                }
+                catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or System.Security.SecurityException)
+                {
+                    Log.Error("Автозапуск", ex);
+                    _tray?.ShowBalloon("Автозапуск", "Не получилось изменить автозапуск: " + ex.Message);
+                }
+                break;
             case MenuLogs:
                 var psi = new System.Diagnostics.ProcessStartInfo("explorer.exe") { UseShellExecute = false };
                 psi.ArgumentList.Add(_paths.LogsDir);

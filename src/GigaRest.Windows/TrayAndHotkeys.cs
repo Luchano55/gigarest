@@ -4,7 +4,7 @@ using GigaRest.Core.Logging;
 
 namespace GigaRest.Windows;
 
-public sealed record TrayMenuItem(int Id, string Text, bool Enabled = true, bool Bold = false);
+public sealed record TrayMenuItem(int Id, string Text, bool Enabled = true, bool Bold = false, bool Checked = false);
 
 /// <summary>
 /// Скрытое окно для значка в трее и горячих клавиш (RegisterHotKey). Создаётся в UI-потоке:
@@ -23,7 +23,7 @@ public sealed class TrayAndHotkeys : IDisposable
     private const int NIF_MESSAGE = 1, NIF_ICON = 2, NIF_TIP = 4, NIF_INFO = 0x10;
     private const int MOD_NOREPEAT = 0x4000;
     private const uint TPM_RETURNCMD = 0x100, TPM_RIGHTBUTTON = 0x2;
-    private const uint MF_STRING = 0, MF_GRAYED = 1, MF_SEPARATOR = 0x800;
+    private const uint MF_STRING = 0, MF_GRAYED = 1, MF_CHECKED = 0x8, MF_SEPARATOR = 0x800;
     private const int ERROR_HOTKEY_ALREADY_REGISTERED = 1409;
 
     private readonly WndProc _proc; // держим делегат, иначе его соберёт GC
@@ -152,7 +152,7 @@ public sealed class TrayAndHotkeys : IDisposable
             foreach (var item in items)
             {
                 if (item is null) AppendMenuW(menu, MF_SEPARATOR, 0, null);
-                else AppendMenuW(menu, item.Enabled ? MF_STRING : MF_GRAYED, (nuint)item.Id, item.Text);
+                else AppendMenuW(menu, (item.Enabled ? MF_STRING : MF_GRAYED) | (item.Checked ? MF_CHECKED : 0), (nuint)item.Id, item.Text);
             }
             var bold = items.FirstOrDefault(i => i?.Bold == true);
             if (bold is not null) SetMenuDefaultItem(menu, (uint)bold.Id, 0);

@@ -188,3 +188,23 @@ public class StartMenuTests
         Assert.NotEmpty(GigaRest.Core.Programs.ProgramCatalog.CleanShortcuts(shortcuts));
     }
 }
+
+public class AutostartTests
+{
+    [WindowsFact]
+    public void TurnsOnAndOffInCurrentUserRun()
+    {
+        var exe = @"C:\Мои программы\GigaRest тест\GigaRest.exe";
+        try
+        {
+            Autostart.Set(exe, true);
+            Assert.True(Autostart.IsEnabled(exe));
+            Assert.False(Autostart.IsEnabled(@"C:\другая\GigaRest.exe"));
+        }
+        finally
+        {
+            Autostart.Set(exe, false);
+        }
+        Assert.False(Autostart.IsEnabled(exe));
+    }
+}
