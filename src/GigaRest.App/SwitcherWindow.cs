@@ -74,7 +74,7 @@ public sealed class SwitcherWindow : Window
         var head = new StackPanel { Spacing = 8 };
         var kicker = Text("ОДНА КНОПКА", 13, Muted, FontWeights.Bold);
         kicker.CharacterSpacing = 120;
-        _headline = Text("Работа → Отдых", 40, Ink, FontWeights.ExtraBold);
+        _headline = Text("Работа → Отдых", 40, Ink, FontWeights.ExtraBold, wrap: true);
         _lead = Text("", 16, Lead, wrap: true);
         _lead.MaxWidth = 600;
         _lead.LineHeight = 24;
@@ -99,7 +99,7 @@ public sealed class SwitcherWindow : Window
         _secondScreen.ColumnDefinitions.Add(new ColumnDefinition());
         var second = Screen(_secondScreen, 164);
         second.Background = Brush("#E9EBF2");
-        _secondCaption = Text("Второй монитор", 13, Muted);
+        _secondCaption = Text("Второй монитор", 13, Muted, wrap: true);
         var secondFig = Figure(second, _secondCaption);
         secondFig.VerticalAlignment = VerticalAlignment.Bottom;
         Grid.SetColumn(secondFig, 1);
@@ -110,12 +110,12 @@ public sealed class SwitcherWindow : Window
         // Три карточки
         var cards = new Grid { ColumnSpacing = 16 };
         for (var i = 0; i < 3; i++) cards.ColumnDefinitions.Add(new ColumnDefinition());
-        (_ramTitle, _ramValue) = (Text("Оперативная память", 13, Muted), Text("", 28, Ink, FontWeights.ExtraBold));
-        _dndValue = Text("", 28, Ink, FontWeights.ExtraBold);
-        _secondValue = Text("", 28, Ink, FontWeights.ExtraBold);
+        (_ramTitle, _ramValue) = (Text("Оперативная память", 13, Muted, wrap: true), Text("", 26, Ink, FontWeights.ExtraBold, wrap: true));
+        _dndValue = Text("", 26, Ink, FontWeights.ExtraBold, wrap: true);
+        _secondValue = Text("", 26, Ink, FontWeights.ExtraBold, wrap: true);
         cards.Children.Add(StatCard(_ramTitle, _ramValue, 0));
-        cards.Children.Add(StatCard(Text("Уведомления", 13, Muted), _dndValue, 1));
-        cards.Children.Add(StatCard(Text("Второй монитор", 13, Muted), _secondValue, 2));
+        cards.Children.Add(StatCard(Text("Уведомления", 13, Muted, wrap: true), _dndValue, 1));
+        cards.Children.Add(StatCard(Text("Второй монитор", 13, Muted, wrap: true), _secondValue, 2));
         left.Children.Add(cards);
 
         _goText = Text("Перейти в отдых", 17, Colors.White, FontWeights.Bold);
@@ -135,13 +135,9 @@ public sealed class SwitcherWindow : Window
         panel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-        var header = new Grid();
-        header.ColumnDefinitions.Add(new ColumnDefinition());
-        header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        _panelTitle = Text("Что будет с программами", 20, Ink, FontWeights.ExtraBold);
-        _panelHint = Text("щёлкните, чтобы поменять", 13, Muted);
-        _panelHint.VerticalAlignment = VerticalAlignment.Bottom;
-        Grid.SetColumn(_panelHint, 1);
+        var header = new StackPanel { Spacing = 4 };
+        _panelTitle = Text("Что будет с программами", 20, Ink, FontWeights.ExtraBold, wrap: true);
+        _panelHint = Text("щёлкните, чтобы поменять", 13, Muted, wrap: true);
         header.Children.Add(_panelTitle);
         header.Children.Add(_panelHint);
         panel.Children.Add(header);
@@ -339,7 +335,7 @@ public sealed class SwitcherWindow : Window
 
         grid.Children.Add(Avatar(p.DisplayName, p.Id));
         var names = new StackPanel { Spacing = 2, VerticalAlignment = VerticalAlignment.Center };
-        names.Children.Add(Text(p.DisplayName, 15, Ink, FontWeights.Bold));
+        names.Children.Add(Text(p.DisplayName, 15, Ink, FontWeights.Bold, wrap: true));
         names.Children.Add(Text(p.IsElevated ? "от администратора — закроете только вы" : p.Note, 12, Muted));
         Grid.SetColumn(names, 1);
         grid.Children.Add(names);
@@ -367,7 +363,7 @@ public sealed class SwitcherWindow : Window
         {
             var check = new CheckBox
             {
-                Content = Text("можно завершать, если спрячется в трей", 13, Lead),
+                Content = Text("можно завершать, если спрячется в трей", 13, Lead, wrap: true),
                 IsChecked = p.AllowTerminate,
                 Margin = new Thickness(64, -4, 0, 4),
                 MinHeight = 28,
@@ -552,13 +548,14 @@ public sealed class SwitcherWindow : Window
     }
 
     /// <summary>Размер по макету (1440×900 при 100%), с учётом масштаба монитора, по центру.</summary>
-    public void SizeToDesign()
+    public void SizeToDesign(bool fitScreen = true)
     {
         var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
         var scale = GetDpiForWindow(hwnd) / 96.0;
         var area = DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Primary).WorkArea;
-        var w = (int)Math.Min(DesignWidth * scale, area.Width * 0.95);
-        var h = (int)Math.Min(DesignHeight * scale, area.Height * 0.95);
+        // Для скриншотов — ровно размер макета, даже если экран меньше.
+        var w = (int)(fitScreen ? Math.Min(DesignWidth * scale, area.Width * 0.95) : DesignWidth * scale);
+        var h = (int)(fitScreen ? Math.Min(DesignHeight * scale, area.Height * 0.95) : DesignHeight * scale);
         AppWindow.Resize(new SizeInt32(w, h));
         AppWindow.Move(new PointInt32(area.X + (area.Width - w) / 2, area.Y + (area.Height - h) / 2));
     }
