@@ -227,6 +227,18 @@ public sealed class ProgramsWindow : Window
         grid.Children.Add(seg);
         box.Children.Add(grid);
 
+        if (r.Action == ProgramAction.Close && !r.IsBackground)
+        {
+            var force = new CheckBox
+            {
+                Content = Text("завершать принудительно, даже если есть несохранённое — оно пропадёт", 13, Hex("#B42318"), wrap: true),
+                IsChecked = r.ForceKill, Margin = new Thickness(64, -6, 0, 4), MinHeight = 28,
+            };
+            ToolTipService.SetToolTip(force, "Для программ вроде ShareX: сначала попросим закрыться, через 5 секунд завершим. Вопрос «Сохранить?» ждать не будем.");
+            force.Checked += (_, _) => r.ForceKill = true;
+            force.Unchecked += (_, _) => r.ForceKill = false;
+            box.Children.Add(force);
+        }
         if (r.Action == ProgramAction.Close && r.HidesToTray && !r.IsBackground)
         {
             var check = new CheckBox

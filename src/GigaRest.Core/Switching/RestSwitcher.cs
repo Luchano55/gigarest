@@ -169,8 +169,8 @@ public sealed class RestSwitcher
             var entry = session.Closed.FirstOrDefault(c => c.Id == r.ProgramId);
             if (entry is null) continue;
             if (r.IsGone) entry.Gone = true;
-            // В трее осталась — запись храним: если к возврату она выйдет сама, запустим.
-            else if (r.Outcome != CloseOutcome.InBackground) session.Closed.Remove(entry);
+            // В трее или не закрылась — запись храним: если её завершат из итога или она выйдет сама, при возврате запустим.
+            else if (r.Outcome is not (CloseOutcome.InBackground or CloseOutcome.StillOpen)) session.Closed.Remove(entry);
             if (!r.IsGone) problems.Add(r.Message);
         }
         _sessions.Save(session);

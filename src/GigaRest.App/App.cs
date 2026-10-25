@@ -253,22 +253,23 @@ public sealed partial class App : Application, IXamlMetadataProvider
     /// «Завершить» в итоге: программа спряталась в трей и ни о чём не спрашивает. Завершаем по явной просьбе,
     /// запоминаем галочку «можно завершать» и отмечаем, что при возврате её надо открыть.
     /// </summary>
-    private void TerminateFromSummary(string programId)
+    private void TerminateFromSummary(string programId, bool force)
     {
         var program = ProgramScanner.Scan(_desktop.GetProcesses(), _desktop.GetWindows(), _settings, _desktop.CurrentProcessId)
             .FirstOrDefault(p => p.Id.Equals(programId, StringComparison.OrdinalIgnoreCase));
         if (program is not null)
         {
-            if (program.Windows.Count > 0 || _desktop.GetWindows().Any(w => w.IsDialog && program.Processes.Any(p => p.Pid == w.Pid)))
+            if (!force && (program.Windows.Count > 0 || _desktop.GetWindows().Any(w => w.IsDialog && program.Processes.Any(p => p.Pid == w.Pid))))
             {
                 _tray?.ShowBalloon(program.DisplayName, "У программы снова открыто окно — закройте её сами.");
                 return;
             }
-            foreach (var root in program.Roots) _desktop.Terminate(root.Key);
+            foreach (var p in program.Processes) _desktop.Terminate(p.Key);
         }
         var setting = _settings.Find(programId) ?? new ProgramSetting { Id = programId, DisplayName = program?.DisplayName ?? programId, Action = ProgramAction.Close };
         if (!_settings.Programs.Contains(setting)) _settings.Programs.Add(setting);
         setting.AllowTerminate = true;
+        if (force) setting.ForceKill = true;
         SaveSettings();
         _switcher.MarkClosed(programId);
         Log.Info($"Завершена из итога по просьбе: {programId}");

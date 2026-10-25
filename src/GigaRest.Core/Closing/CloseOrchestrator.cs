@@ -24,6 +24,8 @@ public sealed class CloseOrchestrator
     public TimeSpan PollInterval { get; init; } = TimeSpan.FromMilliseconds(250);
     /// <summary>Для программ без правила: окна спрятались, но процесс жив (Outlook долго выходит).</summary>
     public TimeSpan ExitGrace { get; init; } = TimeSpan.FromSeconds(10);
+    /// <summary>Сколько ждать вежливого закрытия у программ с галочкой «принудительно».</summary>
+    public TimeSpan ForceWait { get; init; } = TimeSpan.FromSeconds(5);
 
     /// <summary>Закрыть все программы параллельно.</summary>
     public async Task<IReadOnlyList<CloseResult>> CloseAllAsync(
@@ -61,8 +63,23 @@ public sealed class CloseOrchestrator
             : program.Known is { HidesToTray: true } known ? TimeSpan.FromSeconds(known.TrayWaitSeconds)
             : ExitGrace;
 
+        var forceStarted = _clock.UtcNow;
         while (true)
         {
+            // Галочка «принудительно»: вежливо попросили, подождали несколько секунд — завершаем, даже если спрашивает.
+            if (program.ForceKill && _clock.UtcNow - forceStarted >= ForceWait)
+            {
+                var stillAlive = roots.Where(_desktop.IsAlive).ToList();
+                if (stillAlive.Count == 0) return Finish(CloseOutcome.Closed, everAsked);
+                foreach (var p in program.Processes.Where(p => _desktop.IsAlive(p.Key)).Select(p => p.Key)
+                             .Concat(stillAlive).Distinct())
+                    _desktop.Terminate(p);
+                Log.Info($"Принудительно (по галочке): {program.Id}");
+                return await WaitExit(stillAlive, ct).ConfigureAwait(false)
+                    ? Finish(CloseOutcome.Terminated, everAsked)
+                    : Finish(CloseOutcome.StillOpen, everAsked);
+            }
+
             if (ct.IsCancellationRequested)
                 return Finish(CloseOutcome.Cancelled, everAsked);
 
@@ -87,7 +104,7 @@ public sealed class CloseOrchestrator
                 var front = dialog?.Handle ?? mainWindows.First(w => !w.IsEnabled).Handle;
                 if (lastDialog != front)
                 {
-                    _desktop.BringToFront(front);
+                    if (!program.ForceKill) _desktop.BringToFront(front); // принудительным — не отвлекаем вопросом
                     lastDialog = front;
                     Report(CloseStage.Asking);
                 }

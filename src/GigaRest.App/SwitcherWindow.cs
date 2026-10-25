@@ -60,7 +60,7 @@ public sealed class SwitcherWindow : Window
     public event Action? TestRequested;
     public event Action? SnoozeRequested;
     /// <summary>«Завершить» у программы, которая спряталась в трей.</summary>
-    public event Action<string>? TerminateRequested;
+    public event Action<string, bool>? TerminateRequested;
 
     public IReadOnlyList<RunningProgram> Programs { get; private set; } = [];
     /// <summary>Пробный режим: в списке только тестовые окна.</summary>
@@ -280,6 +280,11 @@ public sealed class SwitcherWindow : Window
                 _list.Children.Add(TrayRow(r));
                 continue;
             }
+            if (r.Outcome == CloseOutcome.StillOpen)
+            {
+                _list.Children.Add(ForceRow(r));
+                continue;
+            }
             _list.Children.Add(StatusRow(r.DisplayName, r.ProgramId, text, color, r.IsGone ? null : r.Message));
         }
         if (report.Results.Count == 0)
@@ -474,9 +479,25 @@ public sealed class SwitcherWindow : Window
         var button = new Button { Content = "Завершить", Margin = new Thickness(64, -4, 0, 8), Padding = new Thickness(16, 6, 16, 6), CornerRadius = new CornerRadius(999) };
         button.Click += (_, _) =>
         {
-            TerminateRequested?.Invoke(r.ProgramId);
+            TerminateRequested?.Invoke(r.ProgramId, false);
             var index = _list.Children.IndexOf(box);
             if (index >= 0) _list.Children[index] = StatusRow(r.DisplayName, r.ProgramId, "завершена", Hex("#1E7A44"), "В следующий раз завершим сами");
+        };
+        box.Children.Add(button);
+        return box;
+    }
+
+    /// <summary>Не закрылась (окна или несохранённое): «Завершить принудительно» — по явной просьбе, с предупреждением.</summary>
+    private UIElement ForceRow(CloseResult r)
+    {
+        var box = new StackPanel();
+        box.Children.Add(StatusRow(r.DisplayName, r.ProgramId, "осталась", Hex("#B42318"), r.Message));
+        var button = new Button { Content = "Завершить принудительно — несохранённое пропадёт", Margin = new Thickness(64, -4, 0, 8), Padding = new Thickness(16, 6, 16, 6), CornerRadius = new CornerRadius(999) };
+        button.Click += (_, _) =>
+        {
+            TerminateRequested?.Invoke(r.ProgramId, true);
+            var index = _list.Children.IndexOf(box);
+            if (index >= 0) _list.Children[index] = StatusRow(r.DisplayName, r.ProgramId, "завершена", Hex("#1E7A44"), "Запомнили: в следующий раз завершим принудительно");
         };
         box.Children.Add(button);
         return box;

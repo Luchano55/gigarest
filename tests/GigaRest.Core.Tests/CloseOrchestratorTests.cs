@@ -217,3 +217,71 @@ public sealed class SyncProgress<T>(Action<T> action) : IProgress<T>
 {
     public void Report(T value) => action(value);
 }
+
+public class ForceKillTests
+{
+    [Fact]
+    public async Task ForceKillTerminatesEvenWithUnsavedQuestionAfterShortWait()
+    {
+        var d = new FakeDesktop();
+        var clock = new FakeClock();
+        d.AddProcess("ShareX.exe", 10);
+        var main = d.AddWindow(10, "ShareX");
+        var editor = d.AddWindow(10, "Скриншот — не сохранён");
+        d.OnClose[editor.Handle] = () =>
+        {
+            d.SetEnabled(editor.Handle, false);
+            d.AddWindow(10, "Сохранить изменения?", owner: editor.Handle, cls: "#32770");
+        };
+        var settings = new AppSettings { Programs = { new ProgramSetting { Id = "sharex.exe", Action = ProgramAction.Close, ForceKill = true } } };
+        var program = ProgramScanner.Scan(d.GetProcesses(), d.GetWindows(), settings, 1).Single();
+        Assert.True(program.ForceKill);
+        var start = clock.UtcNow;
+
+        var result = await new CloseOrchestrator(d, clock).CloseAsync(program, null, default);
+
+        Assert.Equal(CloseOutcome.Terminated, result.Outcome);
+        Assert.InRange((clock.UtcNow - start).TotalSeconds, 5, 7);
+        Assert.Contains(d.ClosedPosts, h => h == main.Handle); // сначала — вежливо
+        Assert.Empty(d.Fronted);                               // вопрос вперёд не выводили
+    }
+
+    [Fact]
+    public async Task WithoutForceKillQuestionStillProtectsProgram()
+    {
+        var d = new FakeDesktop();
+        var clock = new FakeClock();
+        d.AddProcess("ShareX.exe", 10);
+        var editor = d.AddWindow(10, "Скриншот — не сохранён");
+        d.OnClose[editor.Handle] = () =>
+        {
+            d.SetEnabled(editor.Handle, false);
+            d.AddWindow(10, "Сохранить изменения?", owner: editor.Handle, cls: "#32770");
+        };
+        var settings = new AppSettings { Programs = { new ProgramSetting { Id = "sharex.exe", Action = ProgramAction.Close, AllowTerminate = true } } };
+        var program = ProgramScanner.Scan(d.GetProcesses(), d.GetWindows(), settings, 1).Single();
+        using var cts = new CancellationTokenSource();
+        var ticks = 0;
+        clock.Ticked += () => { if (++ticks == 400) cts.Cancel(); }; // 100 секунд вопроса
+
+        var result = await new CloseOrchestrator(d, clock).CloseAsync(program, null, cts.Token);
+
+        Assert.Equal(CloseOutcome.Cancelled, result.Outcome);
+        Assert.Empty(d.Terminated);
+    }
+
+    [Fact]
+    public void ForceKillIsSavedOnlyForClose()
+    {
+        var settings = new AppSettings();
+        var rows = new List<SelectorRow>
+        {
+            new() { Id = "sharex.exe", DisplayName = "ShareX", Action = ProgramAction.Close, ForceKill = true },
+            new() { Id = "telegram.exe", DisplayName = "Telegram", Action = ProgramAction.SecondMonitor, ForceKill = true },
+        };
+        ProgramCatalog.Save(settings, rows);
+        Assert.True(settings.Find("sharex.exe")!.ForceKill);
+        Assert.True(settings.Find("sharex.exe")!.AllowTerminate);
+        Assert.False(settings.Find("telegram.exe")!.ForceKill);
+    }
+}

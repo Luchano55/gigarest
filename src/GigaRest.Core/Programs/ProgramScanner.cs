@@ -57,6 +57,7 @@ public static class ProgramScanner
                 Windows = appWindows.Where(w => pids.Contains(w.Pid)).ToList(),
                 Action = setting?.Action ?? known?.DefaultAction ?? ProgramAction.Keep,
                 AllowTerminate = setting?.AllowTerminate ?? false,
+                ForceKill = setting?.ForceKill ?? false,
             });
         }
 
@@ -126,5 +127,6 @@ public static class ProgramScanner
         }
         s.Action = program.Action;
         s.AllowTerminate = program.AllowTerminate;
+        s.ForceKill = program.ForceKill;
     }
 }

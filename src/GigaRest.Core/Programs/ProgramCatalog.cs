@@ -15,6 +15,8 @@ public sealed class SelectorRow
     public bool HidesToTray { get; init; }
     public ProgramAction Action { get; set; }
     public bool AllowTerminate { get; set; }
+    /// <summary>Завершать принудительно, даже если есть несохранённое.</summary>
+    public bool ForceKill { get; set; }
     /// <summary>Фоновый процесс: варианты только «завершать в отдыхе» / «не трогать».</summary>
     public bool IsBackground { get; init; }
     public long PrivateBytes { get; init; }
@@ -61,7 +63,7 @@ public static class ProgramCatalog
             {
                 Id = p.Id, DisplayName = p.DisplayName, ExePath = p.Roots.FirstOrDefault()?.ExePath, IsRunning = true,
                 HidesToTray = p.Known?.HidesToTray == true || p.Windows.Count == 0,
-                Action = p.Action, AllowTerminate = p.AllowTerminate, IsBackground = p.IsBackground,
+                Action = p.Action, AllowTerminate = p.AllowTerminate, ForceKill = p.ForceKill, IsBackground = p.IsBackground,
                 PrivateBytes = p.PrivateBytes,
             };
         }
@@ -90,7 +92,7 @@ public static class ProgramCatalog
             rows[s.Id] = new SelectorRow
             {
                 Id = s.Id, DisplayName = s.DisplayName.Length > 0 ? s.DisplayName : known?.DisplayName ?? ProgramScanner.FriendlyName(s.Id),
-                HidesToTray = known?.HidesToTray == true, Action = s.Action, AllowTerminate = s.AllowTerminate,
+                HidesToTray = known?.HidesToTray == true, Action = s.Action, AllowTerminate = s.AllowTerminate, ForceKill = s.ForceKill,
             };
         }
 
@@ -130,14 +132,15 @@ public static class ProgramCatalog
             var s = settings.Find(r.Id);
             if (s is null)
             {
-                if (r.Action == ProgramAction.Keep && !r.AllowTerminate) continue;
+                if (r.Action == ProgramAction.Keep && !r.AllowTerminate && !r.ForceKill) continue;
                 s = new ProgramSetting { Id = r.Id };
                 settings.Programs.Add(s);
             }
             s.DisplayName = r.DisplayName;
             s.Action = r.Action;
             // Для фонового «завершать» и есть разрешение завершать.
-            s.AllowTerminate = r.IsBackground ? r.Action == ProgramAction.Close : r.AllowTerminate;
+            s.AllowTerminate = r.IsBackground ? r.Action == ProgramAction.Close : r.AllowTerminate || r.ForceKill;
+            s.ForceKill = !r.IsBackground && r.Action == ProgramAction.Close && r.ForceKill;
         }
     }
 

@@ -244,3 +244,23 @@ public class BackgroundTests
         Assert.Equal(args, File.ReadAllLines(marker));
     }
 }
+
+public class ForceKillRealTests
+{
+    [WindowsFact]
+    public async Task ForceKillEndsProgramThatAsksToSave()
+    {
+        using var d = new Dummy("принудительно.exe", ["--ask"]);
+        d.WaitWindows();
+        var settings = new AppSettings { Programs = { new ProgramSetting { Id = "принудительно.exe", Action = ProgramAction.Close, ForceKill = true } } };
+        var program = ProgramScanner.Scan(Dummy.Desktop.GetProcesses(), Dummy.Desktop.GetWindows(), settings, Environment.ProcessId)
+            .Single(p => p.Id == "принудительно.exe");
+
+        var result = await new CloseOrchestrator(Dummy.Desktop, SystemClock.Instance) { ForceWait = TimeSpan.FromSeconds(3) }
+            .CloseAsync(program, null, default).WaitAsync(TimeSpan.FromSeconds(20));
+
+        Assert.Equal(CloseOutcome.Terminated, result.Outcome);
+        Assert.True(result.WasAsked);
+        Assert.True(d.Process.WaitForExit(5000));
+    }
+}

@@ -22,6 +22,11 @@ public sealed class ProgramSetting
     /// её можно завершить. По умолчанию выключена.
     /// </summary>
     public bool AllowTerminate { get; set; }
+    /// <summary>
+    /// Галочка «завершать принудительно, даже если есть несохранённое» (решение Романа для ShareX и подобных).
+    /// Сначала вежливо, через несколько секунд — завершаем, несохранённое в этой программе пропадает.
+    /// </summary>
+    public bool ForceKill { get; set; }
 }
 
 public sealed class AppSettings

@@ -25,6 +25,8 @@ public sealed class RunningProgram
 
     public ProgramAction Action { get; set; }
     public bool AllowTerminate { get; set; }
+    /// <summary>Завершать принудительно, даже с открытыми окнами и вопросами (по галочке Романа).</summary>
+    public bool ForceKill { get; set; }
 
     /// <summary>Описание под названием: «2 окна», «в трее».</summary>
     public string Note => IsBackground ? "фоновый процесс" : Windows.Count == 0 ? "в трее" : Text.Sizes.Plural(Windows.Count, "окно", "окна", "окон");
