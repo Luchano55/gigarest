@@ -11,14 +11,6 @@ internal static class RestScreens
 {
     public static string ScenesDir => Path.Combine(AppContext.BaseDirectory, "Assets", "Scenes");
 
-    public static readonly (string File, string Name)[] Scenes =
-    [
-        ("mountains.jpg", "Горы на рассвете"),
-        ("aurora.jpg", "Северное сияние"),
-        ("forest.jpg", "Лес"),
-        ("city.jpg", "Город зимой"),
-    ];
-
     public static Uri SceneUri(string file) => new(Path.Combine(ScenesDir, file));
 
     /// <summary>Окно — на весь указанный монитор (координаты в настоящих пикселях), без рамки и панели задач.</summary>

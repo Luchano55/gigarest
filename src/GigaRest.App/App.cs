@@ -3,6 +3,7 @@ using GigaRest.Core.Desktop;
 using GigaRest.Core.Input;
 using GigaRest.Core.Logging;
 using GigaRest.Core.Programs;
+using GigaRest.Core.Scenes;
 using GigaRest.Core.Session;
 using GigaRest.Core.Settings;
 using GigaRest.Core.Switching;
@@ -195,7 +196,22 @@ public sealed partial class App : Application, IXamlMetadataProvider
 
         try
         {
-            _quiet = new QuietWindow();
+            var myScenes = string.IsNullOrWhiteSpace(_settings.MyScenesFolder) ? SceneCatalog.DefaultMyScenesFolder() : _settings.MyScenesFolder!;
+            try { Directory.CreateDirectory(myScenes); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { Log.Warn("Папка «Мои сцены»: " + ex.Message); }
+            var scenes = SceneCatalog.Load(RestScreens.ScenesDir, myScenes);
+            _quiet = new QuietWindow(scenes, _settings.SceneId, _settings.SceneEffect);
+            _quiet.SceneChanged += (scene, effect) =>
+            {
+                _settings.SceneId = scene.Id;
+                _settings.SceneEffect = effect;
+                SaveSettings();
+            };
+            _quiet.OpenMyScenesRequested += () =>
+            {
+                var psi = new System.Diagnostics.ProcessStartInfo("explorer.exe") { UseShellExecute = false };
+                psi.ArgumentList.Add(myScenes);
+                System.Diagnostics.Process.Start(psi)?.Dispose();
+            };
             _quiet.ReturnRequested += () => _ = ReturnToWorkAsync();
             _quiet.DetailsRequested += () => { _quiet?.HideSummary(); _window?.Present(); };
             _quiet.ShowOn(primary);

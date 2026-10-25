@@ -104,7 +104,8 @@ internal static class Screenshots
         await Capture(window.Root, Path.Combine(dir, "7-pora.png"));
 
         // «Тихий» экран на основном мониторе.
-        var quiet = new QuietWindow();
+        var scenes = GigaRest.Core.Scenes.SceneCatalog.Load(RestScreens.ScenesDir, null);
+        var quiet = new QuietWindow(scenes, "builtin:winter.jpg");
         quiet.UseDesignSizeForCapture();
         quiet.StartForCapture();
         quiet.ShowSummary("Закрыто: 3 программы, на второй монитор: 4 окна, освободилось 4,3 ГБ.", hasProblems: false);

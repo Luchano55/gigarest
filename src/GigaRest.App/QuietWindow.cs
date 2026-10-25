@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Runtime.InteropServices;
 using GigaRest.Core.Desktop;
+using GigaRest.Core.Scenes;
 using GigaRest.Windows;
 using Microsoft.UI;
 using Microsoft.UI.Text;
@@ -26,7 +27,12 @@ public sealed class QuietWindow : Window
     private static readonly Color TextColor = Hex("#E0FFFFFF"); // 88% — бережём OLED
 
     private readonly Grid _root;
+    private readonly Grid _sceneHost = new();
     private readonly Image _scene;
+    private MediaPlayerElement? _video;
+    private readonly EffectsLayer _effects = new();
+    private readonly IReadOnlyList<Scene> _scenes;
+    private SceneEffect _effect;
     private readonly CompositeTransform _sceneMove = new() { CenterX = 0.5, CenterY = 0.5 };
     private readonly Storyboard _kenBurns = new();
     private readonly Grid _overlay;
@@ -49,17 +55,22 @@ public sealed class QuietWindow : Window
     private readonly Random _random = new();
 
     public event Action? ReturnRequested;
+    /// <summary>Выбрали сцену или эффект — запомнить в настройках.</summary>
+    public event Action<Scene, SceneEffect>? SceneChanged;
+    public event Action? OpenMyScenesRequested;
     public event Action? DetailsRequested;
     public FrameworkElement Root => _root;
 
-    public QuietWindow()
+    public QuietWindow(IReadOnlyList<Scene> scenes, string? sceneId = null, SceneEffect? effect = null)
     {
+        _scenes = scenes;
         Title = "GigaRest — отдых";
         _root = new Grid { Background = Brush("#05060A"), RequestedTheme = ElementTheme.Dark };
 
         // Сцена с медленным движением (Ken Burns) — анимацию считает системный композитор.
         _scene = new Image { Stretch = Stretch.UniformToFill, RenderTransformOrigin = new global::Windows.Foundation.Point(0.5, 0.5), RenderTransform = _sceneMove };
-        _root.Children.Add(_scene);
+        _sceneHost.Children.Add(_scene);
+        _root.Children.Add(_sceneHost);
         AddMove("ScaleX", 1.03, 1.09);
         AddMove("ScaleY", 1.03, 1.09);
         AddMove("TranslateX", 0, -24);
@@ -71,6 +82,7 @@ public sealed class QuietWindow : Window
         shade.GradientStops.Add(new GradientStop { Color = Hex("#00040509"), Offset = 0.62 });
         shade.GradientStops.Add(new GradientStop { Color = Hex("#B8040509"), Offset = 1 });
         _root.Children.Add(new Border { Background = shade });
+        _root.Children.Add(_effects.Element);
 
         // Всё, что поверх сцены, — в одном слое: его и сдвигаем для защиты OLED.
         _overlay = new Grid { Padding = new Thickness(64, 52, 64, 52), RenderTransform = _shift };
@@ -145,7 +157,9 @@ public sealed class QuietWindow : Window
         _root.PointerPressed += (_, _) => Wake();
         _root.KeyDown += OnKey;
         _tick.Tick += (_, _) => OnTick();
-        SetScene(0);
+        var start = sceneId is null ? 0 : Math.Max(0, _scenes.ToList().FindIndex(x => x.Id == sceneId));
+        SetScene(start, effect);
+        _root.SizeChanged += (_, _) => _effects.Set(_effect, _root.ActualWidth, _root.ActualHeight);
         OnTick();
         AppWindow.SetIcon(Path.Combine(AppContext.BaseDirectory, "Assets", "GigaRest.ico"));
         AppWindow.Closing += (_, e) => { if (!_closing) e.Cancel = true; };
@@ -180,12 +194,39 @@ public sealed class QuietWindow : Window
         return b;
     }
 
-    private void SetScene(int index)
+    private void SetScene(int index, SceneEffect? effect = null)
     {
-        _sceneIndex = (index + RestScreens.Scenes.Length) % RestScreens.Scenes.Length;
-        var (file, name) = RestScreens.Scenes[_sceneIndex];
-        _scene.Source = new BitmapImage(RestScreens.SceneUri(file));
-        _sceneName.Text = name;
+        if (_scenes.Count == 0) return;
+        _sceneIndex = (index + _scenes.Count) % _scenes.Count;
+        var scene = _scenes[_sceneIndex];
+        _effect = effect ?? scene.Effect;
+        if (_video is not null)
+        {
+            _video.MediaPlayer?.Pause();
+            _sceneHost.Children.Remove(_video);
+            _video = null;
+        }
+        if (scene.IsVideo)
+        {
+            // Видео-сцена: по кругу, без звука, аппаратное декодирование системного плеера.
+            var player = new global::Windows.Media.Playback.MediaPlayer
+            {
+                IsLoopingEnabled = true, IsMuted = true, AutoPlay = true,
+                Source = global::Windows.Media.Core.MediaSource.CreateFromUri(new Uri(scene.Path)),
+            };
+            _video = new MediaPlayerElement { Stretch = Stretch.UniformToFill, AreTransportControlsEnabled = false };
+            _video.SetMediaPlayer(player);
+            _sceneHost.Children.Add(_video);
+            _scene.Visibility = Visibility.Collapsed;
+        }
+        else
+        {
+            _scene.Source = new BitmapImage(new Uri(scene.Path));
+            _scene.Visibility = Visibility.Visible;
+        }
+        var fx = SceneCatalog.EffectName(_effect);
+        _sceneName.Text = scene.Name + (fx.Length > 0 ? " · " + fx : "");
+        _effects.Set(_effect, _root.ActualWidth, _root.ActualHeight);
     }
 
     private void OnWord(string word)
@@ -196,28 +237,67 @@ public sealed class QuietWindow : Window
         _panelContent.Children.Clear();
         if (word == "Сцены")
         {
-            _panel.Width = 700;
+            _panel.Width = 760;
             var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 16 };
-            for (var i = 0; i < RestScreens.Scenes.Length; i++)
+            for (var i = 0; i < _scenes.Count; i++)
             {
                 var index = i;
-                var (file, name) = RestScreens.Scenes[i];
-                var thumb = new StackPanel { Spacing = 8 };
+                var scene = _scenes[i];
+                var current = i == _sceneIndex;
+                UIElement picture = scene.IsVideo
+                    ? new Grid { Background = Brush("#33FFFFFF"), Children = { new TextBlock { Text = "▶ видео", Foreground = Brush("#CCFFFFFF"), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } } }
+                    : new Image { Source = new BitmapImage(new Uri(scene.Path)) { DecodePixelWidth = 300 }, Stretch = Stretch.UniformToFill };
+                var thumb = new StackPanel { Spacing = 8, Width = 150 };
                 thumb.Children.Add(new Border
                 {
-                    Width = 150, Height = 84, CornerRadius = new CornerRadius(10), Opacity = i == _sceneIndex ? 1 : 0.7,
-                    BorderBrush = Brush(i == _sceneIndex ? "#FFFFFFFF" : "#00FFFFFF"), BorderThickness = new Thickness(1),
-                    Child = new Image { Source = new BitmapImage(RestScreens.SceneUri(file)), Stretch = Stretch.UniformToFill },
+                    Width = 150, Height = 84, CornerRadius = new CornerRadius(10), Opacity = current ? 1 : 0.7,
+                    BorderBrush = Brush(current ? "#FFFFFFFF" : "#00FFFFFF"), BorderThickness = new Thickness(1), Child = picture,
                 });
-                thumb.Children.Add(Text(name, 13, Hex(i == _sceneIndex ? "#FFFFFFFF" : "#8CFFFFFF")));
+                var label = Text(scene.Name, 13, Hex(current ? "#FFFFFFFF" : "#8CFFFFFF"));
+                thumb.Children.Add(label);
                 var b = new Button { Content = thumb, Background = Brush(Colors.Transparent), BorderThickness = new Thickness(0), Padding = new Thickness(0) };
-                b.Click += (_, _) => { SetScene(index); _openWord = null; OnWord("Сцены"); };
+                b.Click += (_, _) => { SetScene(index); SceneChanged?.Invoke(_scenes[_sceneIndex], _effect); _openWord = null; OnWord("Сцены"); };
                 row.Children.Add(b);
             }
-            _panelContent.Children.Add(row);
-            var more = Text("Свои картинки и видео — папка «Мои сцены» (этап 2–3).", 12, Hex("#73FFFFFF"));
-            more.Margin = new Thickness(0, 12, 0, 0);
-            _panelContent.Children.Add(more);
+            _panelContent.Children.Add(new ScrollViewer
+            {
+                Content = row, HorizontalScrollMode = ScrollMode.Enabled, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+                VerticalScrollMode = ScrollMode.Disabled, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled, Padding = new Thickness(0, 0, 0, 10),
+            });
+
+            // Эффект поверх — один за раз.
+            var effects = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Margin = new Thickness(0, 10, 0, 0) };
+            var over = Text("Поверх", 13, Hex("#80FFFFFF"));
+            over.VerticalAlignment = VerticalAlignment.Center;
+            over.Margin = new Thickness(0, 0, 8, 0);
+            effects.Children.Add(over);
+            foreach (var (fx, label) in new[] { (SceneEffect.None, "Ничего"), (SceneEffect.Snow, "Снег"), (SceneEffect.Fog, "Туман"), (SceneEffect.Lights, "Огоньки") })
+            {
+                var selected = fx == _effect;
+                var seg = new Button
+                {
+                    Content = new TextBlock { Text = label, FontSize = 13, Foreground = Brush(selected ? "#FF0B0C10" : "#B3FFFFFF") },
+                    Background = Brush(selected ? "#E6FFFFFF" : "#00FFFFFF"), BorderThickness = new Thickness(0),
+                    CornerRadius = new CornerRadius(999), Padding = new Thickness(12, 6, 12, 6),
+                };
+                seg.Click += (_, _) =>
+                {
+                    _effect = fx;
+                    _effects.Set(_effect, _root.ActualWidth, _root.ActualHeight);
+                    var name = SceneCatalog.EffectName(_effect);
+                    _sceneName.Text = _scenes[_sceneIndex].Name + (name.Length > 0 ? " · " + name : "");
+                    SceneChanged?.Invoke(_scenes[_sceneIndex], _effect);
+                    _openWord = null;
+                    OnWord("Сцены");
+                };
+                effects.Children.Add(seg);
+            }
+            _panelContent.Children.Add(effects);
+
+            var folder = QuietButton("Свои картинки и видео — папка «Мои сцены» (открыть)", 12);
+            folder.Margin = new Thickness(0, 8, 0, 0);
+            folder.Click += (_, _) => OpenMyScenesRequested?.Invoke();
+            _panelContent.Children.Add(folder);
         }
         else
         {
@@ -295,8 +375,8 @@ public sealed class QuietWindow : Window
 
         // Игра или фильм на весь экран поверх — останавливаем движение, видеокарта свободна.
         var busy = UserState.ShouldNotDisturb();
-        if (busy && !_paused) { _kenBurns.Pause(); _paused = true; }
-        else if (!busy && _paused) { _kenBurns.Resume(); _paused = false; }
+        if (busy && !_paused) { _kenBurns.Pause(); _effects.Pause(true); _video?.MediaPlayer?.Pause(); _paused = true; }
+        else if (!busy && _paused) { _kenBurns.Resume(); _effects.Pause(false); _video?.MediaPlayer?.Play(); _paused = false; }
     }
 
     /// <summary>Итог перехода поверх сцены. С проблемами — висит, пока не закроют; без — исчезает через 8 с.</summary>
@@ -343,6 +423,8 @@ public sealed class QuietWindow : Window
         _closing = true;
         _tick.Stop();
         _kenBurns.Stop();
+        _effects.Pause(true);
+        _video?.MediaPlayer?.Pause();
         Close();
     }
 }
