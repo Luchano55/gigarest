@@ -231,7 +231,23 @@ public sealed partial class App : Application, IXamlMetadataProvider
             Log.Info("Самопроверка: старт");
             await StartTestAsync();
             await Task.Delay(1500);
+            // Тест 2 спросит «Сохранить?» — отвечаем «Нет» через 3 секунды, как ответил бы человек.
+            using var answering = new CancellationTokenSource();
+            _ = Task.Run(async () =>
+            {
+                while (!answering.IsCancellationRequested)
+                {
+                    await Task.Delay(3000);
+                    var testPids = _desktop.GetProcesses().Where(p => TestPrograms.IsTest(p.ExeName)).Select(p => p.Pid).ToHashSet();
+                    foreach (var w in _desktop.GetWindows().Where(w => w.IsDialog && testPids.Contains(w.Pid)))
+                    {
+                        Log.Info("Самопроверка: отвечаем «Нет» на вопрос тестового окна");
+                        WindowTools.AnswerNo(w.Handle);
+                    }
+                }
+            });
             await GoToRestAsync(Window().Programs);
+            answering.Cancel();
             await Task.Delay(10000);           // CI в это время снимает экран
             await ReturnToWorkAsync();
             await Task.Delay(4000);

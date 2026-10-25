@@ -95,6 +95,9 @@ public static class WindowTools
 
     public static bool IsAlive(long hwnd) => Native.IsWindow((nint)hwnd);
 
+    /// <summary>Нажать «Нет» в диалоге «Сохранить?» (только для самопроверки на тестовых окнах).</summary>
+    public static void AnswerNo(long dialog) => Native.PostMessageW((nint)dialog, 0x0111 /* WM_COMMAND */, 7 /* IDNO */, 0);
+
     /// <summary>
     /// Chrome, Electron и Firefox перестают рисовать окно, полностью закрытое непрозрачным окном (D-THUMBS).
     /// Окно с альфой меньше 255 они непрозрачным не считают — тогда живые копии не замирают (?).
