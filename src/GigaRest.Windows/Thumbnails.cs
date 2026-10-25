@@ -116,6 +116,25 @@ public static class WindowTools
 
     public static bool IsAlive(long hwnd) => Native.IsWindow((nint)hwnd);
 
+    /// <summary>Прозрачность экрана плиток (0–254): так окно под ним открывается плавно, без «перерисовки».</summary>
+    public static void SetAlpha(nint hwnd, byte alpha) => SetLayeredWindowAttributes(hwnd, 0, Math.Min(alpha, (byte)254), 0x2);
+
+    /// <summary>Поставить окно программы прямо под экран плиток (не активируя) и развернуть, если свёрнуто.</summary>
+    public static void PlaceUnder(long hwnd, nint above)
+    {
+        var h = (nint)hwnd;
+        if (Native.IsIconic(h)) Native.ShowWindow(h, 3 /* SW_SHOWMAXIMIZED */);
+        const uint SWP_NOSIZE = 0x1, SWP_NOMOVE = 0x2, SWP_NOACTIVATE = 0x10;
+        Native.SetWindowPos(h, above, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+    }
+
+    /// <summary>Убрать экран плиток под окно программы (не активируя).</summary>
+    public static void PutBelow(nint tiles, long hwnd)
+    {
+        const uint SWP_NOSIZE = 0x1, SWP_NOMOVE = 0x2, SWP_NOACTIVATE = 0x10;
+        Native.SetWindowPos(tiles, (nint)hwnd, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+    }
+
     public static long Foreground() => GetForegroundWindow();
 
     [DllImport("user32.dll")] private static extern nint GetForegroundWindow();

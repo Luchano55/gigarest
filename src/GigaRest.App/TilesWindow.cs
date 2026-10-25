@@ -167,8 +167,28 @@ public sealed class TilesWindow : Window
     private static readonly TimeSpan OpenDuration = TimeSpan.FromMilliseconds(260);
     private EventHandler<object>? _frame;
 
-    /// <summary>Плитка плавно «вырастает» до всего монитора, потом поднимается настоящее окно.</summary>
-    public void AnimateOpen(long hwnd, Action done) => Animate(hwnd, opening: true, done);
+    /// <summary>
+    /// Плитка плавно «вырастает» до всего монитора; настоящее окно уже стоит прямо под экраном плиток,
+    /// экран плиток растворяется — и окно на месте. Без «повторного открытия» и вспышки.
+    /// </summary>
+    public void AnimateOpen(long hwnd, Action done) => Animate(hwnd, opening: true, () =>
+    {
+        var tiles = Handle;
+        WindowTools.PlaceUnder(hwnd, tiles);
+        var started = DateTime.UtcNow;
+        EventHandler<object>? fade = null;
+        fade = (_, _) =>
+        {
+            var t = Math.Min(1, (DateTime.UtcNow - started).TotalMilliseconds / 180);
+            WindowTools.SetAlpha(tiles, (byte)(254 * (1 - t)));
+            if (t < 1) return;
+            CompositionTarget.Rendering -= fade;
+            done();                                   // окно — на передний план (оно уже видно, ничего не меняется)
+            WindowTools.PutBelow(tiles, hwnd);        // плитки — под ним
+            WindowTools.SetAlpha(tiles, 254);
+        };
+        CompositionTarget.Rendering += fade;
+    });
 
     /// <summary>Окно свернули: копия плавно «уменьшается» обратно в свою плитку.</summary>
     public void AnimateClose(long hwnd) => Animate(hwnd, opening: false, null);
