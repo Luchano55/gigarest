@@ -16,10 +16,16 @@ public static class UserState
     /// <summary>true — лучше не беспокоить (игра, фильм на весь экран, презентация, ПК заблокирован).</summary>
     public static bool ShouldNotDisturb()
     {
+        // Наш «Тихий» экран тоже на весь экран — это не игра и не помеха.
+        GetWindowThreadProcessId(GetForegroundWindow(), out var pid);
+        if (pid == Environment.ProcessId) return false;
         if (SHQueryUserNotificationState(out var state) != 0) return false;
         return state is QUERY_USER_NOTIFICATION_STATE.NotPresent or QUERY_USER_NOTIFICATION_STATE.Busy
             or QUERY_USER_NOTIFICATION_STATE.RunningD3DFullScreen or QUERY_USER_NOTIFICATION_STATE.PresentationMode;
     }
+
+    [DllImport("user32.dll")] private static extern nint GetForegroundWindow();
+    [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(nint hwnd, out int pid);
 
     [DllImport("shell32.dll")]
     private static extern int SHQueryUserNotificationState(out QUERY_USER_NOTIFICATION_STATE state);

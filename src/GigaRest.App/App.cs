@@ -20,7 +20,7 @@ namespace GigaRest.App;
 /// </summary>
 public sealed partial class App : Application, IXamlMetadataProvider
 {
-    private const int HotkeyToggle = 1;
+    private const int HotkeyToggle = 1, HotkeyTiles = 2;
     private const int MenuToggle = 1, MenuShow = 2, MenuPrograms = 4, MenuTest = 5, MenuTestClose = 6, MenuAutostart = 7, MenuSettings = 8, MenuLogs = 3, MenuExit = 9;
 
     private readonly XamlControlsXamlMetaDataProvider _metadata = new();
@@ -36,6 +36,11 @@ public sealed partial class App : Application, IXamlMetadataProvider
     private SwitcherWindow? _window;
     private ProgramsWindow? _programs;
     private SettingsWindow? _settingsWindow;
+    private QuietWindow? _quiet;
+    private TilesWindow? _tilesWindow;
+    private WindowEvents? _windowEvents;
+    private bool _tilesHintShown;
+    private DispatcherQueue _queue = null!;
     private DispatcherQueueTimer? _scheduleTimer;
     private DateTime _lastScheduleCheck = DateTime.Now;
     private DateTime? _snoozeUntil;
@@ -92,7 +97,12 @@ public sealed partial class App : Application, IXamlMetadataProvider
         _tray.ShowIcon(Path.Combine(AppContext.BaseDirectory, "Assets", "GigaRest.ico"), TrayTip);
         _tray.TrayClicked += () => queue.TryEnqueue(ShowWindow);
         _tray.BalloonClicked += () => queue.TryEnqueue(OnBalloonClicked);
-        _tray.HotkeyPressed += id => { if (id == HotkeyToggle) queue.TryEnqueue(Toggle); };
+        _queue = queue;
+        _tray.HotkeyPressed += id =>
+        {
+            if (id == HotkeyToggle) queue.TryEnqueue(Toggle);
+            else if (id == HotkeyTiles) queue.TryEnqueue(BackToTiles);
+        };
         _tray.MenuItems = MenuItems;
         _tray.MenuCommand += id => queue.TryEnqueue(() => OnMenu(id));
         RegisterHotkey();
@@ -109,10 +119,111 @@ public sealed partial class App : Application, IXamlMetadataProvider
             // Первый запуск: сначала настройка — что закрывать, что на второй монитор (с подсказками).
             _ = ShowProgramsAsync(setup: true);
         }
-        else if (!_args.Contains("--tray") || _switcher.IsResting)
+        else if (_switcher.IsResting)
+        {
+            // Отдых продолжается (например, после перезагрузки): снова «Тихий» экран и плитки.
+            EnterRestScreens(null);
+        }
+        else if (!_args.Contains("--tray"))
         {
             ShowWindow();
         }
+    }
+
+    // ---------- экраны отдыха: «Тихий» на основном мониторе, плитки на втором ----------
+
+    private void EnterRestScreens(RestReport? report)
+    {
+        try
+        {
+            var monitors = _desktop.GetMonitors();
+            var primary = monitors.FirstOrDefault(m => m.IsPrimary) ?? monitors.FirstOrDefault();
+            var second = RestSwitcher.PickSecondMonitor(monitors);
+
+            // Плитки — из того, что переехало на второй монитор (в session.json).
+            var session = new SessionStore(_paths.SessionFile).Load();
+            var processes = _desktop.GetProcesses();
+            var tiles = (session?.Moved ?? [])
+                .Where(m => WindowTools.IsAlive(m.Handle))
+                .GroupBy(m => m.ProgramId).Select(g => g.First())
+                .Select(m => new TileInfo(m.Handle, m.ProgramId, m.DisplayName, processes.FirstOrDefault(p => p.Pid == m.Pid)?.ExePath))
+                .ToList();
+            if (second is not null && tiles.Count > 0)
+            {
+                _windowEvents ??= new WindowEvents();
+                _windowEvents.Clear();
+                foreach (var t in tiles) _windowEvents.Watch(t.Hwnd);
+                _windowEvents.Minimized += OnTileMinimized;
+                _windowEvents.Destroyed += OnTileDestroyed;
+                _tilesWindow = new TilesWindow();
+                _tilesWindow.OpenRequested += OpenTile;
+                _tilesWindow.SetTiles(tiles);
+                _tilesWindow.ShowOn(second);
+                if (Hotkey.TryParse("Ctrl+Alt+Space", out var tilesKey) && _tray?.RegisterHotkey(HotkeyTiles, tilesKey) is { } problem)
+                    Log.Warn("Клавиша плиток: " + problem);
+            }
+
+            _quiet = new QuietWindow();
+            _quiet.ReturnRequested += () => _ = ReturnToWorkAsync();
+            _quiet.DetailsRequested += () => { _quiet?.HideSummary(); _window?.Present(); };
+            _quiet.ShowOn(primary);
+            _window?.AppWindow.Hide();
+            if (report is not null)
+                _quiet.ShowSummary(report.Summary + (report.Problems.Count > 0 ? "\n" + string.Join("\n", report.Problems) : ""), report.Problems.Count > 0);
+            Log.Info($"Экраны отдыха: тихий экран, плиток {(_tilesWindow is null ? 0 : tiles.Count)}");
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Экраны отдыха", ex);
+        }
+    }
+
+    private void ExitRestScreens()
+    {
+        _tray?.UnregisterHotkey(HotkeyTiles);
+        if (_windowEvents is not null)
+        {
+            _windowEvents.Minimized -= OnTileMinimized;
+            _windowEvents.Destroyed -= OnTileDestroyed;
+            _windowEvents.Clear();
+        }
+        _tilesWindow?.CloseForGood();
+        _tilesWindow = null;
+        _quiet?.CloseForGood();
+        _quiet = null;
+    }
+
+    /// <summary>Щелчок по плитке: окно программы — сверху, на весь второй монитор. Закрыта — открыть снова.</summary>
+    private void OpenTile(TileInfo tile)
+    {
+        if (WindowTools.IsAlive(tile.Hwnd))
+        {
+            WindowTools.Activate(tile.Hwnd);
+            if (!_tilesHintShown)
+            {
+                _tilesHintShown = true;
+                _tray?.ShowBalloon(tile.Name, "«Свернуть» или Ctrl+Alt+Пробел — обратно в плитки.");
+            }
+        }
+        else if (tile.ExePath is not null)
+        {
+            var error = _desktop.Launch(new LaunchSpec { FileName = tile.ExePath, WorkingDirectory = Path.GetDirectoryName(tile.ExePath) });
+            if (error is not null) _tray?.ShowBalloon(tile.Name, "Не открылась: " + error);
+        }
+    }
+
+    // Окно с плитки свернули — ставим его обратно развёрнутым под плитки, плитки — сверху.
+    private void OnTileMinimized(long hwnd) => _queue.TryEnqueue(() =>
+    {
+        WindowTools.RestoreMaximizedNoActivate(hwnd);
+        BackToTiles();
+    });
+
+    private void OnTileDestroyed(long hwnd) => _queue.TryEnqueue(() => _tilesWindow?.MarkClosed(hwnd));
+
+    private void BackToTiles()
+    {
+        if (_tilesWindow is not null) RestScreens.BringToFront(_tilesWindow);
     }
 
     private async Task RunScreenshotsAsync(string dir)
@@ -470,6 +581,7 @@ public sealed partial class App : Application, IXamlMetadataProvider
             var report = await Task.Run(() => _switcher.GoToRestAsync(programs, progress, _cts.Token));
             w.ShowRest(report);
             _tray?.SetTip(TrayTip);
+            if (_switcher.IsResting) EnterRestScreens(report);
         }
         catch (Exception ex)
         {
@@ -487,6 +599,7 @@ public sealed partial class App : Application, IXamlMetadataProvider
         if (_busy) return;
         _busy = true;
         var w = Window();
+        ExitRestScreens();
         try
         {
             w.ShowReturning();
@@ -516,6 +629,8 @@ public sealed partial class App : Application, IXamlMetadataProvider
         _window?.CloseForGood();
         _programs?.CloseForGood();
         _settingsWindow?.CloseForGood();
+        ExitRestScreens();
+        _windowEvents?.Dispose();
         _scheduleTimer?.Stop();
         Log.Info("Выход");
         Exit();

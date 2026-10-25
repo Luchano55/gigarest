@@ -28,5 +28,7 @@
   </ItemGroup>
   <ItemGroup>
     <Content Include="Assets\GigaRest.ico" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Встроенные сцены (свои, без чужих прав) — assets/scenes. -->
+    <Content Include="..\..\assets\scenes\*.jpg" Link="Assets\Scenes\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

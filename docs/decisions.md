@@ -34,6 +34,8 @@
 - **Chromium и Electron** (Chrome, Claude) перестают рисовать полностью перекрытое окно (native window occlusion). Тогда плитка показывает последний кадр с подписью.
   - Для своего Chrome можно передать флаг `--disable-features=CalculateNativeWinOcclusion` (?).
 - **Порядок:** этап 4 начинается с прототипа.
+- **Первая версия (25.10.2026):** окно плиток WinUI на весь второй монитор, `DwmRegisterThumbnail` в прямоугольники плиток (пропорции окна сохраняются). Окна программ развёрнуты под ним; «Свернуть» ловится `SetWinEventHook(EVENT_SYSTEM_MINIMIZESTART)` — окно разворачивается обратно без активации, плитки — сверху; Ctrl+Alt+Пробел — то же. Окно плиток — WS_EX_LAYERED с альфой 254: Chromium/Firefox не считают его непрозрачным и не перестают рисовать окна под ним (?, проверить на ПК Романа; если окно плиток окажется чёрным — убрать).
+- **Esc** для возврата в плитки не берём (нужен самим программам); Роман спрашивал — предложено двойное Esc по желанию.
 - Источники: https://learn.microsoft.com/en-us/windows/win32/api/dwmapi/nf-dwmapi-dwmregisterthumbnail , https://chromium.googlesource.com/chromium/src/+/master/docs/windows_native_window_occlusion_tracking.md
 
 ## D-WINDOWS. Перенос окон

@@ -103,9 +103,32 @@ internal static class Screenshots
         window.ShowReturnOffer("по будням в 09:00", [("bitrix24.exe", "Битрикс24"), ("chrome.exe", "Chrome"), ("1cv8.exe", "1С:Предприятие")]);
         await Capture(window.Root, Path.Combine(dir, "7-pora.png"));
 
+        // «Тихий» экран на основном мониторе.
+        var quiet = new QuietWindow();
+        quiet.UseDesignSizeForCapture();
+        quiet.StartForCapture();
+        quiet.ShowSummary("Закрыто: 3 программы, на второй монитор: 4 окна, освободилось 4,3 ГБ.", hasProblems: false);
+        await Task.Delay(1500); // картинка сцены грузится с диска
+        await Capture(quiet.Root, Path.Combine(dir, "11-tihiy.png"));
+
+        // Плитки на втором мониторе (на сервере сборки живых копий нет — заглушки).
+        var tilesWindow = new TilesWindow();
+        tilesWindow.UseDesignSizeForCapture();
+        tilesWindow.SetTiles(
+        [
+            new TileInfo(0, "claude.exe", "Claude", null),
+            new TileInfo(0, "telegram.exe", "Telegram", null),
+            new TileInfo(0, "zen.exe", "Zen", null),
+            new TileInfo(0, "яндекс музыка.exe", "Яндекс Музыка", null),
+        ], liveCopies: false);
+        await Task.Delay(1500);
+        await Capture(tilesWindow.Root, Path.Combine(dir, "12-plitki.png"));
+
         // Последнее закрытое окно завершает программу — поэтому закрываем оба только в конце.
         programsWindow.CloseForGood();
         settingsWindow.CloseForGood();
+        quiet.CloseForGood();
+        tilesWindow.CloseForGood();
         window.CloseForGood();
         return true;
     }

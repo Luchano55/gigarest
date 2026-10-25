@@ -116,6 +116,11 @@ public sealed class TrayAndHotkeys : IDisposable
             : $"{hotkey} не удалось назначить (код {error})";
     }
 
+    public void UnregisterHotkey(int id)
+    {
+        if (_hotkeys.Remove(id)) UnregisterHotKey(_hwnd, id);
+    }
+
     private nint Proc(nint hwnd, int msg, nint wParam, nint lParam)
     {
         try

@@ -13,6 +13,13 @@
 
 ## Как это выглядит
 
+В отдыхе на основном мониторе — «Тихий» экран, на втором — живые плитки разрешённых окон.
+
+![Тихий экран](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/claude-system-management-requirements-nobkxi/11-tihiy.png)
+
+![Плитки на втором мониторе](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/claude-system-management-requirements-nobkxi/12-plitki.png)
+
+
 Окно перехода: что будет с каждой программой и сколько памяти освободится.
 
 ![Переход в отдых](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/claude-system-management-requirements-nobkxi/1-perehod.png)
