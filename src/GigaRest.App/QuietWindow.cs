@@ -121,6 +121,7 @@ public sealed class QuietWindow : Window
         }
         bottom.Children.Add(_words);
         _sceneName = Text("", 13, Hex("#73FFFFFF"));
+        _sceneName.Visibility = Visibility.Collapsed; // название сцены видно только в списке «Сцены»
         _sceneName.VerticalAlignment = VerticalAlignment.Center;
         Grid.SetColumn(_sceneName, 1);
         bottom.Children.Add(_sceneName);
@@ -397,7 +398,7 @@ public sealed class QuietWindow : Window
         }
 
         // Игра или фильм на весь экран поверх — останавливаем движение, видеокарта свободна.
-        var busy = UserState.ShouldNotDisturb();
+        var busy = _monitor is not null && UserState.CoversMonitor(_monitor);
         if (busy && !_paused) { _kenBurns.Pause(); _effects.Pause(true); _video?.Pause(); _paused = true; }
         else if (!busy && _paused) { _kenBurns.Resume(); _effects.Pause(false); _video?.Resume(); _paused = false; }
     }
@@ -430,8 +431,11 @@ public sealed class QuietWindow : Window
         OnTick();
     }
 
+    private MonitorInfo? _monitor;
+
     public void ShowOn(MonitorInfo? monitor)
     {
+        _monitor = monitor;
         RestScreens.FullScreenOn(this, monitor);
         RestScreens.BringToFront(this);
         _tick.Start();

@@ -22,7 +22,7 @@ namespace GigaRest.App;
 public sealed partial class App : Application, IXamlMetadataProvider
 {
     private const int HotkeyToggle = 1, HotkeyTiles = 2;
-    private const int MenuToggle = 1, MenuShow = 2, MenuPrograms = 4, MenuTest = 5, MenuTestClose = 6, MenuAutostart = 7, MenuSettings = 8, MenuLogs = 3, MenuExit = 9;
+    private const int MenuToggle = 1, MenuShow = 2, MenuPrograms = 4, MenuTest = 5, MenuTestClose = 6, MenuAutostart = 7, MenuSettings = 8, MenuUpdate = 10, MenuLogs = 3, MenuExit = 9;
 
     private readonly XamlControlsXamlMetaDataProvider _metadata = new();
     private readonly string[] _args;
@@ -38,6 +38,9 @@ public sealed partial class App : Application, IXamlMetadataProvider
     private ProgramsWindow? _programs;
     private SettingsWindow? _settingsWindow;
     private QuietWindow? _quiet;
+    private Updater? _updater;
+    private DispatcherQueueTimer? _updateTimer;
+    private bool _updateBalloon;
     private TilesWindow? _tilesWindow;
     private WindowEvents? _windowEvents;
     private bool _tilesHintShown;
@@ -97,6 +100,10 @@ public sealed partial class App : Application, IXamlMetadataProvider
         _tray = new TrayAndHotkeys();
         _tray.ShowIcon(Path.Combine(AppContext.BaseDirectory, "Assets", "GigaRest.ico"), TrayTip);
         _tray.TrayClicked += () => queue.TryEnqueue(ShowWindow);
+        _tray.BalloonClicked += () => queue.TryEnqueue(() =>
+        {
+            if (_updateBalloon && _updater?.Available is { } m) { _updateBalloon = false; _ = InstallUpdateAsync(m); }
+        });
         _tray.BalloonClicked += () => queue.TryEnqueue(OnBalloonClicked);
         _queue = queue;
         _tray.HotkeyPressed += id =>
@@ -113,6 +120,19 @@ public sealed partial class App : Application, IXamlMetadataProvider
             Log.Info("Запущена другая версия — выходим, чтобы она работала вместо нас");
             Quit();
         });
+
+        // Самообновление: через 30 секунд после запуска и раз в 6 часов. Остатки прошлого обновления (*.old) — убрать.
+        _ = Task.Run(() => GigaRest.Core.Updates.UpdateApplier.CleanupOld(Updater.AppDir));
+        _updater = new Updater();
+        _updateTimer = queue.CreateTimer();
+        _updateTimer.Interval = TimeSpan.FromSeconds(30);
+        _updateTimer.Tick += async (_, _) =>
+        {
+            _updateTimer.Interval = TimeSpan.FromHours(6);
+            if (await _updater.CheckAsync(manual: false) is { } m) OfferUpdate(m);
+        };
+        if (!_args.Contains("--selftest")) _updateTimer.Start();
+        if (_args.Contains("--after-update")) _tray.ShowBalloon("GigaRest обновлён", $"Версия {GigaRest.Core.Updates.AppVersion.Display}. Что нового — в docs/CHANGELOG.md.");
 
         // Расписание возврата: проверяем раз в 30 секунд (и сразу после пробуждения ПК — по разнице времени).
         _scheduleTimer = queue.CreateTimer();
@@ -306,7 +326,8 @@ public sealed partial class App : Application, IXamlMetadataProvider
     {
         if (WindowTools.IsAlive(tile.Hwnd))
         {
-            WindowTools.Activate(tile.Hwnd);
+            if (_tilesWindow is not null) _tilesWindow.AnimateOpen(tile.Hwnd, () => WindowTools.Activate(tile.Hwnd));
+            else WindowTools.Activate(tile.Hwnd);
             if (!_tilesHintShown)
             {
                 _tilesHintShown = true;
@@ -321,10 +342,13 @@ public sealed partial class App : Application, IXamlMetadataProvider
     }
 
     // Окно с плитки свернули — ставим его обратно развёрнутым под плитки, плитки — сверху.
-    private void OnTileMinimized(long hwnd) => _queue.TryEnqueue(() =>
+    // Ждём, пока Windows досворачивает окно, — иначе наш возврат перебивается её анимацией.
+    private void OnTileMinimized(long hwnd) => _queue.TryEnqueue(async () =>
     {
+        await Task.Delay(250);
         if (_tilesWindow is null) return;
         WindowTools.ParkUnderTiles(hwnd, _tilesWindow.Handle);
+        _tilesWindow.AnimateClose(hwnd);
     });
 
     private void OnTileDestroyed(long hwnd) => _queue.TryEnqueue(() => _tilesWindow?.MarkClosed(hwnd));
@@ -335,9 +359,14 @@ public sealed partial class App : Application, IXamlMetadataProvider
         if (_tilesWindow is null) return;
         var foreground = WindowTools.Foreground();
         if (foreground != 0 && _windowEvents?.IsWatched(foreground) == true)
+        {
             WindowTools.ParkUnderTiles(foreground, _tilesWindow.Handle);
+            _tilesWindow.AnimateClose(foreground);
+        }
         else
-            RestScreens.BringToFront(_tilesWindow);
+        {
+            WindowTools.RaiseAboveAll(_tilesWindow.Handle);
+        }
     }
 
     private async Task RunScreenshotsAsync(string dir)
@@ -387,6 +416,50 @@ public sealed partial class App : Application, IXamlMetadataProvider
         SaveSettings();
         _switcher.MarkClosed(programId);
         Log.Info($"Завершена из итога по просьбе: {programId}");
+    }
+
+    private void OfferUpdate(GigaRest.Core.Updates.UpdateManifest m)
+    {
+        _updateBalloon = true;
+        _tray?.ShowBalloon("Доступна новая версия", $"GigaRest {m.Version}. Щёлкните здесь, чтобы обновиться (около минуты).");
+    }
+
+    private async Task UpdateFromMenuAsync()
+    {
+        if (_updater is null) return;
+        if (_updater.Available is { } ready) { await InstallUpdateAsync(ready); return; }
+        try
+        {
+            var m = await _updater.CheckAsync(manual: true);
+            if (m is null) _tray?.ShowBalloon("Обновления", $"У вас последняя версия: {GigaRest.Core.Updates.AppVersion.Display}.");
+            else OfferUpdate(m);
+        }
+        catch (Exception ex)
+        {
+            _tray?.ShowBalloon("Обновления", "Не удалось проверить: " + ex.Message);
+        }
+    }
+
+    private async Task InstallUpdateAsync(GigaRest.Core.Updates.UpdateManifest m)
+    {
+        if (_updater is null || _busy) { _tray?.ShowBalloon("Обновление", "Сейчас идёт переход — обновим чуть позже."); return; }
+        _tray?.ShowBalloon("Обновление", $"Скачиваем GigaRest {m.Version}… Программа перезапустится сама.");
+        try
+        {
+            var last = DateTime.MinValue;
+            var progress = new Progress<string>(text =>
+            {
+                _tray?.SetTip("GigaRest — " + text);
+                if (DateTime.Now - last > TimeSpan.FromSeconds(15)) { last = DateTime.Now; Log.Info(text); }
+            });
+            await Task.Run(() => _updater.InstallAsync(m, progress, () => _queue.TryEnqueue(Quit)));
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Обновление", ex);
+            _tray?.SetTip(TrayTip);
+            _tray?.ShowBalloon("Обновление не получилось", ex.Message);
+        }
     }
 
     private void CheckSchedule()
@@ -489,6 +562,9 @@ public sealed partial class App : Application, IXamlMetadataProvider
         new TrayMenuItem(MenuTestClose, "Закрыть тестовые окна", !_busy),
         null,
         new TrayMenuItem(MenuSettings, "Настройки…"),
+        _updater?.Available is { } update
+            ? new TrayMenuItem(MenuUpdate, $"Обновить до {update.Version}", Bold: false)
+            : new TrayMenuItem(MenuUpdate, "Проверить обновления"),
         new TrayMenuItem(MenuAutostart, "Запускать вместе с Windows", Checked: Autostart.IsEnabled(ExePath)),
         new TrayMenuItem(MenuLogs, "Открыть журнал"),
         null,
@@ -505,6 +581,7 @@ public sealed partial class App : Application, IXamlMetadataProvider
             case MenuTest: _ = StartTestAsync(); break;
             case MenuTestClose: CloseTestWindows(); break;
             case MenuSettings: ShowSettings(); break;
+            case MenuUpdate: _ = UpdateFromMenuAsync(); break;
             case MenuAutostart:
                 var enable = !Autostart.IsEnabled(ExePath);
                 try
@@ -748,6 +825,8 @@ public sealed partial class App : Application, IXamlMetadataProvider
         ExitRestScreens();
         _windowEvents?.Dispose();
         _scheduleTimer?.Stop();
+        _updateTimer?.Stop();
+        _updater?.Dispose();
         Log.Info("Выход");
         Exit();
     }

@@ -162,6 +162,52 @@ public sealed class TilesWindow : Window
         }
     }
 
+    // ---------- плавное открытие и возврат ----------
+
+    private static readonly TimeSpan OpenDuration = TimeSpan.FromMilliseconds(260);
+    private EventHandler<object>? _frame;
+
+    /// <summary>Плитка плавно «вырастает» до всего монитора, потом поднимается настоящее окно.</summary>
+    public void AnimateOpen(long hwnd, Action done) => Animate(hwnd, opening: true, done);
+
+    /// <summary>Окно свернули: копия плавно «уменьшается» обратно в свою плитку.</summary>
+    public void AnimateClose(long hwnd) => Animate(hwnd, opening: false, null);
+
+    private void Animate(long hwnd, bool opening, Action? done)
+    {
+        var index = _tiles.FindIndex(t => t.Info.Hwnd == hwnd);
+        if (index < 0 || _tiles[index].Thumb is null || _root.XamlRoot is null) { done?.Invoke(); return; }
+        var (_, slot, _, thumb) = _tiles[index];
+        var scale = _root.XamlRoot.RasterizationScale;
+        var p = slot.TransformToVisual(_root).TransformPoint(new global::Windows.Foundation.Point(0, 0));
+        (double L, double T, double W, double H) tile = (p.X * scale, p.Y * scale, slot.ActualWidth * scale, slot.ActualHeight * scale);
+        (double L, double T, double W, double H) full = (0, 0, _root.ActualWidth * scale, _root.ActualHeight * scale);
+        var (from, to) = opening ? (tile, full) : (full, tile);
+
+        // Остальные копии на время анимации прячем: эта — главная.
+        for (var i = 0; i < _tiles.Count; i++) if (i != index) _tiles[i].Thumb?.Hide();
+        if (_frame is not null) CompositionTarget.Rendering -= _frame;
+        var started = DateTime.UtcNow;
+        _frame = (_, _) =>
+        {
+            var t = Math.Min(1, (DateTime.UtcNow - started).TotalMilliseconds / OpenDuration.TotalMilliseconds);
+            var e = 1 - Math.Pow(1 - t, 3); // плавное замедление в конце
+            thumb!.Place((int)(from.L + (to.L - from.L) * e), (int)(from.T + (to.T - from.T) * e),
+                (int)(from.W + (to.W - from.W) * e), (int)(from.H + (to.H - from.H) * e));
+            if (t < 1) return;
+            CompositionTarget.Rendering -= _frame;
+            _frame = null;
+            done?.Invoke();
+            // Когда настоящее окно уже сверху — вернуть копии на места.
+            DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, async () =>
+            {
+                if (opening) await Task.Delay(400);
+                PlaceThumbnails();
+            });
+        };
+        CompositionTarget.Rendering += _frame;
+    }
+
     /// <summary>Программа на плитке закрылась.</summary>
     public void MarkClosed(long hwnd)
     {

@@ -93,8 +93,19 @@ public static class WindowTools
         }
         const uint SWP_NOSIZE = 0x1, SWP_NOMOVE = 0x2, SWP_NOACTIVATE = 0x10;
         Native.SetWindowPos(h, 1 /* HWND_BOTTOM */, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
-        Native.SetWindowPos(tilesWindow, 0 /* HWND_TOP */, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
-        Native.SetForegroundWindow(tilesWindow);
+        RaiseAboveAll(tilesWindow);
+    }
+
+    /// <summary>
+    /// Поднять окно над всеми без прав «переднего плана»: на миг «поверх всех», потом обратно в обычные —
+    /// оно остаётся наверху. Обычный SetForegroundWindow из фона Windows часто не выполняет.
+    /// </summary>
+    public static void RaiseAboveAll(nint hwnd)
+    {
+        const uint SWP_NOSIZE = 0x1, SWP_NOMOVE = 0x2, SWP_NOACTIVATE = 0x10;
+        Native.SetWindowPos(hwnd, -1 /* HWND_TOPMOST */, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+        Native.SetWindowPos(hwnd, -2 /* HWND_NOTOPMOST */, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+        Native.SetForegroundWindow(hwnd);
     }
 
     public static void Activate(long hwnd)

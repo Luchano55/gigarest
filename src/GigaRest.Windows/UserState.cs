@@ -24,6 +24,23 @@ public static class UserState
             or QUERY_USER_NOTIFICATION_STATE.RunningD3DFullScreen or QUERY_USER_NOTIFICATION_STATE.PresentationMode;
     }
 
+    /// <summary>
+    /// Сцену ставим на паузу, только если её закрывает чужое окно на весь этот монитор (игра, фильм)
+    /// или игра в эксклюзивном полноэкранном режиме. Развёрнутое окно на другом мониторе — не повод.
+    /// </summary>
+    public static bool CoversMonitor(GigaRest.Core.Desktop.MonitorInfo monitor)
+    {
+        var hwnd = GetForegroundWindow();
+        GetWindowThreadProcessId(hwnd, out var pid);
+        if (hwnd == 0 || pid == Environment.ProcessId) return false;
+        if (SHQueryUserNotificationState(out var state) == 0 && state == QUERY_USER_NOTIFICATION_STATE.RunningD3DFullScreen) return true;
+        if (Native.IsIconic(hwnd) || !Native.IsWindowVisible(hwnd)) return false;
+        using var dpi = new Native.DpiScope();
+        if (!Native.GetWindowRect(hwnd, out var r)) return false;
+        var b = monitor.Bounds;
+        return r.Left <= b.Left && r.Top <= b.Top && r.Right >= b.Right && r.Bottom >= b.Bottom;
+    }
+
     [DllImport("user32.dll")] private static extern nint GetForegroundWindow();
     [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(nint hwnd, out int pid);
 
