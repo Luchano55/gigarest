@@ -106,7 +106,12 @@ public sealed partial class App : Application, IXamlMetadataProvider
         _tray.MenuItems = MenuItems;
         _tray.MenuCommand += id => queue.TryEnqueue(() => OnMenu(id));
         RegisterHotkey();
-        _single?.Listen(queue, ShowWindow);
+        _single?.Listen(queue, ShowWindow, () =>
+        {
+            // Запустили новую версию — уступаем ей. Если идёт отдых, состояние в session.json — новая версия продолжит.
+            Log.Info("Запущена другая версия — выходим, чтобы она работала вместо нас");
+            Quit();
+        });
 
         // Расписание возврата: проверяем раз в 30 секунд (и сразу после пробуждения ПК — по разнице времени).
         _scheduleTimer = queue.CreateTimer();
@@ -114,7 +119,11 @@ public sealed partial class App : Application, IXamlMetadataProvider
         _scheduleTimer.Tick += (_, _) => CheckSchedule();
         _scheduleTimer.Start();
 
-        if (!_settings.SetupDone && !_switcher.IsResting)
+        if (_args.Contains("--selftest"))
+        {
+            _ = SelfTestAsync();
+        }
+        else if (!_settings.SetupDone && !_switcher.IsResting)
         {
             // Первый запуск: сначала настройка — что закрывать, что на второй монитор (с подсказками).
             _ = ShowProgramsAsync(setup: true);
@@ -132,15 +141,22 @@ public sealed partial class App : Application, IXamlMetadataProvider
 
     // ---------- экраны отдыха: «Тихий» на основном мониторе, плитки на втором ----------
 
+    /// <summary>Что не получилось при показе экранов отдыха — показываем в окне, а не молчим.</summary>
+    private string? _restScreensProblem;
+
     private void EnterRestScreens(RestReport? report)
     {
+        _restScreensProblem = null;
+        IReadOnlyList<MonitorInfo> monitors = [];
+        try { monitors = _desktop.GetMonitors(); }
+        catch (Exception ex) { Log.Error("Мониторы", ex); }
+        var primary = monitors.FirstOrDefault(m => m.IsPrimary) ?? monitors.FirstOrDefault();
+        var second = RestSwitcher.PickSecondMonitor(monitors);
+        var tileCount = 0;
+
+        // Плитки — отдельно: если с ними что-то не так, «Тихий» экран всё равно откроется.
         try
         {
-            var monitors = _desktop.GetMonitors();
-            var primary = monitors.FirstOrDefault(m => m.IsPrimary) ?? monitors.FirstOrDefault();
-            var second = RestSwitcher.PickSecondMonitor(monitors);
-
-            // Плитки — из того, что переехало на второй монитор (в session.json).
             var session = new SessionStore(_paths.SessionFile).Load();
             var processes = _desktop.GetProcesses();
             var tiles = (session?.Moved ?? [])
@@ -148,6 +164,7 @@ public sealed partial class App : Application, IXamlMetadataProvider
                 .GroupBy(m => m.ProgramId).Select(g => g.First())
                 .Select(m => new TileInfo(m.Handle, m.ProgramId, m.DisplayName, processes.FirstOrDefault(p => p.Pid == m.Pid)?.ExePath))
                 .ToList();
+            Log.Info($"Плитки: второй монитор {(second is null ? "нет" : second.Id)}, окон для плиток {tiles.Count}");
             if (second is not null && tiles.Count > 0)
             {
                 _windowEvents ??= new WindowEvents();
@@ -159,24 +176,79 @@ public sealed partial class App : Application, IXamlMetadataProvider
                 _tilesWindow.OpenRequested += OpenTile;
                 _tilesWindow.SetTiles(tiles);
                 _tilesWindow.ShowOn(second);
+                tileCount = tiles.Count;
                 if (Hotkey.TryParse("Ctrl+Alt+Space", out var tilesKey) && _tray?.RegisterHotkey(HotkeyTiles, tilesKey) is { } problem)
                     Log.Warn("Клавиша плиток: " + problem);
             }
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Плитки", ex);
+            _restScreensProblem = "Плитки не открылись: " + ex.Message;
+            try { _tilesWindow?.CloseForGood(); } catch (Exception) { }
+            _tilesWindow = null;
+        }
 
+        try
+        {
             _quiet = new QuietWindow();
             _quiet.ReturnRequested += () => _ = ReturnToWorkAsync();
             _quiet.DetailsRequested += () => { _quiet?.HideSummary(); _window?.Present(); };
             _quiet.ShowOn(primary);
             _window?.AppWindow.Hide();
-            if (report is not null)
-                _quiet.ShowSummary(report.Summary + (report.Problems.Count > 0 ? "\n" + string.Join("\n", report.Problems) : ""), report.Problems.Count > 0);
-            Log.Info($"Экраны отдыха: тихий экран, плиток {(_tilesWindow is null ? 0 : tiles.Count)}");
+            var text = report?.Summary ?? "Отдых.";
+            var problems = (report?.Problems ?? []).ToList();
+            if (_restScreensProblem is not null) problems.Add(_restScreensProblem);
+            if (report is not null || problems.Count > 0)
+                _quiet.ShowSummary(text + (problems.Count > 0 ? "\n" + string.Join("\n", problems) : ""), problems.Count > 0);
+            Log.Info($"Экраны отдыха: тихий экран показан, плиток {tileCount}");
+            RestScreensShown?.Invoke();
         }
         catch (Exception ex)
         {
-            Log.Error("Экраны отдыха", ex);
+            Log.Error("Тихий экран", ex);
+            _restScreensProblem = (_restScreensProblem is null ? "" : _restScreensProblem + "\n") + "«Тихий» экран не открылся: " + ex.Message;
+            try { _quiet?.CloseForGood(); } catch (Exception) { }
+            _quiet = null;
+            _window?.SetNotice(_restScreensProblem + " Пришлите, пожалуйста, журнал (меню значка → «Открыть журнал»).");
+            _window?.Present();
         }
     }
+
+    /// <summary>
+    /// Самопроверка для CI (GigaRest.exe --selftest): пробный режим целиком на настоящей Windows —
+    /// тестовые окна → отдых → «Тихий» экран (CI снимает экран по файлу-флагу) → возврат → выход.
+    /// Код выхода 0 — экраны отдыха показались и всё вернулось.
+    /// </summary>
+    private async Task SelfTestAsync()
+    {
+        var flag = Path.Combine(_paths.Root, "rest-shown.flag");
+        var shown = false;
+        RestScreensShown += () => { shown = true; File.WriteAllText(flag, DateTime.Now.ToString("O")); };
+        try
+        {
+            _settings.SetupDone = true;
+            Log.Info("Самопроверка: старт");
+            await StartTestAsync();
+            await Task.Delay(1500);
+            await GoToRestAsync(Window().Programs);
+            await Task.Delay(10000);           // CI в это время снимает экран
+            await ReturnToWorkAsync();
+            await Task.Delay(4000);
+            CloseTestWindows();
+            Log.Info($"Самопроверка: конец, экраны отдыха {(shown ? "показаны" : "НЕ показаны")}");
+            ExitCode = shown && _restScreensProblem is null ? 0 : 4;
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Самопроверка", ex);
+            ExitCode = 5;
+        }
+        Quit();
+    }
+
+    /// <summary>Для самопроверки в CI: экраны отдыха показаны.</summary>
+    private event Action? RestScreensShown;
 
     private void ExitRestScreens()
     {

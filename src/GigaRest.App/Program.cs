@@ -39,43 +39,87 @@ public static class Program
     }
 }
 
-/// <summary>Одна копия программы. Вторая запускается — просит первую показать окно и выходит.</summary>
+/// <summary>
+/// Одна копия программы. Запускают ещё раз ту же сборку — она просит первую показать окно и выходит.
+/// Запускают другую сборку (новую версию из другой папки) — она просит старую выйти и работает сама.
+/// </summary>
 public sealed class SingleInstance : IDisposable
 {
     private const string MutexName = @"Local\GigaRest.Single";
     private const string ShowEventName = @"Local\GigaRest.Show";
+    private const string QuitEventName = @"Local\GigaRest.Quit";
     private readonly Mutex _mutex;
     private readonly EventWaitHandle _show;
+    private readonly EventWaitHandle _quit;
     private readonly CancellationTokenSource _stop = new();
 
-    private SingleInstance(Mutex mutex, EventWaitHandle show)
+    private SingleInstance(Mutex mutex, EventWaitHandle show, EventWaitHandle quit)
     {
         _mutex = mutex;
         _show = show;
+        _quit = quit;
     }
+
+    /// <summary>Файл, где запущенная копия пишет, откуда она и какой версии.</summary>
+    private static string InstanceFile => Path.Combine(GigaRest.Core.AppPaths.Default().Root, "instance.txt");
+
+    private static string Me => (Environment.ProcessPath ?? "") + "|" + typeof(SingleInstance).Assembly.GetName().Version;
 
     public static SingleInstance? TryStart()
     {
         var mutex = new Mutex(true, MutexName, out var created);
         var show = new EventWaitHandle(false, EventResetMode.AutoReset, ShowEventName);
+        var quit = new EventWaitHandle(false, EventResetMode.AutoReset, QuitEventName);
         if (!created)
         {
-            show.Set();
-            show.Dispose();
-            mutex.Dispose();
-            return null;
+            string? running = null;
+            try { running = File.ReadAllText(InstanceFile).Trim(); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+            if (running is not null && string.Equals(running, Me, StringComparison.OrdinalIgnoreCase))
+            {
+                // Та же сборка — просто показать её окно.
+                show.Set();
+                show.Dispose(); quit.Dispose(); mutex.Dispose();
+                return null;
+            }
+            // Другая сборка (или старая, которая о себе не пишет): просим выйти и ждём.
+            quit.Set();
+            var taken = false;
+            try { taken = mutex.WaitOne(TimeSpan.FromSeconds(10)); }
+            catch (AbandonedMutexException) { taken = true; }
+            if (!taken)
+            {
+                // Старая версия не умеет выходить по просьбе — покажем её окно, а человеку подскажем.
+                show.Set();
+                show.Dispose(); quit.Dispose(); mutex.Dispose();
+                ShowMessage("Уже запущена другая версия GigaRest, и она не закрылась сама.\n\n" +
+                            "Закройте её: правый щелчок по значку-месяцу в трее → «Выход» " +
+                            "(или Диспетчер задач → GigaRest → «Снять задачу»), затем запустите эту версию снова.");
+                return null;
+            }
         }
-        return new SingleInstance(mutex, show);
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(InstanceFile)!);
+            File.WriteAllText(InstanceFile, Me);
+        }
+        catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
+        return new SingleInstance(mutex, show, quit);
     }
 
-    /// <summary>Ждём просьбы «покажись» в отдельном потоке; действие — в UI-потоке.</summary>
-    public void Listen(DispatcherQueue queue, Action onShow)
+    /// <summary>Ждём просьб «покажись» и «выйди» в отдельном потоке; действия — в UI-потоке.</summary>
+    public void Listen(DispatcherQueue queue, Action onShow, Action onQuit)
     {
         var thread = new Thread(() =>
         {
-            var handles = new[] { _show, _stop.Token.WaitHandle };
-            while (WaitHandle.WaitAny(handles) == 0)
-                queue.TryEnqueue(() => onShow());
+            var handles = new[] { _show, _quit, _stop.Token.WaitHandle };
+            while (true)
+            {
+                var i = WaitHandle.WaitAny(handles);
+                if (i == 0) queue.TryEnqueue(() => onShow());
+                else if (i == 1) { queue.TryEnqueue(() => onQuit()); return; }
+                else return;
+            }
         }) { IsBackground = true, Name = "GigaRest.SingleInstance" };
         thread.Start();
     }
@@ -86,5 +130,11 @@ public sealed class SingleInstance : IDisposable
         try { _mutex.ReleaseMutex(); } catch (ApplicationException) { }
         _mutex.Dispose();
         _show.Dispose();
+        _quit.Dispose();
     }
+
+    private static void ShowMessage(string text) => MessageBoxW(0, text, "GigaRest", 0x40 /* MB_ICONINFORMATION */);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+    private static extern int MessageBoxW(nint hwnd, string text, string caption, int type);
 }

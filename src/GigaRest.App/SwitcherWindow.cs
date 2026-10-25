@@ -141,6 +141,11 @@ public sealed class SwitcherWindow : Window
         _notice = Text("", 14, Lead, wrap: true);
         _notice.LineHeight = 21;
         left.Children.Add(_notice);
+        var version = typeof(SwitcherWindow).Assembly
+            .GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
+            .OfType<System.Reflection.AssemblyInformationalVersionAttribute>().FirstOrDefault()?.InformationalVersion ?? "";
+        var plus = version.IndexOf('+');
+        left.Children.Add(Text("GigaRest " + (plus > 0 ? version[..plus] : version), 11, Hex("#9A9DAB")));
         // На маленьком экране левая колонка прокручивается, кнопка не теряется.
         var leftScroll = new ScrollViewer { Content = left, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Padding = new Thickness(0, 0, 12, 0) };
         _root.Children.Add(leftScroll);
@@ -353,6 +358,9 @@ public sealed class SwitcherWindow : Window
         if (report.Launched.Count + report.Failed.Count == 0)
             _list.Children.Add(Text("Запускать ничего не пришлось.", 14, Muted));
     }
+
+    /// <summary>Сообщение под кнопкой, не меняя состояния окна.</summary>
+    public void SetNotice(string text) => _notice.Text = text;
 
     public void ShowError(string text)
     {
