@@ -37,6 +37,7 @@ public class ProgramHintsTests
             new() { Id = "claude.exe", DisplayName = "Claude" },
             new() { Id = "discord.exe", DisplayName = "Discord" },
             new() { Id = "notepad++.exe", DisplayName = "Notepad++" },
+            new() { Id = "yandexdisk2.exe", DisplayName = "Яндекс Диск", IsBackground = true },
         };
 
         var changed = ProgramHints.Apply(rows);
@@ -48,6 +49,9 @@ public class ProgramHintsTests
         Assert.Equal(ProgramAction.Keep, rows.Single(r => r.Id == "notepad++.exe").Action);
         Assert.Contains("почта", ProgramHints.Suggest("outlook.exe")!.Reason);
         Assert.NotNull(rows.Single(r => r.Id == "discord.exe").Hint);
+        var disk = rows.Single(r => r.Id == "yandexdisk2.exe");
+        Assert.Equal(ProgramAction.Keep, disk.Action); // фоновый — только подсказка
+        Assert.Contains("облачный диск", disk.Hint);
     }
 
     [Fact]

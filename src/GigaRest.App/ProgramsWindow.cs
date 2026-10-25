@@ -205,7 +205,8 @@ public sealed class ProgramsWindow : Window
         names.Children.Add(Text(r.DisplayName, 15, Ink, FontWeights.Bold, wrap: true));
         if (r.IsBackground)
         {
-            names.Children.Add(Text($"≈{GigaRest.Core.Text.Sizes.Format(r.PrivateBytes)} · запустим обратно: {r.RelaunchInfo}", 12, Muted, wrap: true));
+            var info = $"≈{GigaRest.Core.Text.Sizes.Format(r.PrivateBytes)}" + (r.Hint is null ? "" : " · " + r.Hint) + $" · запустим обратно: {r.RelaunchInfo}";
+            names.Children.Add(Text(info, 12, Muted, wrap: true));
         }
         else
         {

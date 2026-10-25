@@ -71,7 +71,8 @@ public static class ProgramHints
         {
             var hint = Suggest(r.Id, r.ExePath);
             r.Hint = hint?.Reason;
-            if (hint is null || r.Action != ProgramAction.Keep || hint.Action == ProgramAction.Keep) continue;
+            // Фоновые сами не отмечаем: завершать их или нет — решает Роман, подсказка только поясняет.
+            if (hint is null || r.IsBackground || r.Action != ProgramAction.Keep || hint.Action == ProgramAction.Keep) continue;
             if (hint.Action == ProgramAction.SecondMonitor)
             {
                 if (tiles >= 4) continue;
