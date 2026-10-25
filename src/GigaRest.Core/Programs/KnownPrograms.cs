@@ -66,6 +66,7 @@ public static class KnownPrograms
             Exe = "яндекс музыка.exe", DisplayName = "Яндекс Музыка", DefaultAction = ProgramAction.SecondMonitor,
             IsChromium = true, HidesToTray = true,
         },
+        new() { Exe = "sharex.exe", DisplayName = "ShareX", HidesToTray = true, TrayWaitSeconds = 2 },
         new() { Exe = "steam.exe", DisplayName = "Steam", HidesToTray = true },
         new() { Exe = "battle.net.exe", DisplayName = "Battle.net", IsChromium = true, HidesToTray = true },
     ];

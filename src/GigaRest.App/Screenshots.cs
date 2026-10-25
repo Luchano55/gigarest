@@ -62,6 +62,13 @@ internal static class Screenshots
         running.Single(p => p.Id == "bitrix24.exe").AllowTerminate = true;
         programsWindow.SetRows(ProgramCatalog.BuildRows(settings, running, DemoData.Shortcuts));
         await Capture(programsWindow.Root, Path.Combine(dir, "5-programmy.png"));
+
+        // Первая настройка: подсказки уже расставлены.
+        programsWindow.SetSetupMode(true);
+        var fresh = ProgramScanner.Scan(processes, windows, new AppSettings(), selfPid: 1);
+        foreach (var p in fresh) p.Action = ProgramAction.Keep; // как у нового пользователя: ещё ничего не выбрано
+        programsWindow.SetRows(ProgramCatalog.BuildRows(new AppSettings(), fresh, DemoData.Shortcuts));
+        await Capture(programsWindow.Root, Path.Combine(dir, "9-pervaya-nastroyka.png"));
         // Пробный режим: четыре тестовых окна.
         var testProcesses = TestPrograms.All.Select((t, i) => new GigaRest.Core.Desktop.ProcessInfo
         {

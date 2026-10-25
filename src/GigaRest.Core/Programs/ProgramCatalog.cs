@@ -15,6 +15,8 @@ public sealed class SelectorRow
     public bool HidesToTray { get; init; }
     public ProgramAction Action { get; set; }
     public bool AllowTerminate { get; set; }
+    /// <summary>Автоподсказка: «похоже на рабочую: почта».</summary>
+    public string? Hint { get; set; }
 }
 
 /// <summary>

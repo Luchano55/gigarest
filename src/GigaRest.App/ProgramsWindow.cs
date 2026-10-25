@@ -23,6 +23,9 @@ public sealed class ProgramsWindow : Window
     private readonly StackPanel _list;
     private readonly TextBox _search;
     private readonly TextBlock _summary;
+    private readonly TextBlock _title, _lead;
+    private readonly Button _done;
+    private readonly TextBlock _doneText;
     private List<SelectorRow> _rows = [];
     private bool _closingForGood;
 
@@ -39,15 +42,32 @@ public sealed class ProgramsWindow : Window
         _root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
         var head = new StackPanel { Spacing = 8 };
-        head.Children.Add(Text("Рабочие программы", 32, Ink, FontWeights.ExtraBold, wrap: true));
-        head.Children.Add(Text("Выберите, что делать с каждой программой при переходе в отдых. " +
-                               "Можно настроить и те, что сейчас не запущены.", 15, Lead, wrap: true));
+        _title = Text("Рабочие программы", 32, Ink, FontWeights.ExtraBold, wrap: true);
+        _lead = Text("", 15, Lead, wrap: true);
+        head.Children.Add(_title);
+        head.Children.Add(_lead);
         _root.Children.Add(head);
 
+        var tools = new Grid { ColumnSpacing = 12 };
+        tools.ColumnDefinitions.Add(new ColumnDefinition());
+        tools.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         _search = new TextBox { PlaceholderText = "Найти программу…", FontSize = 15, CornerRadius = new CornerRadius(10), Padding = new Thickness(12, 8, 12, 8) };
         _search.TextChanged += (_, _) => Render();
-        Grid.SetRow(_search, 1);
-        _root.Children.Add(_search);
+        tools.Children.Add(_search);
+        var suggest = new Button { Content = "Подсказать автоматически", CornerRadius = new CornerRadius(10), Padding = new Thickness(14, 8, 14, 8) };
+        ToolTipService.SetToolTip(suggest, "Почта, Битрикс, офис, 1С, звонки — закрыть; мессенджеры, музыка, личный браузер — на второй монитор; игры — оставить. " +
+                                           "Меняются только программы, для которых вы ещё ничего не выбрали.");
+        suggest.Click += (_, _) =>
+        {
+            var n = ProgramHints.Apply(_rows);
+            Render();
+            _summary.Text = (n > 0 ? $"Подсказано для {n} — проверьте и поправьте. " : "Подсказывать нечего — всё уже выбрано. ") + _summary.Text;
+        };
+        Grid.SetColumn(suggest, 1);
+        tools.Children.Add(suggest);
+        Grid.SetRow(tools, 1);
+        _root.Children.Add(tools);
+        SetSetupMode(false);
 
         _list = new StackPanel { Spacing = 2 };
         var card = CardBorder(new ScrollViewer { Content = _list, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Padding = new Thickness(0, 0, 12, 0) }, radius: 20, padding: 12);
@@ -60,12 +80,13 @@ public sealed class ProgramsWindow : Window
         _summary = Text("", 14, Muted, wrap: true);
         _summary.VerticalAlignment = VerticalAlignment.Center;
         footer.Children.Add(_summary);
-        var done = ColoredButton(Text("Готово", 16, Colors.White, FontWeights.Bold), Accent, AccentDark, Colors.White);
-        done.HorizontalAlignment = HorizontalAlignment.Right;
-        done.Padding = new Thickness(36, 12, 36, 12);
-        done.Click += (_, _) => { Saved?.Invoke(_rows); AppWindow.Hide(); };
-        Grid.SetColumn(done, 1);
-        footer.Children.Add(done);
+        _doneText = Text("Готово", 16, Colors.White, FontWeights.Bold);
+        _done = ColoredButton(_doneText, Accent, AccentDark, Colors.White);
+        _done.HorizontalAlignment = HorizontalAlignment.Right;
+        _done.Padding = new Thickness(36, 12, 36, 12);
+        _done.Click += (_, _) => { Saved?.Invoke(_rows); AppWindow.Hide(); };
+        Grid.SetColumn(_done, 1);
+        footer.Children.Add(_done);
         Grid.SetRow(footer, 3);
         _root.Children.Add(footer);
 
@@ -80,6 +101,21 @@ public sealed class ProgramsWindow : Window
         SizeToDesign();
     }
 
+    /// <summary>Первая настройка: другой заголовок и подсказки уже расставлены.</summary>
+    public bool IsSetup { get; private set; }
+
+    public void SetSetupMode(bool setup)
+    {
+        IsSetup = setup;
+        Title = setup ? "GigaRest — первая настройка" : "GigaRest — рабочие программы";
+        _title.Text = setup ? "Первая настройка" : "Рабочие программы";
+        _lead.Text = setup
+            ? "Отметьте, что закрывать при переходе в отдых, а что — на второй монитор. Мы уже подсказали по видам программ — " +
+              "проверьте и поправьте. Потом это можно изменить в меню значка → «Рабочие программы»."
+            : "Выберите, что делать с каждой программой при переходе в отдых. Можно настроить и те, что сейчас не запущены.";
+        if (_doneText is not null) _doneText.Text = setup ? "Сохранить и начать" : "Готово";
+    }
+
     public void ShowLoading()
     {
         _list.Children.Clear();
@@ -90,6 +126,8 @@ public sealed class ProgramsWindow : Window
     public void SetRows(List<SelectorRow> rows)
     {
         _rows = rows;
+        if (IsSetup) ProgramHints.Apply(_rows);
+        else foreach (var r in _rows) r.Hint = ProgramHints.Suggest(r.Id, r.ExePath)?.Reason;
         Render();
     }
 
@@ -152,7 +190,9 @@ public sealed class ProgramsWindow : Window
 
         var names = new StackPanel { Spacing = 2, VerticalAlignment = VerticalAlignment.Center };
         names.Children.Add(Text(r.DisplayName, 15, Ink, FontWeights.Bold, wrap: true));
-        names.Children.Add(Text(r.IsRunning ? "запущена" : "сейчас не запущена", 12, r.IsRunning ? Hex("#1E7A44") : Muted));
+        var status = r.IsRunning ? "запущена" : "сейчас не запущена";
+        if (r.Hint is not null) status += " · " + r.Hint;
+        names.Children.Add(Text(status, 12, r.IsRunning ? Hex("#1E7A44") : Muted, wrap: true));
         Grid.SetColumn(names, 1);
         grid.Children.Add(names);
 

@@ -104,8 +104,15 @@ public sealed partial class App : Application, IXamlMetadataProvider
         _scheduleTimer.Tick += (_, _) => CheckSchedule();
         _scheduleTimer.Start();
 
-        if (!_args.Contains("--tray") || _switcher.IsResting)
+        if (!_settings.SetupDone && !_switcher.IsResting)
+        {
+            // Первый запуск: сначала настройка — что закрывать, что на второй монитор (с подсказками).
+            _ = ShowProgramsAsync(setup: true);
+        }
+        else if (!_args.Contains("--tray") || _switcher.IsResting)
+        {
             ShowWindow();
+        }
     }
 
     private async Task RunScreenshotsAsync(string dir)
@@ -131,6 +138,31 @@ public sealed partial class App : Application, IXamlMetadataProvider
     /// Раз в 30 секунд: вечером — мягкое предложение отдыха (уведомление у значка), утром — «Пора за работу».
     /// Во время игры или фильма на весь экран ничего не показываем — откладываем на 15 минут.
     /// </summary>
+    /// <summary>
+    /// «Завершить» в итоге: программа спряталась в трей и ни о чём не спрашивает. Завершаем по явной просьбе,
+    /// запоминаем галочку «можно завершать» и отмечаем, что при возврате её надо открыть.
+    /// </summary>
+    private void TerminateFromSummary(string programId)
+    {
+        var program = ProgramScanner.Scan(_desktop.GetProcesses(), _desktop.GetWindows(), _settings, _desktop.CurrentProcessId)
+            .FirstOrDefault(p => p.Id.Equals(programId, StringComparison.OrdinalIgnoreCase));
+        if (program is not null)
+        {
+            if (program.Windows.Count > 0 || _desktop.GetWindows().Any(w => w.IsDialog && program.Processes.Any(p => p.Pid == w.Pid)))
+            {
+                _tray?.ShowBalloon(program.DisplayName, "У программы снова открыто окно — закройте её сами.");
+                return;
+            }
+            foreach (var root in program.Roots) _desktop.Terminate(root.Key);
+        }
+        var setting = _settings.Find(programId) ?? new ProgramSetting { Id = programId, DisplayName = program?.DisplayName ?? programId, Action = ProgramAction.Close };
+        if (!_settings.Programs.Contains(setting)) _settings.Programs.Add(setting);
+        setting.AllowTerminate = true;
+        SaveSettings();
+        _switcher.MarkClosed(programId);
+        Log.Info($"Завершена из итога по просьбе: {programId}");
+    }
+
     private void CheckSchedule()
     {
         var now = DateTime.Now;
@@ -284,6 +316,7 @@ public sealed partial class App : Application, IXamlMetadataProvider
             _window.CancelRequested += () => _cts?.Cancel();
             _window.ProgramsRequested += () => _ = ShowProgramsAsync();
             _window.TestRequested += () => _ = StartTestAsync();
+            _window.TerminateRequested += TerminateFromSummary;
             _window.SnoozeRequested += () =>
             {
                 _snoozeUntil = DateTime.Now.AddMinutes(15);
@@ -305,7 +338,7 @@ public sealed partial class App : Application, IXamlMetadataProvider
     }
 
     /// <summary>Окно «Рабочие программы»: запущенные, настроенные и установленные (ярлыки «Пуск» читаем в фоне).</summary>
-    private async Task ShowProgramsAsync()
+    private async Task ShowProgramsAsync(bool setup = false)
     {
         if (_programs is null)
         {
@@ -313,12 +346,16 @@ public sealed partial class App : Application, IXamlMetadataProvider
             _programs.Saved += rows =>
             {
                 ProgramCatalog.Save(_settings, rows);
+                var firstSetup = !_settings.SetupDone;
+                _settings.SetupDone = true;
                 SaveSettings();
                 Log.Info($"Рабочие программы: закрывать {rows.Count(r => r.Action == ProgramAction.Close)}, на второй монитор {rows.Count(r => r.Action == ProgramAction.SecondMonitor)}");
-                if (!_busy && !_switcher.IsResting && _window is not null)
+                if (firstSetup) ShowWindow(); // после первой настройки — сразу окно перехода
+                else if (!_busy && !_switcher.IsResting && _window is not null)
                     _window.ShowPlan(Scan(), _desktop.GetMonitors().Count > 1, _hotkeyProblem);
             };
         }
+        _programs.SetSetupMode(setup);
         _programs.ShowLoading();
         _programs.Present();
         try

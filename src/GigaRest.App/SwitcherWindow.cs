@@ -59,6 +59,8 @@ public sealed class SwitcherWindow : Window
     public event Action? ProgramsRequested;
     public event Action? TestRequested;
     public event Action? SnoozeRequested;
+    /// <summary>«Завершить» у программы, которая спряталась в трей.</summary>
+    public event Action<string>? TerminateRequested;
 
     public IReadOnlyList<RunningProgram> Programs { get; private set; } = [];
     /// <summary>Пробный режим: в списке только тестовые окна.</summary>
@@ -273,6 +275,11 @@ public sealed class SwitcherWindow : Window
                 CloseOutcome.Terminated => ("завершена", Hex("#1E7A44")),
                 _ => ("осталась", Hex("#B42318")),
             };
+            if (r.Outcome == CloseOutcome.InBackground)
+            {
+                _list.Children.Add(TrayRow(r));
+                continue;
+            }
             _list.Children.Add(StatusRow(r.DisplayName, r.ProgramId, text, color, r.IsGone ? null : r.Message));
         }
         if (report.Results.Count == 0)
@@ -454,6 +461,23 @@ public sealed class SwitcherWindow : Window
             Background = Brush(ProgramColor(id)),
             Child = letter,
         };
+    }
+
+    /// <summary>Программа спряталась в трей: «Завершить» — завершить сейчас и разрешить в следующий раз.</summary>
+    private UIElement TrayRow(CloseResult r)
+    {
+        var box = new StackPanel();
+        box.Children.Add(StatusRow(r.DisplayName, r.ProgramId, "в трее", Hex("#B26A00"),
+            "Спряталась в трей и работает в фоне. «Завершить» — завершим сейчас и запомним, что её можно завершать."));
+        var button = new Button { Content = "Завершить", Margin = new Thickness(64, -4, 0, 8), Padding = new Thickness(16, 6, 16, 6), CornerRadius = new CornerRadius(999) };
+        button.Click += (_, _) =>
+        {
+            TerminateRequested?.Invoke(r.ProgramId);
+            var index = _list.Children.IndexOf(box);
+            if (index >= 0) _list.Children[index] = StatusRow(r.DisplayName, r.ProgramId, "завершена", Hex("#1E7A44"), "В следующий раз завершим сами");
+        };
+        box.Children.Add(button);
+        return box;
     }
 
     private static UIElement StatusRow(string name, string id, string status, Color statusColor, string? detail = null)

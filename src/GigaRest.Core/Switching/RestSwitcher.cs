@@ -64,6 +64,16 @@ public sealed class RestSwitcher
         return others.FirstOrDefault(m => m.Bounds.Left >= primary.Bounds.Right) ?? others[0];
     }
 
+    /// <summary>Программу завершили вручную из итога («Завершить») — при возврате её надо открыть.</summary>
+    public void MarkClosed(string programId)
+    {
+        var session = _sessions.Load();
+        var entry = session?.Closed.FirstOrDefault(c => c.Id == programId);
+        if (session is null || entry is null) return;
+        entry.Gone = true;
+        _sessions.Save(session);
+    }
+
     public async Task<RestReport> GoToRestAsync(
         IReadOnlyList<RunningProgram> programs, IProgress<SwitchProgress>? progress, CancellationToken ct)
     {

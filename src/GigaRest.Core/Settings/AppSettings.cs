@@ -27,6 +27,8 @@ public sealed class ProgramSetting
 public sealed class AppSettings
 {
     public int Version { get; set; } = 1;
+    /// <summary>Первая настройка пройдена. Пока нет — при запуске открывается «Первая настройка».</summary>
+    public bool SetupDone { get; set; }
     /// <summary>Горячая клавиша «Работа ↔ Отдых».</summary>
     public string Hotkey { get; set; } = "Ctrl+Alt+Home";
     /// <summary>Показывать окно «Переход в отдых». false — переходить сразу, без вопросов.</summary>
