@@ -12,7 +12,7 @@ using static GigaRest.App.Ui;
 
 namespace GigaRest.App;
 
-public sealed record SettingsResult(DaySchedule Schedule, DaySchedule RestOffer, string Hotkey, bool ConfirmBeforeRest, bool Autostart);
+public sealed record SettingsResult(DaySchedule Schedule, DaySchedule RestOffer, string Hotkey, string TilesHotkey, bool ConfirmBeforeRest, bool Autostart);
 
 /// <summary>Настройки: расписание возврата, горячая клавиша, окно перехода, автозапуск.</summary>
 public sealed class SettingsWindow : Window
@@ -22,7 +22,7 @@ public sealed class SettingsWindow : Window
     private readonly Grid _root;
     private readonly ToggleSwitch _confirm, _autostart;
     private readonly ScheduleEditor _return, _rest;
-    private readonly TextBox _hotkey;
+    private readonly TextBox _hotkey, _tilesHotkey;
     private readonly TextBlock _hotkeyHint;
     private bool _closingForGood;
 
@@ -61,6 +61,9 @@ public sealed class SettingsWindow : Window
         keys.Children.Add(_hotkey);
         _hotkeyHint = Text("", 13, Muted, wrap: true);
         keys.Children.Add(_hotkeyHint);
+        keys.Children.Add(Text("Обратно в плитки (во время отдыха)", 14, Ink, FontWeights.SemiBold));
+        _tilesHotkey = new TextBox { PlaceholderText = "Ctrl+Alt+End", Width = 260, HorizontalAlignment = HorizontalAlignment.Left };
+        keys.Children.Add(_tilesHotkey);
         body.Children.Add(CardBorder(keys, radius: 18, padding: 22));
 
         // Прочее
@@ -99,6 +102,7 @@ public sealed class SettingsWindow : Window
         _return.Load(settings.ReturnSchedule);
         _rest.Load(settings.RestOffer);
         _hotkey.Text = settings.Hotkey;
+        _tilesHotkey.Text = settings.TilesHotkey;
         _confirm.IsOn = settings.ConfirmBeforeRest;
         _autostart.IsOn = autostart;
         UpdateHotkeyHint(hotkeyProblem);
@@ -118,7 +122,8 @@ public sealed class SettingsWindow : Window
             UpdateHotkeyHint();
             return;
         }
-        Saved?.Invoke(new SettingsResult(_return.Current(), _rest.Current(), hotkey.ToString(), _confirm.IsOn, _autostart.IsOn));
+        var tiles = Hotkey.TryParse(_tilesHotkey.Text, out var t) && t != hotkey ? t.ToString() : "Ctrl+Alt+End";
+        Saved?.Invoke(new SettingsResult(_return.Current(), _rest.Current(), hotkey.ToString(), tiles, _confirm.IsOn, _autostart.IsOn));
         AppWindow.Hide();
     }
 

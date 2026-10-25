@@ -16,13 +16,13 @@ public sealed record TileInfo(long Hwnd, string ProgramId, string Name, string? 
 /// <summary>
 /// Второй монитор (макет «Второй монитор · живые плитки»): до четырёх живых копий окон.
 /// Окна программ стоят развёрнутыми под этим окном («паркуются»): щелчок по плитке — окно сверху,
-/// «Свернуть» или Ctrl+Alt+Пробел — снова плитки.
+/// «Свернуть» или клавиша (по умолчанию Ctrl+Alt+End) — снова плитки.
 /// </summary>
 public sealed class TilesWindow : Window
 {
     private readonly Grid _root;
     private readonly Grid _grid;
-    private readonly TextBlock _clock, _caption;
+    private readonly TextBlock _clock, _caption, _hint;
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromSeconds(1) };
     private readonly List<(TileInfo Info, Border Slot, TextBlock Status, Thumbnail? Thumb)> _tiles = [];
     private bool _closing;
@@ -55,7 +55,7 @@ public sealed class TilesWindow : Window
         _caption.VerticalAlignment = VerticalAlignment.Bottom;
         Grid.SetColumn(_caption, 1);
         header.Children.Add(_caption);
-        var hint = Text("«Свернуть» или Ctrl+Alt+Пробел — обратно в плитки", 13, Hex("#8CFFFFFF"));
+        var hint = _hint = Text("«Свернуть» или Ctrl+Alt+End — обратно в плитки", 13, Hex("#8CFFFFFF"));
         hint.VerticalAlignment = VerticalAlignment.Bottom;
         hint.Margin = new Thickness(0, 0, 0, 6);
         Grid.SetColumn(hint, 2);
@@ -177,12 +177,19 @@ public sealed class TilesWindow : Window
 
     public void ShowOn(MonitorInfo monitor)
     {
+        AppWindow.IsShownInSwitchers = false;
         RestScreens.FullScreenOn(this, monitor);
+        // До показа: Chrome, Claude, Zen не должны считать экран плиток закрывающим их окна (D-THUMBS).
+        WindowTools.MakeNonOccluding(RestScreens.Hwnd(this));
         RestScreens.BringToFront(this);
-        // Chrome, Claude, Zen перестают рисовать окно под непрозрачным — делаем себя «почти непрозрачными» (D-THUMBS).
-        WindowTools.MakeAlmostOpaque(RestScreens.Hwnd(this));
+        // Полноэкранный режим может переписать стили окна — повторяем, когда окно уже показано.
+        DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () => WindowTools.MakeNonOccluding(RestScreens.Hwnd(this)));
         PlaceThumbnails();
     }
+
+    public nint Handle => RestScreens.Hwnd(this);
+
+    public void SetHotkeyHint(string hotkey) => _hint.Text = $"«Свернуть» или {hotkey} — обратно в плитки";
 
     /// <summary>Для скриншотов: корень 1440×900, без полноэкранного режима.</summary>
     public void UseDesignSizeForCapture()

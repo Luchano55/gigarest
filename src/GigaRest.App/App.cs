@@ -175,10 +175,14 @@ public sealed partial class App : Application, IXamlMetadataProvider
                 _tilesWindow = new TilesWindow();
                 _tilesWindow.OpenRequested += OpenTile;
                 _tilesWindow.SetTiles(tiles);
+                _tilesWindow.SetHotkeyHint(_settings.TilesHotkey);
                 _tilesWindow.ShowOn(second);
                 tileCount = tiles.Count;
-                if (Hotkey.TryParse("Ctrl+Alt+Space", out var tilesKey) && _tray?.RegisterHotkey(HotkeyTiles, tilesKey) is { } problem)
+                if (Hotkey.TryParse(_settings.TilesHotkey, out var tilesKey) && _tray?.RegisterHotkey(HotkeyTiles, tilesKey) is { } problem)
+                {
                     Log.Warn("Клавиша плиток: " + problem);
+                    _restScreensProblem = $"Клавиша «обратно в плитки» {problem}. Поменяйте её в настройках; пока — кнопка «Свернуть».";
+                }
             }
         }
         catch (Exception ex)
@@ -290,7 +294,7 @@ public sealed partial class App : Application, IXamlMetadataProvider
             if (!_tilesHintShown)
             {
                 _tilesHintShown = true;
-                _tray?.ShowBalloon(tile.Name, "«Свернуть» или Ctrl+Alt+Пробел — обратно в плитки.");
+                _tray?.ShowBalloon(tile.Name, $"«Свернуть» или {_settings.TilesHotkey} — обратно в плитки.");
             }
         }
         else if (tile.ExePath is not null)
@@ -303,15 +307,21 @@ public sealed partial class App : Application, IXamlMetadataProvider
     // Окно с плитки свернули — ставим его обратно развёрнутым под плитки, плитки — сверху.
     private void OnTileMinimized(long hwnd) => _queue.TryEnqueue(() =>
     {
-        WindowTools.RestoreMaximizedNoActivate(hwnd);
-        BackToTiles();
+        if (_tilesWindow is null) return;
+        WindowTools.ParkUnderTiles(hwnd, _tilesWindow.Handle);
     });
 
     private void OnTileDestroyed(long hwnd) => _queue.TryEnqueue(() => _tilesWindow?.MarkClosed(hwnd));
 
+    /// <summary>Клавиша «обратно в плитки»: окно, открытое с плитки, — вниз, плитки — сверху.</summary>
     private void BackToTiles()
     {
-        if (_tilesWindow is not null) RestScreens.BringToFront(_tilesWindow);
+        if (_tilesWindow is null) return;
+        var foreground = WindowTools.Foreground();
+        if (foreground != 0 && _windowEvents?.IsWatched(foreground) == true)
+            WindowTools.ParkUnderTiles(foreground, _tilesWindow.Handle);
+        else
+            RestScreens.BringToFront(_tilesWindow);
     }
 
     private async Task RunScreenshotsAsync(string dir)
@@ -421,6 +431,7 @@ public sealed partial class App : Application, IXamlMetadataProvider
                 _settings.ConfirmBeforeRest = r.ConfirmBeforeRest;
                 var hotkeyChanged = r.Hotkey != _settings.Hotkey;
                 _settings.Hotkey = r.Hotkey;
+                _settings.TilesHotkey = r.TilesHotkey;
                 SaveSettings();
                 if (hotkeyChanged) RegisterHotkey();
                 try { Autostart.Set(ExePath, r.Autostart); }

@@ -36,6 +36,8 @@ public sealed class AppSettings
     public bool SetupDone { get; set; }
     /// <summary>Горячая клавиша «Работа ↔ Отдых».</summary>
     public string Hotkey { get; set; } = "Ctrl+Alt+Home";
+    /// <summary>Клавиша «обратно в плитки» во время отдыха. Ctrl+Alt+Пробел занят быстрым вызовом Claude.</summary>
+    public string TilesHotkey { get; set; } = "Ctrl+Alt+End";
     /// <summary>Показывать окно «Переход в отдых». false — переходить сразу, без вопросов.</summary>
     public bool ConfirmBeforeRest { get; set; } = true;
     /// <summary>Сколько ждать, пока программа закроется (вопросы «Сохранить?» не считаются).</summary>

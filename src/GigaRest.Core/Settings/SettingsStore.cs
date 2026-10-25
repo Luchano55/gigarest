@@ -37,5 +37,7 @@ public sealed class SettingsStore
             s.CloseTimeoutSeconds = 30;
         if (string.IsNullOrWhiteSpace(s.Hotkey))
             s.Hotkey = "Ctrl+Alt+Home";
+        if (string.IsNullOrWhiteSpace(s.TilesHotkey) || s.TilesHotkey.Equals(s.Hotkey, StringComparison.OrdinalIgnoreCase))
+            s.TilesHotkey = "Ctrl+Alt+End";
     }
 }

@@ -77,14 +77,24 @@ public sealed class Thumbnail : IDisposable
 /// <summary>Мелочи для окон отдыха: поднять окно без активации, сделать «прозрачным» для Chromium.</summary>
 public static class WindowTools
 {
-    /// <summary>Развернуть окно на его мониторе, не забирая фокус (после «Свернуть» — обратно под плитки).</summary>
-    public static void RestoreMaximizedNoActivate(long hwnd)
+    /// <summary>
+    /// Окно с плитки свернули: развернуть его обратно на втором мониторе и убрать в самый низ —
+    /// под экран плиток. Иначе Windows выводит развёрнутое окно наверх, и оно снова закрывает плитки.
+    /// </summary>
+    public static void ParkUnderTiles(long hwnd, nint tilesWindow)
     {
+        var h = (nint)hwnd;
         var wp = new Native.WINDOWPLACEMENT { length = Marshal.SizeOf<Native.WINDOWPLACEMENT>() };
-        if (!Native.GetWindowPlacement((nint)hwnd, ref wp)) return;
-        wp.showCmd = 3; // SW_SHOWMAXIMIZED
-        wp.flags = 0;
-        Native.SetWindowPlacement((nint)hwnd, ref wp);
+        if (Native.GetWindowPlacement(h, ref wp))
+        {
+            wp.showCmd = 3; // SW_SHOWMAXIMIZED
+            wp.flags = 0;
+            Native.SetWindowPlacement(h, ref wp);
+        }
+        const uint SWP_NOSIZE = 0x1, SWP_NOMOVE = 0x2, SWP_NOACTIVATE = 0x10;
+        Native.SetWindowPos(h, 1 /* HWND_BOTTOM */, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+        Native.SetWindowPos(tilesWindow, 0 /* HWND_TOP */, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+        Native.SetForegroundWindow(tilesWindow);
     }
 
     public static void Activate(long hwnd)
@@ -95,17 +105,22 @@ public static class WindowTools
 
     public static bool IsAlive(long hwnd) => Native.IsWindow((nint)hwnd);
 
+    public static long Foreground() => GetForegroundWindow();
+
+    [DllImport("user32.dll")] private static extern nint GetForegroundWindow();
+
     /// <summary>Нажать «Нет» в диалоге «Сохранить?» (только для самопроверки на тестовых окнах).</summary>
     public static void AnswerNo(long dialog) => Native.PostMessageW((nint)dialog, 0x0111 /* WM_COMMAND */, 7 /* IDNO */, 0);
 
     /// <summary>
-    /// Chrome, Electron и Firefox перестают рисовать окно, полностью закрытое непрозрачным окном (D-THUMBS).
-    /// Окно с альфой меньше 255 они непрозрачным не считают — тогда живые копии не замирают (?).
+    /// Chrome, Electron (Claude) и Firefox (Zen) перестают рисовать окно, полностью закрытое другим окном (D-THUMBS).
+    /// Служебные окна (WS_EX_TOOLWINDOW) и полупрозрачные они закрывающими не считают — делаем экран плиток таким,
+    /// тогда живые копии не замирают. Заодно экран плиток не появляется на панели задач и в Alt+Tab.
     /// </summary>
-    public static void MakeAlmostOpaque(nint hwnd)
+    public static void MakeNonOccluding(nint hwnd)
     {
         var ex = GetWindowLongPtrW(hwnd, -20);
-        SetWindowLongPtrW(hwnd, -20, ex | 0x80000); // WS_EX_LAYERED
+        SetWindowLongPtrW(hwnd, -20, (ex | 0x80 /* WS_EX_TOOLWINDOW */ | 0x80000 /* WS_EX_LAYERED */) & ~(nint)0x40000 /* WS_EX_APPWINDOW */);
         SetLayeredWindowAttributes(hwnd, 0, 254, 0x2); // LWA_ALPHA
     }
 
