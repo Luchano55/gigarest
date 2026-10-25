@@ -56,8 +56,9 @@ public sealed class CloseOrchestrator
         TimeSpan? hiddenFor = null;           // сколько окон нет, а процесс жив
         long? lastDialog = null;
         var last = _clock.UtcNow;
-        var hideWait = program.Known is { HidesToTray: true } known
-            ? TimeSpan.FromSeconds(known.TrayWaitSeconds)
+        // Фоновый процесс без окон ждать незачем: окон не было и не будет.
+        var hideWait = program.IsBackground ? TimeSpan.Zero
+            : program.Known is { HidesToTray: true } known ? TimeSpan.FromSeconds(known.TrayWaitSeconds)
             : ExitGrace;
 
         while (true)

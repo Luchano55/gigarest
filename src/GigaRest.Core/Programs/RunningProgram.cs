@@ -20,9 +20,12 @@ public sealed class RunningProgram
     public bool IsElevated => Roots.Any(p => p.IsElevated);
     public string? Aumid => Roots.Select(r => r.Aumid).FirstOrDefault(a => a is not null);
 
+    /// <summary>Фоновый процесс без окон: «завершать в отдыхе» или «не трогать».</summary>
+    public bool IsBackground { get; init; }
+
     public ProgramAction Action { get; set; }
     public bool AllowTerminate { get; set; }
 
     /// <summary>Описание под названием: «2 окна», «в трее».</summary>
-    public string Note => Windows.Count == 0 ? "в трее" : Text.Sizes.Plural(Windows.Count, "окно", "окна", "окон");
+    public string Note => IsBackground ? "фоновый процесс" : Windows.Count == 0 ? "в трее" : Text.Sizes.Plural(Windows.Count, "окно", "окна", "окон");
 }

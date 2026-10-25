@@ -67,8 +67,12 @@ internal static class Screenshots
         programsWindow.SetSetupMode(true);
         var fresh = ProgramScanner.Scan(processes, windows, new AppSettings(), selfPid: 1);
         foreach (var p in fresh) p.Action = ProgramAction.Keep; // как у нового пользователя: ещё ничего не выбрано
-        programsWindow.SetRows(ProgramCatalog.BuildRows(new AppSettings(), fresh, DemoData.Shortcuts));
+        var demoBackground = BackgroundScanner.Find(processes, windows, selfPid: 1);
+        programsWindow.SetRows(ProgramCatalog.BuildRows(new AppSettings(), fresh, DemoData.Shortcuts, demoBackground));
         await Capture(programsWindow.Root, Path.Combine(dir, "9-pervaya-nastroyka.png"));
+        // Тот же список, прокрученный к фоновым процессам: только они.
+        programsWindow.SetRows(ProgramCatalog.BuildRows(new AppSettings(), [], [], demoBackground));
+        await Capture(programsWindow.Root, Path.Combine(dir, "10-fonovye.png"));
         // Пробный режим: четыре тестовых окна.
         var testProcesses = TestPrograms.All.Select((t, i) => new GigaRest.Core.Desktop.ProcessInfo
         {

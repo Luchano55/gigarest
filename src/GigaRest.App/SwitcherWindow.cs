@@ -397,7 +397,9 @@ public sealed class SwitcherWindow : Window
         var row = RowButton(grid);
         row.Click += (_, _) =>
         {
-            p.Action = Next(p.Action);
+            p.Action = p.IsBackground
+                ? (p.Action == ProgramAction.Close ? ProgramAction.Keep : ProgramAction.Close)
+                : Next(p.Action);
             ActionChanged?.Invoke(p);
             var index = _list.Children.IndexOf(box);
             if (index >= 0) _list.Children[index] = PlanRow(p);
@@ -406,7 +408,7 @@ public sealed class SwitcherWindow : Window
         box.Children.Add(row);
 
         // Галочка «можно завершать» — для программ, которые прячутся в трей.
-        if (p.Action == ProgramAction.Close && (p.Known?.HidesToTray == true || p.Windows.Count == 0))
+        if (p.Action == ProgramAction.Close && !p.IsBackground && (p.Known?.HidesToTray == true || p.Windows.Count == 0))
         {
             var check = new CheckBox
             {

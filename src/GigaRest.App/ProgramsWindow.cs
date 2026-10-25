@@ -135,6 +135,8 @@ public sealed class ProgramsWindow : Window
     {
         _list.Children.Clear();
         var shown = ProgramCatalog.Filter(_rows, _search.Text).ToList();
+        var background = shown.Where(r => r.IsBackground).OrderByDescending(r => r.PrivateBytes).ToList();
+        shown = shown.Where(r => !r.IsBackground).ToList();
         var chosen = shown.Where(r => r.Action != ProgramAction.Keep).ToList();
         var rest = shown.Where(r => r.Action == ProgramAction.Keep).ToList();
         if (chosen.Count > 0)
@@ -147,16 +149,27 @@ public sealed class ProgramsWindow : Window
             _list.Children.Add(SectionTitle(chosen.Count > 0 ? "Остальные — не трогаем" : "Все программы — не трогаем"));
             foreach (var r in rest) _list.Children.Add(Row(r));
         }
-        if (shown.Count == 0)
+        if (background.Count > 0)
+        {
+            _list.Children.Add(SectionTitle("Фоновые процессы — без окон"));
+            var note = Text("Можно завершать на время отдыха — освободится память. При возврате запустим их снова той же командой. " +
+                            "Системное, драйверы, антивирус и то, что не сможем запустить обратно, здесь не показываем.", 12, Muted, wrap: true);
+            note.Margin = new Thickness(14, 0, 14, 6);
+            _list.Children.Add(note);
+            foreach (var r in background) _list.Children.Add(Row(r));
+        }
+        if (shown.Count + background.Count == 0)
             _list.Children.Add(Text("Ничего не нашлось.", 14, Muted));
         UpdateSummary();
     }
 
     private void UpdateSummary()
     {
-        var close = _rows.Count(r => r.Action == ProgramAction.Close);
+        var close = _rows.Count(r => r.Action == ProgramAction.Close && !r.IsBackground);
         var second = _rows.Count(r => r.Action == ProgramAction.SecondMonitor);
-        _summary.Text = $"Закрывать: {close} · на второй монитор: {second} · всего программ: {_rows.Count}";
+        var bg = _rows.Where(r => r.IsBackground && r.Action == ProgramAction.Close).ToList();
+        _summary.Text = $"Закрывать: {close} · на второй монитор: {second} · фоновых завершать: {bg.Count}" +
+                        (bg.Count > 0 ? $" (≈{GigaRest.Core.Text.Sizes.Format(bg.Sum(r => r.PrivateBytes))})" : "");
     }
 
     private static TextBlock SectionTitle(string text)
@@ -190,20 +203,30 @@ public sealed class ProgramsWindow : Window
 
         var names = new StackPanel { Spacing = 2, VerticalAlignment = VerticalAlignment.Center };
         names.Children.Add(Text(r.DisplayName, 15, Ink, FontWeights.Bold, wrap: true));
-        var status = r.IsRunning ? "запущена" : "сейчас не запущена";
-        if (r.Hint is not null) status += " · " + r.Hint;
-        names.Children.Add(Text(status, 12, r.IsRunning ? Hex("#1E7A44") : Muted, wrap: true));
+        if (r.IsBackground)
+        {
+            names.Children.Add(Text($"≈{GigaRest.Core.Text.Sizes.Format(r.PrivateBytes)} · запустим обратно: {r.RelaunchInfo}", 12, Muted, wrap: true));
+        }
+        else
+        {
+            var status = r.IsRunning ? "запущена" : "сейчас не запущена";
+            if (r.Hint is not null) status += " · " + r.Hint;
+            names.Children.Add(Text(status, 12, r.IsRunning ? Hex("#1E7A44") : Muted, wrap: true));
+        }
         Grid.SetColumn(names, 1);
         grid.Children.Add(names);
 
         var seg = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, VerticalAlignment = VerticalAlignment.Center };
-        foreach (var (action, label) in new[] { (ProgramAction.Close, "Закрыть"), (ProgramAction.SecondMonitor, "Второй монитор"), (ProgramAction.Keep, "Оставить") })
+        var choices = r.IsBackground
+            ? new[] { (ProgramAction.Close, "Завершать в отдыхе"), (ProgramAction.Keep, "Не трогать") }
+            : new[] { (ProgramAction.Close, "Закрыть"), (ProgramAction.SecondMonitor, "Второй монитор"), (ProgramAction.Keep, "Оставить") };
+        foreach (var (action, label) in choices)
             seg.Children.Add(Segment(r, action, label, box));
         Grid.SetColumn(seg, 2);
         grid.Children.Add(seg);
         box.Children.Add(grid);
 
-        if (r.Action == ProgramAction.Close && r.HidesToTray)
+        if (r.Action == ProgramAction.Close && r.HidesToTray && !r.IsBackground)
         {
             var check = new CheckBox
             {

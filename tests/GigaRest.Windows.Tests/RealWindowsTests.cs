@@ -208,3 +208,39 @@ public class AutostartTests
         Assert.False(Autostart.IsEnabled(exe));
     }
 }
+
+public class BackgroundTests
+{
+    [WindowsFact]
+    public async Task BackgroundProcessIsFoundStoppedAndStartedWithSameArguments()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "GigaRest тесты", "Фон " + Guid.NewGuid().ToString("N")[..6]);
+        var marker = Path.Combine(root, "метка фона.txt");
+        Directory.CreateDirectory(root);
+        string[] args = ["--windows", "0", "--marker", marker, "--title", "фон без окон"];
+        using var d = new Dummy("фоновая программа.exe", args, Path.Combine(root, "программа"));
+        for (var i = 0; i < 50 && !File.Exists(marker); i++) await Task.Delay(100);
+        Assert.Equal(args, File.ReadAllLines(marker));
+        File.Delete(marker);
+
+        var desktop = Dummy.Desktop;
+        var found = GigaRest.Core.Programs.BackgroundScanner.Find(desktop.GetProcesses(), desktop.GetWindows(), Environment.ProcessId);
+        Assert.Contains(found, p => p.Id == "фоновая программа.exe");
+
+        var settings = new AppSettings { Programs = { new ProgramSetting { Id = "фоновая программа.exe", Action = ProgramAction.Close, AllowTerminate = true } } };
+        var programs = ProgramScanner.Scan(desktop.GetProcesses(), desktop.GetWindows(), settings, Environment.ProcessId)
+            .Where(p => p.Id == "фоновая программа.exe").ToList();
+        var switcher = new RestSwitcher(desktop, SystemClock.Instance, new SessionStore(Path.Combine(root, "session.json")))
+        {
+            MemorySettle = TimeSpan.FromSeconds(1),
+        };
+
+        var rest = await switcher.GoToRestAsync(programs, null, default);
+        Assert.Equal(CloseOutcome.Terminated, rest.Results.Single().Outcome);
+        Assert.True(d.Process.WaitForExit(5000));
+
+        switcher.ReturnToWork(null, default);
+        for (var i = 0; i < 100 && !File.Exists(marker); i++) await Task.Delay(100);
+        Assert.Equal(args, File.ReadAllLines(marker));
+    }
+}

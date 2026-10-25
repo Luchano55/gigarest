@@ -15,6 +15,11 @@ public sealed class SelectorRow
     public bool HidesToTray { get; init; }
     public ProgramAction Action { get; set; }
     public bool AllowTerminate { get; set; }
+    /// <summary>Фоновый процесс: варианты только «завершать в отдыхе» / «не трогать».</summary>
+    public bool IsBackground { get; init; }
+    public long PrivateBytes { get; init; }
+    /// <summary>Чем запустим обратно — для фоновых показываем, чтобы было спокойно.</summary>
+    public string? RelaunchInfo { get; init; }
     /// <summary>Автоподсказка: «похоже на рабочую: почта».</summary>
     public string? Hint { get; set; }
 }
@@ -44,7 +49,8 @@ public static class ProgramCatalog
 
     /// <summary>Все строки: сначала настроенные (не «Оставить»), потом запущенные, потом установленные — по алфавиту.</summary>
     public static List<SelectorRow> BuildRows(
-        AppSettings settings, IEnumerable<RunningProgram> running, IEnumerable<ShortcutInfo> shortcuts)
+        AppSettings settings, IEnumerable<RunningProgram> running, IEnumerable<ShortcutInfo> shortcuts,
+        IEnumerable<RunningProgram>? background = null)
     {
         var rows = new Dictionary<string, SelectorRow>(StringComparer.OrdinalIgnoreCase);
         var runningList = running.ToList();
@@ -55,7 +61,26 @@ public static class ProgramCatalog
             {
                 Id = p.Id, DisplayName = p.DisplayName, ExePath = p.Roots.FirstOrDefault()?.ExePath, IsRunning = true,
                 HidesToTray = p.Known?.HidesToTray == true || p.Windows.Count == 0,
-                Action = p.Action, AllowTerminate = p.AllowTerminate,
+                Action = p.Action, AllowTerminate = p.AllowTerminate, IsBackground = p.IsBackground,
+                PrivateBytes = p.PrivateBytes,
+            };
+        }
+
+        // Фоновые — отдельной группой; их настройка — «завершать» (Close + можно завершать) или «не трогать».
+        foreach (var b in background ?? [])
+        {
+            if (rows.ContainsKey(b.Id)) continue;
+            var s = settings.Find(b.Id);
+            var root = b.Roots[0];
+            rows[b.Id] = new SelectorRow
+            {
+                Id = b.Id, DisplayName = s?.DisplayName is { Length: > 0 } n ? n : b.DisplayName, ExePath = root.ExePath,
+                IsRunning = true, IsBackground = true, PrivateBytes = b.PrivateBytes,
+                Action = s?.Action == ProgramAction.Close ? ProgramAction.Close : ProgramAction.Keep,
+                AllowTerminate = s?.Action == ProgramAction.Close,
+                RelaunchInfo = Session.RelaunchPlanner.Plan(root, null) is { } spec
+                    ? spec.FileName + (spec.Arguments.Count > 0 ? " " + string.Join(" ", spec.Arguments) : "")
+                    : null,
             };
         }
 
@@ -111,7 +136,8 @@ public static class ProgramCatalog
             }
             s.DisplayName = r.DisplayName;
             s.Action = r.Action;
-            s.AllowTerminate = r.AllowTerminate;
+            // Для фонового «завершать» и есть разрешение завершать.
+            s.AllowTerminate = r.IsBackground ? r.Action == ProgramAction.Close : r.AllowTerminate;
         }
     }
 

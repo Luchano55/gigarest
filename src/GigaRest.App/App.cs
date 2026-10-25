@@ -361,8 +361,11 @@ public sealed partial class App : Application, IXamlMetadataProvider
         try
         {
             var running = Scan();
+            var processes = _desktop.GetProcesses();
+            var background = BackgroundScanner.Find(processes, _desktop.GetWindows(), _desktop.CurrentProcessId)
+                .Where(b => !TestPrograms.IsTest(b.Id)).ToList();
             var shortcuts = await Task.Run(StartMenu.ReadShortcuts);
-            _programs.SetRows(ProgramCatalog.BuildRows(_settings, running, shortcuts));
+            _programs.SetRows(ProgramCatalog.BuildRows(_settings, running, shortcuts, background));
         }
         catch (Exception ex)
         {

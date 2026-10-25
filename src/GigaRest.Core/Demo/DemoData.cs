@@ -48,6 +48,23 @@ public static class DemoData
             for (var i = 0; i < count; i++)
                 windows.Add(new WindowInfo { Handle = handle++, Pid = pid, Title = title, IsVisible = true });
         }
+        // Фоновые процессы без окон — для раздела «Фоновые процессы».
+        foreach (var (exe, folder, args, mb) in new[]
+        {
+            ("OneDrive.exe", @"C:\Users\User\AppData\Local\Microsoft\OneDrive", "/background", 210L),
+            ("Updater.exe", @"C:\Users\User\AppData\Local\Updater", "--autostart --minimized", 140L),
+            ("AnyDesk.exe", @"C:\Program Files (x86)\AnyDesk", "--tray", 90L),
+        })
+        {
+            pid += 10;
+            var path = folder + "\\" + exe;
+            processes.Add(new ProcessInfo
+            {
+                Pid = pid, ExeName = exe, ExePath = path, CommandLine = $"\"{path}\" {args}",
+                StartTimeUtc = new DateTime(2026, 10, 24, 9, 0, 0, DateTimeKind.Utc), PrivateBytes = mb << 20,
+            });
+        }
+
         var monitors = new List<MonitorInfo>
         {
             new() { Id = @"\\.\DISPLAY1", IsPrimary = true, Bounds = new Rect(0, 0, 3840, 2160), WorkArea = new Rect(0, 0, 3840, 2100), ScalePercent = 150 },

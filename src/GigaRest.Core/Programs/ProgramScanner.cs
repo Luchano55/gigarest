@@ -60,12 +60,32 @@ public static class ProgramScanner
             });
         }
 
+        // Фоновые процессы, которые Роман отметил «завершать в отдыхе», — тоже в список.
+        var configured = settings.Programs.Where(s => s.Action == ProgramAction.Close).Select(s => s.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (configured.Count > 0)
+        {
+            foreach (var b in BackgroundScanner.Find(processes, windows, selfPid))
+            {
+                if (!configured.Contains(b.Id) || result.Any(r => r.Id.Equals(b.Id, StringComparison.OrdinalIgnoreCase))) continue;
+                var setting = settings.Find(b.Id)!;
+                b.Action = ProgramAction.Close;
+                b.AllowTerminate = true; // фоновый процесс иначе не закрыть — выбор «завершать» и есть разрешение
+                result.Add(setting.DisplayName is { Length: > 0 } ? CopyWithName(b, setting.DisplayName) : b);
+            }
+        }
+
         // Сначала то, что закрываем, потом второй монитор, потом остальное; внутри — по памяти.
         return result
             .OrderBy(p => p.Action switch { ProgramAction.Close => 0, ProgramAction.SecondMonitor => 1, _ => 2 })
             .ThenByDescending(p => p.PrivateBytes)
             .ToList();
     }
+
+    private static RunningProgram CopyWithName(RunningProgram b, string name) => new()
+    {
+        Id = b.Id, DisplayName = name, ExeName = b.ExeName, Known = b.Known, Roots = b.Roots, Processes = b.Processes,
+        Windows = b.Windows, IsBackground = true, Action = b.Action, AllowTerminate = b.AllowTerminate,
+    };
 
     public static string ProgramId(ProcessInfo root) => root.Aumid ?? root.ExeName.ToLowerInvariant();
 

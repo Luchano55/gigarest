@@ -67,7 +67,7 @@ jobs:
           Get-ChildItem $shots
           if (Test-Path "$shots\error.txt") { Get-Content "$shots\error.txt"; throw "Скриншоты: ошибка" }
           if ($p.ExitCode -ne 0) { throw "Скриншоты: код $($p.ExitCode)" }
-          if ((Get-ChildItem $shots -Filter *.png).Count -lt 9) { throw "Скриншотов меньше девяти" }
+          if ((Get-ChildItem $shots -Filter *.png).Count -lt 10) { throw "Скриншотов меньше десяти" }
       - name: Пробный режим — тестовое окно запускается
         # Копия GigaRest.exe под другим именем с --test-window должна показать окно с заголовком.
         shell: pwsh
