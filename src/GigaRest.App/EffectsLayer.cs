@@ -36,6 +36,8 @@ internal sealed class EffectsLayer
         _height = height;
         Clear();
         if (width < 10 || height < 10) return;
+        // Всё, что вылетает за край (капли, хлопья, сдвинутый туман), — обрезаем по экрану.
+        _canvas.Clip = new RectangleGeometry { Rect = new global::Windows.Foundation.Rect(0, 0, width, height) };
         switch (effect)
         {
             case SceneEffect.Snow: Snow(width, height); break;
@@ -127,32 +129,28 @@ internal sealed class EffectsLayer
     /// <summary>Туман: три слоя настоящей текстуры плывут у земли с разной скоростью и «дышат».</summary>
     private void Fog(double w, double h)
     {
-        (double height, double top, double seconds, double opacity, bool flip)[] layers =
+        (double height, double top, double seconds, double opacity, bool reverse)[] layers =
         [
-            (0.55, 0.45, 160, 0.45, false),
-            (0.65, 0.42, 110, 0.55, true),
-            (0.45, 0.62, 75, 0.40, false),
+            (0.55, 0.47, 170, 0.32, false),
+            (0.62, 0.44, 120, 0.40, true),
+            (0.42, 0.64, 80, 0.30, false),
         ];
-        foreach (var (lh, top, seconds, opacity, flip) in layers)
+        foreach (var (lh, top, seconds, opacity, reverse) in layers)
         {
-            // Две копии бесшовной текстуры рядом: сдвигаем на ширину экрана и начинаем сначала — шва не видно.
-            var strip = new StackPanel { Orientation = Orientation.Horizontal, Opacity = opacity };
-            for (var i = 0; i < 2; i++)
-                strip.Children.Add(new Image
-                {
-                    Source = new BitmapImage(new Uri(FogTexture)), Width = w + 1, Height = h * lh, Stretch = Stretch.Fill,
-                    RenderTransformOrigin = new global::Windows.Foundation.Point(0.5, 0.5),
-                    RenderTransform = new ScaleTransform { ScaleX = flip ? -1 : 1 },
-                });
+            // В текстуре две копии бесшовного тумана подряд: одна картинка шириной 2 экрана, сдвиг на экран — и сначала.
+            var image = new Image
+            {
+                Source = new BitmapImage(new Uri(FogTexture)), Width = w * 2, Height = h * lh, Stretch = Stretch.Fill, Opacity = opacity,
+            };
             var move = new TranslateTransform();
-            strip.RenderTransform = move;
-            Canvas.SetTop(strip, h * top);
-            _canvas.Children.Add(strip);
+            image.RenderTransform = move;
+            Canvas.SetTop(image, h * top);
+            _canvas.Children.Add(image);
             Add(move, "X", new DoubleAnimation
             {
-                From = flip ? -w : 0, To = flip ? 0 : -w, Duration = TimeSpan.FromSeconds(seconds), RepeatBehavior = RepeatBehavior.Forever,
+                From = reverse ? -w : 0, To = reverse ? 0 : -w, Duration = TimeSpan.FromSeconds(seconds), RepeatBehavior = RepeatBehavior.Forever,
             });
-            Add(strip, "Opacity", new DoubleAnimation
+            Add(image, "Opacity", new DoubleAnimation
             {
                 From = opacity * 0.6, To = opacity, Duration = TimeSpan.FromSeconds(R(14, 26)), AutoReverse = true,
                 RepeatBehavior = RepeatBehavior.Forever, EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut },

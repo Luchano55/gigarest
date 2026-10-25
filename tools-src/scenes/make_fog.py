@@ -25,5 +25,7 @@ mask = Image.linear_gradient("L").resize((W, H))
 alpha = ImageChops.multiply(base, mask).point(lambda v: max(0, min(255, int((v - 40) * 1.6))))
 alpha = alpha.filter(ImageFilter.GaussianBlur(6))
 fog = Image.merge("RGBA", (Image.new("L", (W, H), 224), Image.new("L", (W, H), 228), Image.new("L", (W, H), 240), alpha))
-fog.save(sys.argv[1] if len(sys.argv) > 1 else "fog.png", optimize=True)
+# В файле — две копии подряд: программа сдвигает одну картинку на половину ширины, стыков между элементами нет.
+double = Image.new("RGBA", (W * 2, H)); double.paste(fog, (0, 0)); double.paste(fog, (W, 0))
+double.save(sys.argv[1] if len(sys.argv) > 1 else "fog.png", optimize=True)
 print("ok", fog.size)
