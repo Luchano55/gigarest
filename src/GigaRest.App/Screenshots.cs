@@ -111,6 +111,17 @@ internal static class Screenshots
         quiet.ShowSummary("Закрыто: 3 программы, на второй монитор: 4 окна, освободилось 4,3 ГБ.", hasProblems: false);
         await Task.Delay(1500); // картинка сцены грузится с диска
         await Capture(quiet.Root, Path.Combine(dir, "11-tihiy.png"));
+        foreach (var (scene, fx, file) in new[]
+        {
+            ("builtin:mountains.jpg", GigaRest.Core.Scenes.SceneEffect.Fog, "14-tuman.png"),
+            ("builtin:lake.jpg", GigaRest.Core.Scenes.SceneEffect.Lights, "15-ogonki.png"),
+            ("builtin:dunes.jpg", GigaRest.Core.Scenes.SceneEffect.Rain, "16-dozhd.png"),
+        })
+        {
+            quiet.ShowSceneForCapture(scene, fx);
+            await Task.Delay(2500); // смена сцены — плавная, 1,2 с
+            await Capture(quiet.Root, Path.Combine(dir, file));
+        }
 
         // Плитки на втором мониторе (на сервере сборки живых копий нет — заглушки).
         var tilesWindow = new TilesWindow();

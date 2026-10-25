@@ -36,7 +36,7 @@ public sealed class SceneCatalogTests : IDisposable
     public void MyScenesPickedUpWithSidecarSettings()
     {
         File.WriteAllText(Path.Combine(_mine, "Город ночью.jpg"), "x");
-        File.WriteAllText(Path.Combine(_mine, "Город ночью.json"), """{ "name": "Город", "effect": "снег" }""");
+        File.WriteAllText(Path.Combine(_mine, "Город ночью.json"), """{ "name": "Город", "effect": "снег", "focus": [0.25, 1.4], "speed": 10 }""");
         File.WriteAllText(Path.Combine(_mine, "камин.mp4"), "x");
         File.WriteAllText(Path.Combine(_mine, "заметки.txt"), "x");
         File.WriteAllText(Path.Combine(_mine, "битый.png"), "x");
@@ -47,6 +47,9 @@ public sealed class SceneCatalogTests : IDisposable
         Assert.Equal(3, mine.Count);
         var storm = mine.Single(s => s.Name == "Город");
         Assert.Equal(SceneEffect.Snow, storm.Effect);
+        Assert.Equal(0.25, storm.FocusX);
+        Assert.Equal(1, storm.FocusY);   // за пределами — к краю
+        Assert.Equal(3, storm.Speed);     // не быстрее втрое
         Assert.True(mine.Single(s => s.Name == "камин").IsVideo);
         Assert.Equal(SceneEffect.None, mine.Single(s => s.Name == "битый").Effect);
     }
@@ -56,6 +59,7 @@ public sealed class SceneCatalogTests : IDisposable
     [InlineData("Туман", SceneEffect.Fog)]
     [InlineData("огоньки", SceneEffect.Lights)]
     [InlineData("ничего", SceneEffect.None)]
-    [InlineData("дождь", null)]
+    [InlineData("Дождь", SceneEffect.Rain)]
+    [InlineData("град", null)]
     public void ParsesEffects(string text, SceneEffect? expected) => Assert.Equal(expected, SceneCatalog.ParseEffect(text));
 }

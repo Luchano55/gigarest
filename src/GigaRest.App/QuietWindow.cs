@@ -28,8 +28,8 @@ public sealed class QuietWindow : Window
 
     private readonly Grid _root;
     private readonly Grid _sceneHost = new();
-    private readonly Image _scene;
-    private MediaPlayerElement? _video;
+    private UIElement? _current;
+    private VideoLoop? _video;
     private readonly EffectsLayer _effects = new();
     private readonly IReadOnlyList<Scene> _scenes;
     private SceneEffect _effect;
@@ -68,13 +68,8 @@ public sealed class QuietWindow : Window
         _root = new Grid { Background = Brush("#05060A"), RequestedTheme = ElementTheme.Dark };
 
         // Сцена с медленным движением (Ken Burns) — анимацию считает системный композитор.
-        _scene = new Image { Stretch = Stretch.UniformToFill, RenderTransformOrigin = new global::Windows.Foundation.Point(0.5, 0.5), RenderTransform = _sceneMove };
-        _sceneHost.Children.Add(_scene);
+        _sceneHost.RenderTransform = _sceneMove;
         _root.Children.Add(_sceneHost);
-        AddMove("ScaleX", 1.03, 1.09);
-        AddMove("ScaleY", 1.03, 1.09);
-        AddMove("TranslateX", 0, -24);
-        AddMove("TranslateY", 0, -10);
 
         var shade = new LinearGradientBrush { StartPoint = new(0, 0), EndPoint = new(0, 1) };
         shade.GradientStops.Add(new GradientStop { Color = Hex("#59040509"), Offset = 0 });
@@ -165,11 +160,25 @@ public sealed class QuietWindow : Window
         AppWindow.Closing += (_, e) => { if (!_closing) e.Cancel = true; };
     }
 
-    private void AddMove(string property, double from, double to)
+    /// <summary>Медленное движение к точке фокуса сцены; скорость — из настроек сцены.</summary>
+    private void SetMotion(Scene scene)
+    {
+        _kenBurns.Stop();
+        _kenBurns.Children.Clear();
+        _sceneHost.RenderTransformOrigin = new global::Windows.Foundation.Point(scene.FocusX, scene.FocusY);
+        var seconds = 45 / scene.Speed;
+        AddMove("ScaleX", 1.03, 1.09, seconds);
+        AddMove("ScaleY", 1.03, 1.09, seconds);
+        AddMove("TranslateX", 0, -(scene.FocusX - 0.5) * 60 - 12, seconds);
+        AddMove("TranslateY", 0, -(scene.FocusY - 0.5) * 30 - 5, seconds);
+        if (!_paused) _kenBurns.Begin();
+    }
+
+    private void AddMove(string property, double from, double to, double seconds)
     {
         var a = new DoubleAnimation
         {
-            From = from, To = to, Duration = new Duration(TimeSpan.FromSeconds(45)), AutoReverse = true,
+            From = from, To = to, Duration = new Duration(TimeSpan.FromSeconds(seconds)), AutoReverse = true,
             RepeatBehavior = RepeatBehavior.Forever, EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut },
         };
         Storyboard.SetTarget(a, _sceneMove);
@@ -200,30 +209,44 @@ public sealed class QuietWindow : Window
         _sceneIndex = (index + _scenes.Count) % _scenes.Count;
         var scene = _scenes[_sceneIndex];
         _effect = effect ?? scene.Effect;
-        if (_video is not null)
-        {
-            _video.MediaPlayer?.Pause();
-            _sceneHost.Children.Remove(_video);
-            _video = null;
-        }
+
+        // Новая сцена проступает поверх старой за секунду — без моргания.
+        UIElement next;
+        VideoLoop? video = null;
         if (scene.IsVideo)
         {
-            // Видео-сцена: по кругу, без звука, аппаратное декодирование системного плеера.
-            var player = new global::Windows.Media.Playback.MediaPlayer
-            {
-                IsLoopingEnabled = true, IsMuted = true, AutoPlay = true,
-                Source = global::Windows.Media.Core.MediaSource.CreateFromUri(new Uri(scene.Path)),
-            };
-            _video = new MediaPlayerElement { Stretch = Stretch.UniformToFill, AreTransportControlsEnabled = false };
-            _video.SetMediaPlayer(player);
-            _sceneHost.Children.Add(_video);
-            _scene.Visibility = Visibility.Collapsed;
+            next = video = new VideoLoop(new Uri(scene.Path));
         }
         else
         {
-            _scene.Source = new BitmapImage(new Uri(scene.Path));
-            _scene.Visibility = Visibility.Visible;
+            // 4K-обои — в полном разрешении, без пережатия.
+            next = new Image { Source = new BitmapImage(new Uri(scene.Path)), Stretch = Stretch.UniformToFill };
         }
+        var previous = _current;
+        var previousVideo = _video;
+        _current = next;
+        _video = video;
+        _sceneHost.Children.Add(next);
+        if (previous is null)
+        {
+            next.Opacity = 1;
+        }
+        else
+        {
+            next.Opacity = 0;
+            var fade = new DoubleAnimation { From = 0, To = 1, Duration = TimeSpan.FromSeconds(1.2), EasingFunction = new SineEase() };
+            Storyboard.SetTarget(fade, next);
+            Storyboard.SetTargetProperty(fade, "Opacity");
+            var board = new Storyboard();
+            board.Children.Add(fade);
+            board.Completed += (_, _) =>
+            {
+                _sceneHost.Children.Remove(previous);
+                previousVideo?.Dispose();
+            };
+            board.Begin();
+        }
+        SetMotion(scene);
         var fx = SceneCatalog.EffectName(_effect);
         _sceneName.Text = scene.Name + (fx.Length > 0 ? " · " + fx : "");
         _effects.Set(_effect, _root.ActualWidth, _root.ActualHeight);
@@ -271,7 +294,7 @@ public sealed class QuietWindow : Window
             over.VerticalAlignment = VerticalAlignment.Center;
             over.Margin = new Thickness(0, 0, 8, 0);
             effects.Children.Add(over);
-            foreach (var (fx, label) in new[] { (SceneEffect.None, "Ничего"), (SceneEffect.Snow, "Снег"), (SceneEffect.Fog, "Туман"), (SceneEffect.Lights, "Огоньки") })
+            foreach (var (fx, label) in new[] { (SceneEffect.None, "Ничего"), (SceneEffect.Snow, "Снег"), (SceneEffect.Fog, "Туман"), (SceneEffect.Lights, "Огоньки"), (SceneEffect.Rain, "Дождь") })
             {
                 var selected = fx == _effect;
                 var seg = new Button
@@ -375,8 +398,8 @@ public sealed class QuietWindow : Window
 
         // Игра или фильм на весь экран поверх — останавливаем движение, видеокарта свободна.
         var busy = UserState.ShouldNotDisturb();
-        if (busy && !_paused) { _kenBurns.Pause(); _effects.Pause(true); _video?.MediaPlayer?.Pause(); _paused = true; }
-        else if (!busy && _paused) { _kenBurns.Resume(); _effects.Pause(false); _video?.MediaPlayer?.Play(); _paused = false; }
+        if (busy && !_paused) { _kenBurns.Pause(); _effects.Pause(true); _video?.Pause(); _paused = true; }
+        else if (!busy && _paused) { _kenBurns.Resume(); _effects.Pause(false); _video?.Resume(); _paused = false; }
     }
 
     /// <summary>Итог перехода поверх сцены. С проблемами — висит, пока не закроют; без — исчезает через 8 с.</summary>
@@ -391,6 +414,14 @@ public sealed class QuietWindow : Window
     }
 
     public void HideSummary() => _toast.Visibility = Visibility.Collapsed;
+
+    /// <summary>Для скриншотов: показать сцену с эффектом.</summary>
+    public void ShowSceneForCapture(string sceneId, SceneEffect effect)
+    {
+        var i = _scenes.ToList().FindIndex(x => x.Id == sceneId);
+        SetScene(Math.Max(0, i), effect);
+        HideSummary();
+    }
 
     /// <summary>Для скриншотов: запустить часы и анимацию без перехода на весь экран.</summary>
     public void StartForCapture()
@@ -424,7 +455,7 @@ public sealed class QuietWindow : Window
         _tick.Stop();
         _kenBurns.Stop();
         _effects.Pause(true);
-        _video?.MediaPlayer?.Pause();
+        _video?.Dispose();
         Close();
     }
 }
