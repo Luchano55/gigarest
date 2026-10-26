@@ -176,11 +176,18 @@ internal static class Screenshots
         await Task.Delay(1500);
         await Capture(tilesWindow.Root, Path.Combine(dir, "12-plitki.png"));
 
+        // Окно хода обновления.
+        var update = new UpdateWindow("0.2.1");
+        update.Activate();
+        update.Report("Скачиваем: 42% (25 из 60 МБ)", 42);
+        await Capture(update.Root, Path.Combine(dir, "23-obnovlenie.png"));
+
         // Последнее закрытое окно завершает программу — поэтому закрываем оба только в конце.
         programsWindow.CloseForGood();
         settingsWindow.CloseForGood();
         quiet.CloseForGood();
         tilesWindow.CloseForGood();
+        update.Close();
         window.CloseForGood();
         return true;
     }

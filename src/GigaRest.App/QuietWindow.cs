@@ -113,7 +113,6 @@ public sealed class QuietWindow : Window
     }
 
     public event Action<Film>? FilmRequested;
-    public event Action? WatchLaterRequested;
     public event Action? OpenFilmsFolderRequested;
 
     /// <summary>Что играет — по умолчанию из Windows; для скриншотов подменяется.</summary>
@@ -404,7 +403,7 @@ public sealed class QuietWindow : Window
         }
         else if (word == "Играть")
         {
-            _panel.Width = 520;
+            _panel.Width = _games is { Count: > 0 } ? 820 : 520;
             _panelContent.Children.Add(Text("Играть", 17, Hex("#E6FFFFFF"), FontWeights.Medium));
             if (_games is null || _games.Count == 0)
             {
@@ -414,9 +413,19 @@ public sealed class QuietWindow : Window
             }
             else
             {
-                var list = new StackPanel { Spacing = 2, Margin = new Thickness(-12, 6, -12, 0) };
-                foreach (var game in _games) list.Children.Add(GameRow(game));
-                _panelContent.Children.Add(new ScrollViewer { Content = list, MaxHeight = 420, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
+                // Сверху — недавние обложками, ниже — все игры списком.
+                var recent = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 16, Margin = new Thickness(0, 12, 0, 4) };
+                foreach (var game in _games.Take(5)) recent.Children.Add(GameCard(game));
+                _panelContent.Children.Add(recent);
+                if (_games.Count > 5)
+                {
+                    var all = Text("Все игры", 13, Hex("#99FFFFFF"));
+                    all.Margin = new Thickness(0, 12, 0, 0);
+                    _panelContent.Children.Add(all);
+                    var list = new StackPanel { Spacing = 2, Margin = new Thickness(-12, 4, -12, 0) };
+                    foreach (var game in _games.Skip(5)) list.Children.Add(GameListRow(game));
+                    _panelContent.Children.Add(new ScrollViewer { Content = list, MaxHeight = 260, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
+                }
                 var count = Text(GigaRest.Core.Text.Sizes.Plural(_games.Count, "игра", "игры", "игр") + " · Steam, Epic, GOG, Battle.net", 12, Hex("#66FFFFFF"));
                 count.Margin = new Thickness(0, 8, 0, 0);
                 _panelContent.Children.Add(count);
@@ -435,7 +444,7 @@ public sealed class QuietWindow : Window
         {
             _panel.Width = 520;
             _panelContent.Children.Add(Text("Слушать", 17, Hex("#E6FFFFFF"), FontWeights.Medium));
-            var web = LinkRow(_webMusic is null ? "♫  Яндекс Музыка здесь" : "♫  Вернуть Яндекс Музыку", "поиск, плейлисты, «Моя волна»", ShowWebMusic, big: true);
+            var web = LinkRow(!_web.ContainsKey(Music) ? "♫  Яндекс Музыка здесь" : "♫  Вернуть Яндекс Музыку", "поиск, плейлисты, «Моя волна»", ShowWebMusic, big: true);
             web.Margin = new Thickness(-12, 6, -12, 0);
             _panelContent.Children.Add(web);
             var box = new StackPanel { Spacing = 8, Margin = new Thickness(0, 8, 0, 0) };
@@ -448,7 +457,8 @@ public sealed class QuietWindow : Window
             _panel.Width = 560;
             _panelContent.Children.Add(Text("Смотреть", 17, Hex("#E6FFFFFF"), FontWeights.Medium));
             var list = new StackPanel { Spacing = 2, Margin = new Thickness(-12, 6, -12, 0) };
-            list.Children.Add(LinkRow("YouTube · Смотреть позже", "в браузере", () => WatchLaterRequested?.Invoke()));
+            list.Children.Add(LinkRow("▶  YouTube", "главная, прямо здесь", () => ShowYouTube(lastWatched: false)));
+            list.Children.Add(LinkRow("▶  YouTube · последний ролик", "тот, что смотрели последним", () => ShowYouTube(lastWatched: true)));
             if (_films is { Count: > 0 })
                 foreach (var film in _films.Take(30)) list.Children.Add(FilmRow(film));
             _panelContent.Children.Add(new ScrollViewer { Content = list, MaxHeight = 420, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
@@ -507,8 +517,106 @@ public sealed class QuietWindow : Window
     /// <summary>Строка игры: название слева, магазин и «когда играли» справа; щелчок — запуск.</summary>
     private Button GameRow(Game game, bool big = false)
     {
+        if (big) return GameListRow(game, big: true);
         var when = GameLibraries.LastPlayedText(game.LastPlayedUtc, DateTime.Now);
-        return LinkRow(big ? $"▶  {game.Name}" : game.Name, when.Length > 0 ? $"{game.Store} · {when}" : game.Store, () => PlayRequested?.Invoke(game), big);
+        return LinkRow(game.Name, when.Length > 0 ? $"{game.Store} · {when}" : game.Store, () => PlayRequested?.Invoke(game));
+    }
+
+    private static string GameMeta(Game game)
+    {
+        var when = GameLibraries.LastPlayedText(game.LastPlayedUtc, DateTime.Now);
+        return when.Length > 0 ? $"{game.Store} · {when}" : game.Store;
+    }
+
+    /// <summary>Карточка недавней игры: вертикальная обложка, название, магазин.</summary>
+    private Button GameCard(Game game)
+    {
+        var box = new StackPanel { Spacing = 6, Width = 136 };
+        box.Children.Add(Cover(game, 136, 204));
+        var name = Text(game.Name, 13, Hex("#E6FFFFFF"), wrap: true);
+        name.MaxLines = 2;
+        name.TextTrimming = TextTrimming.CharacterEllipsis;
+        box.Children.Add(name);
+        box.Children.Add(Text(GameMeta(game), 11, Hex("#73FFFFFF")));
+        return GameButton(box, game, new Thickness(0));
+    }
+
+    /// <summary>Строка игры с маленькой обложкой; big — для «Продолжить».</summary>
+    private Button GameListRow(Game game, bool big = false)
+    {
+        var grid = new Grid { ColumnSpacing = 14 };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition());
+        grid.Children.Add(Cover(game, big ? 64 : 30, big ? 96 : 45));
+        var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Spacing = 2 };
+        var name = Text(big ? $"▶  {game.Name}" : game.Name, big ? 19 : 15, Hex("#E6FFFFFF"), big ? FontWeights.SemiBold : null);
+        text.Children.Add(name);
+        text.Children.Add(Text(GameMeta(game), 12, Hex("#73FFFFFF")));
+        Grid.SetColumn(text, 1);
+        grid.Children.Add(text);
+        return GameButton(grid, game, new Thickness(12, big ? 10 : 6, 12, big ? 10 : 6));
+    }
+
+    private Button GameButton(UIElement content, Game game, Thickness padding)
+    {
+        var b = new Button
+        {
+            Content = content, HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch,
+            Background = Brush(Colors.Transparent), BorderThickness = new Thickness(0), CornerRadius = new CornerRadius(12), Padding = padding,
+        };
+        b.Resources["ButtonBackgroundPointerOver"] = Brush("#1AFFFFFF");
+        b.Resources["ButtonBackgroundPressed"] = Brush("#26FFFFFF");
+        b.Resources["ButtonBorderBrushPointerOver"] = Brush(Colors.Transparent);
+        b.Resources["ButtonBorderBrushPressed"] = Brush(Colors.Transparent);
+        b.Click += (_, _) => { ClosePanel(); PlayRequested?.Invoke(game); };
+        return b;
+    }
+
+    /// <summary>
+    /// Обложка: из кэша магазина; нет — значок игры на тёмной подложке; нет и его — название на подложке (ТЗ, раздел 8).
+    /// </summary>
+    private static Border Cover(Game game, double width, double height)
+    {
+        var tint = ProgramColor(game.Name);
+        var bg = new LinearGradientBrush { StartPoint = new(0, 0), EndPoint = new(1, 1) };
+        bg.GradientStops.Add(new GradientStop { Color = Color.FromArgb(255, (byte)(tint.R / 3), (byte)(tint.G / 3), (byte)(tint.B / 3)), Offset = 0 });
+        bg.GradientStops.Add(new GradientStop { Color = Hex("#FF14151C"), Offset = 1 });
+        var frame = new Border { Width = width, Height = height, CornerRadius = new CornerRadius(width > 60 ? 10 : 5), Background = bg, BorderBrush = Brush("#1AFFFFFF"), BorderThickness = new Thickness(1) };
+        if (game.CoverPath is { } cover && File.Exists(cover))
+        {
+            frame.Child = new Image { Source = new BitmapImage(new Uri(cover)) { DecodePixelWidth = (int)(width * 2) }, Stretch = Stretch.UniformToFill };
+            return frame;
+        }
+        var fallback = new Grid();
+        if (width > 60)
+        {
+            var title = Text(game.Name, 13, Hex("#CCFFFFFF"), FontWeights.SemiBold, wrap: true);
+            title.TextAlignment = TextAlignment.Center;
+            title.Margin = new Thickness(10);
+            title.VerticalAlignment = VerticalAlignment.Bottom;
+            fallback.Children.Add(title);
+        }
+        frame.Child = fallback;
+        if (game.IconPath is { } icon && File.Exists(icon)) _ = LoadIconAsync(fallback, icon, width > 60 ? 56 : 22);
+        return frame;
+    }
+
+    // Значок exe — так же, как его показывает проводник.
+    private static async Task LoadIconAsync(Grid into, string path, double size)
+    {
+        try
+        {
+            var file = await global::Windows.Storage.StorageFile.GetFileFromPathAsync(path);
+            using var thumb = await file.GetThumbnailAsync(global::Windows.Storage.FileProperties.ThumbnailMode.SingleItem, (uint)(size * 2));
+            if (thumb is null) return;
+            var bmp = new BitmapImage();
+            await bmp.SetSourceAsync(thumb);
+            into.Children.Add(new Image { Source = bmp, Width = size, Height = size, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center });
+        }
+        catch (Exception ex)
+        {
+            GigaRest.Core.Logging.Log.Warn("Значок игры: " + ex.Message);
+        }
     }
 
     private async Task FillListenAsync(StackPanel box)
@@ -657,7 +765,7 @@ public sealed class QuietWindow : Window
         var now = DateTime.Now;
         _clock.Text = now.ToString("HH:mm", Ru);
         _date.Text = now.ToString("dddd, d MMMM", Ru);
-        if (_film is not null || _webMusic?.Host.Visibility == Visibility.Visible) _lastInput = now; // смотрят или выбирают музыку — не гасим экран
+        if (_film is not null || WebVisible) _lastInput = now; // смотрят или выбирают музыку — не гасим экран
         var idle = now - _lastInput;
 
         // 20 секунд без действий — список закрывается, строка приглушается до 40%.
@@ -685,22 +793,42 @@ public sealed class QuietWindow : Window
         else if (!busy && _paused) { _kenBurns.Resume(); _effects.Pause(false); _video?.Resume(); _paused = false; }
     }
 
-    // ---------- Яндекс Музыка (сайт) внутри «Тихого» экрана: WebView2, свой профиль — вход запоминается ----------
+    // ---------- сайты внутри «Тихого» экрана (Яндекс Музыка, YouTube): WebView2, свой профиль — вход запоминается ----------
 
-    private (Grid Host, WebView2 Web)? _webMusic;
-    private const string WebMusicUrl = "https://music.yandex.ru/";
+    private const string Music = "music", YouTube = "youtube";
+    private const string MusicUrl = "https://music.yandex.ru/";
+    private const string YouTubeUrl = "https://www.youtube.com/";
+    private const string YouTubeHistoryUrl = "https://www.youtube.com/feed/history";
+    private readonly Dictionary<string, (Grid Host, WebView2 Web)> _web = [];
 
-    /// <summary>Папка профиля встроенного браузера: вход в Яндекс, настройки сайта. Удаляется вместе с программой.</summary>
+    /// <summary>Папка профиля встроенного браузера: вход в Яндекс и YouTube, настройки сайтов. Удаляется вместе с программой.</summary>
     public static string WebProfileFolder => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "GigaRest", "WebView2");
 
-    private async void ShowWebMusic()
+    private bool WebVisible => _web.Values.Any(w => w.Host.Visibility == Visibility.Visible);
+
+    private void ShowWebMusic() => ShowWeb(Music, "Яندекс Музыка", MusicUrl, "Свернуть — музыка играет дальше");
+
+    private void ShowYouTube(bool lastWatched) =>
+        ShowWeb(YouTube, "YouTube", lastWatched ? YouTubeHistoryUrl : YouTubeUrl, "Свернуть", navigate: true, openLastWatched: lastWatched);
+
+    /// <summary>
+    /// Открыть сайт панелью поверх сцены. Уже открыт — показать (navigate — перейти на адрес).
+    /// openLastWatched — на странице истории YouTube сразу открыть верхний (последний просмотренный) ролик.
+    /// </summary>
+    private async void ShowWeb(string key, string titleText, string url, string hideText, bool navigate = false, bool openLastWatched = false)
     {
         Wake();
         ClosePanel();
-        if (_webMusic is { } open)
+        foreach (var other in _web.Where(w => w.Key != key)) other.Value.Host.Visibility = Visibility.Collapsed;
+        if (_web.TryGetValue(key, out var open))
         {
             open.Host.Visibility = Visibility.Visible;
             _overlay.Visibility = Visibility.Collapsed;
+            if (navigate && open.Web.CoreWebView2 is { } core)
+            {
+                _openLastWatched = openLastWatched;
+                core.Navigate(url);
+            }
             return;
         }
         var web = new WebView2();
@@ -715,23 +843,23 @@ public sealed class QuietWindow : Window
         bar.ColumnDefinitions.Add(new ColumnDefinition());
         bar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         bar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var title = Text("Яндекс Музыка", 15, Hex("#E6FFFFFF"), FontWeights.Medium);
+        var title = Text(titleText, 15, Hex("#E6FFFFFF"), FontWeights.Medium);
         title.VerticalAlignment = VerticalAlignment.Center;
         bar.Children.Add(title);
-        var hide = QuietButton("Свернуть — музыка играет дальше", 13);
-        hide.Click += (_, _) => HideWebMusic();
+        var hide = QuietButton(hideText, 13);
+        hide.Click += (_, _) => HideWeb(key);
         Grid.SetColumn(hide, 1);
         bar.Children.Add(hide);
         var close = QuietButton("Закрыть", 13);
         close.Margin = new Thickness(18, 0, 0, 0);
-        close.Click += (_, _) => CloseWebMusic();
+        close.Click += (_, _) => CloseWeb(key);
         Grid.SetColumn(close, 2);
         bar.Children.Add(close);
         host.Children.Add(bar);
         Grid.SetRow(web, 1);
         host.Children.Add(web);
 
-        _webMusic = (host, web);
+        _web[key] = (host, web);
         _root.Children.Add(host);
         _overlay.Visibility = Visibility.Collapsed;
         try
@@ -741,31 +869,53 @@ public sealed class QuietWindow : Window
             await web.EnsureCoreWebView2Async(env);
             // Окна входа и ссылки «в новой вкладке» — здесь же, без отдельного браузера.
             web.CoreWebView2.NewWindowRequested += (_, e) => { e.Handled = true; web.CoreWebView2.Navigate(e.Uri); };
-            web.Source = new Uri(WebMusicUrl);
+            if (key == YouTube) web.CoreWebView2.NavigationCompleted += async (_, _) => await OpenLastWatchedAsync(web);
+            _openLastWatched = openLastWatched;
+            web.Source = new Uri(url);
         }
         catch (Exception ex)
         {
-            GigaRest.Core.Logging.Log.Error("Встроенная Яндекс Музыка", ex);
-            CloseWebMusic();
-            ShowSummary("Встроенная Яндекс Музыка не открылась: в Windows нет компонента Microsoft Edge WebView2. Его можно поставить с сайта Microsoft.", hasProblems: true);
+            GigaRest.Core.Logging.Log.Error($"Встроенный сайт {titleText}", ex);
+            CloseWeb(key);
+            ShowSummary($"{titleText} не открылся: в Windows нет компонента Microsoft Edge WebView2. Его можно поставить с сайта Microsoft.", hasProblems: true);
         }
     }
 
-    private void HideWebMusic()
+    private bool _openLastWatched;
+
+    // На странице истории верхний ролик — последний просмотренный: открываем его (ждём, пока список загрузится, до 10 с).
+    private async Task OpenLastWatchedAsync(WebView2 web)
     {
-        if (_webMusic is not { } m) return;
-        m.Host.Visibility = Visibility.Collapsed;
+        if (!_openLastWatched || web.CoreWebView2 is not { } core || !core.Source.Contains("/feed/history", StringComparison.Ordinal)) return;
+        _openLastWatched = false;
+        const string script = """
+            (function () {
+              let tries = 0;
+              const timer = setInterval(() => {
+                const link = document.querySelector('a#thumbnail[href*="/watch"], a[href*="/watch?v="]');
+                if (link) { clearInterval(timer); location.href = link.href; }
+                else if (++tries > 40) clearInterval(timer);
+              }, 250);
+            })();
+            """;
+        try { await core.ExecuteScriptAsync(script); }
+        catch (Exception ex) { GigaRest.Core.Logging.Log.Warn("YouTube, последний ролик: " + ex.Message); }
+    }
+
+    private void HideWeb(string key)
+    {
+        if (!_web.TryGetValue(key, out var w)) return;
+        w.Host.Visibility = Visibility.Collapsed;
         _overlay.Visibility = Visibility.Visible;
         Wake();
     }
 
-    private void CloseWebMusic()
+    private void CloseWeb(string key)
     {
-        if (_webMusic is not { } m) return;
-        _webMusic = null;
-        try { m.Web.Close(); } catch (Exception ex) { GigaRest.Core.Logging.Log.Warn("Яндекс Музыка, закрытие: " + ex.Message); }
-        _root.Children.Remove(m.Host);
-        _overlay.Visibility = Visibility.Visible;
+        if (!_web.Remove(key, out var w)) return;
+        try { w.Web.Close(); } catch (Exception ex) { GigaRest.Core.Logging.Log.Warn("Встроенный сайт, закрытие: " + ex.Message); }
+        _root.Children.Remove(w.Host);
+        if (!WebVisible) _overlay.Visibility = Visibility.Visible;
         Wake();
     }
 
@@ -896,7 +1046,7 @@ public sealed class QuietWindow : Window
     public void CloseForGood()
     {
         CloseFilm(); // где остановились — запомнится
-        CloseWebMusic();
+        foreach (var key in _web.Keys.ToList()) CloseWeb(key);
         _closing = true;
         _tick.Stop();
         _kenBurns.Stop();

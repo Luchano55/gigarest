@@ -51,12 +51,47 @@ public static class GameLibraries
                     // StateFlags: 4 — установлена полностью (бывают и вместе с другими флагами, например обновление).
                     if (int.TryParse(state!["StateFlags"], out var flags) && (flags & 4) == 0) continue;
                     DateTime? last = long.TryParse(state["LastPlayed"], out var unix) && unix > 0 ? DateTimeOffset.FromUnixTimeSeconds(unix).UtcDateTime : null;
-                    games.Add(new Game { Id = "steam:" + id, Name = name.Trim(), Store = "Steam", LastPlayedUtc = last, LaunchUri = "steam://rungameid/" + id });
+                    games.Add(new Game
+                    {
+                        Id = "steam:" + id, Name = name.Trim(), Store = "Steam", LastPlayedUtc = last, LaunchUri = "steam://rungameid/" + id,
+                        CoverPath = SteamCover(steamRoot, id),
+                    });
                 }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { Log.Warn($"Steam, {Path.GetFileName(file)}: {ex.Message}"); }
             }
         }
         return games;
+    }
+
+    // Порядок важен: сначала вертикальная обложка, потом шапка.
+    private static readonly string[] SteamCoverNames = ["library_600x900.jpg", "library_600x900_2x.jpg", "header.jpg", "library_header.jpg"];
+
+    /// <summary>
+    /// Обложка из кэша Steam: appcache\librarycache. Старый вид — «570_library_600x900.jpg» прямо в папке,
+    /// новый — папка «570» (иногда с подпапкой) и «library_600x900.jpg» в ней.
+    /// </summary>
+    public static string? SteamCover(string steamRoot, string appId)
+    {
+        var cache = Path.Combine(steamRoot, "appcache", "librarycache");
+        if (!Directory.Exists(cache)) return null;
+        foreach (var name in SteamCoverNames)
+        {
+            var flat = Path.Combine(cache, $"{appId}_{name}");
+            if (File.Exists(flat)) return flat;
+        }
+        var folder = Path.Combine(cache, appId);
+        if (!Directory.Exists(folder)) return null;
+        try
+        {
+            var files = Directory.GetFiles(folder, "*.jpg", new EnumerationOptions { RecurseSubdirectories = true, MaxRecursionDepth = 2, IgnoreInaccessible = true });
+            foreach (var name in SteamCoverNames)
+            {
+                var hit = files.FirstOrDefault(f => Path.GetFileName(f).Equals(name, StringComparison.OrdinalIgnoreCase));
+                if (hit is not null) return hit;
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+        return null;
     }
 
     /// <summary>Игры Epic. manifestsDir — %ProgramData%\Epic\EpicGamesLauncher\Data\Manifests.</summary>
@@ -83,9 +118,12 @@ public static class GameLibraries
                 var ns = S("CatalogNamespace");
                 var item = S("CatalogItemId");
                 var id = ns is not null && item is not null ? $"{ns}%3A{item}%3A{app}" : app;
+                var location = S("InstallLocation");
+                var exe = S("LaunchExecutable");
                 games.Add(new Game
                 {
                     Id = "epic:" + app, Name = name.Trim(), Store = "Epic",
+                    IconPath = location is not null && exe is not null ? Path.Combine(location, exe) : null,
                     LaunchUri = $"com.epicgames.launcher://apps/{id}?action=launch&silent=true",
                 });
             }

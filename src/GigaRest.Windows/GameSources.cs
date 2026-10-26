@@ -68,7 +68,7 @@ public static class GameSources
             if (key.GetValue("dependsOn") is string dep && dep.Length > 0) continue; // дополнение к игре
             yield return new Game
             {
-                Id = "gog:" + id, Name = name.Trim(), Store = "GOG", ExePath = exe,
+                Id = "gog:" + id, Name = name.Trim(), Store = "GOG", ExePath = exe, IconPath = exe,
                 WorkingDirectory = key.GetValue("workingDir") as string ?? Path.GetDirectoryName(exe),
             };
         }
@@ -93,7 +93,8 @@ public static class GameSources
             {
                 using var key = root.OpenSubKey(name);
                 if (key is null) continue;
-                list.Add(new UninstallEntry(key.GetValue("DisplayName") as string, key.GetValue("Publisher") as string, key.GetValue("UninstallString") as string));
+                list.Add(new UninstallEntry(key.GetValue("DisplayName") as string, key.GetValue("Publisher") as string,
+                    key.GetValue("UninstallString") as string, key.GetValue("DisplayIcon") as string));
             }
         }
         return list;

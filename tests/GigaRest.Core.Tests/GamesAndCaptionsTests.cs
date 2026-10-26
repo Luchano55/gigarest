@@ -111,6 +111,22 @@ public class GameLibrariesTests : IDisposable
     }
 
     [Fact]
+    public void SteamCover_OldAndNewCacheLayouts()
+    {
+        var steam = Path.Combine(_dir, "Steam");
+        var cache = Path.Combine(steam, "appcache", "librarycache");
+        Directory.CreateDirectory(Path.Combine(cache, "1245620", "abc123"));
+        File.WriteAllText(Path.Combine(cache, "570_header.jpg"), "");
+        File.WriteAllText(Path.Combine(cache, "570_library_600x900.jpg"), "");
+        File.WriteAllText(Path.Combine(cache, "1245620", "abc123", "header.jpg"), "");
+        File.WriteAllText(Path.Combine(cache, "1245620", "library_600x900.jpg"), "");
+
+        Assert.Equal(Path.Combine(cache, "570_library_600x900.jpg"), GameLibraries.SteamCover(steam, "570"));
+        Assert.Equal(Path.Combine(cache, "1245620", "library_600x900.jpg"), GameLibraries.SteamCover(steam, "1245620"));
+        Assert.Null(GameLibraries.SteamCover(steam, "999"));
+    }
+
+    [Fact]
     public void Steam_NoFolder_Empty() => Assert.Empty(GameLibraries.Steam(Path.Combine(_dir, "нет")));
 
     [Fact]
@@ -231,6 +247,12 @@ public class BattleNetTests
         Assert.Equal(@"C:\Program Files (x86)\Battle.net\Battle.net.exe", d4.ExePath);
         Assert.Empty(games[1].LaunchArgs); // неизвестная — просто открыть Battle.net
     }
+
+    [Theory]
+    [InlineData("\"C:\\Games\\Diablo IV\\Diablo IV Launcher.exe\",0", "C:\\Games\\Diablo IV\\Diablo IV Launcher.exe")]
+    [InlineData("C:\\Games\\Wow.exe", "C:\\Games\\Wow.exe")]
+    [InlineData("", null)]
+    public void IconFile_StripsQuotesAndIndex(string value, string? expected) => Assert.Equal(expected, BattleNet.IconFile(value));
 
     [Fact]
     public void FromUninstall_LocaleSuffixAndLastPlayed()

@@ -253,7 +253,6 @@ public sealed partial class App : Application, IXamlMetadataProvider
             _quiet.MusicAppRequested += OpenMusicApp;
             _quiet.MusicAppPickRequested += () => _ = PickMusicAppAsync();
             LoadApps(_quiet);
-            _quiet.WatchLaterRequested += () => OpenShell("https://www.youtube.com/playlist?list=WL");
             _quiet.OpenFilmsFolderRequested += () =>
             {
                 var folder = FilmsFolder;
@@ -709,14 +708,18 @@ public sealed partial class App : Application, IXamlMetadataProvider
     private async Task InstallUpdateAsync(GigaRest.Core.Updates.UpdateManifest m)
     {
         if (_updater is null || _busy) { _tray?.ShowBalloon("Обновление", "Сейчас идёт переход — обновим чуть позже."); return; }
-        _tray?.ShowBalloon("Обновление", $"Скачиваем GigaRest {m.Version}… Программа перезапустится сама.");
+        // Ход обновления — в окошке поверх всех в правом нижнем углу (и в подсказке значка).
+        UpdateWindow? window = null;
+        try { window = new UpdateWindow(m.Version); window.Activate(); }
+        catch (Exception ex) { Log.Error("Окно обновления", ex); }
         try
         {
             var last = DateTime.MinValue;
-            var progress = new Progress<string>(text =>
+            var progress = new Progress<(string Text, int Percent)>(p =>
             {
-                _tray?.SetTip("GigaRest — " + text);
-                if (DateTime.Now - last > TimeSpan.FromSeconds(15)) { last = DateTime.Now; Log.Info(text); }
+                window?.Report(p.Text, p.Percent);
+                _tray?.SetTip("GigaRest — " + p.Text);
+                if (DateTime.Now - last > TimeSpan.FromSeconds(15)) { last = DateTime.Now; Log.Info(p.Text); }
             });
             await Task.Run(() => _updater.InstallAsync(m, progress, () => _queue.TryEnqueue(Quit)));
         }
@@ -724,7 +727,8 @@ public sealed partial class App : Application, IXamlMetadataProvider
         {
             Log.Error("Обновление", ex);
             _tray?.SetTip(TrayTip);
-            _tray?.ShowBalloon("Обновление не получилось", ex.Message);
+            if (window is not null) window.Fail(ex.Message);
+            else _tray?.ShowBalloon("Обновление не получилось", ex.Message);
         }
     }
 

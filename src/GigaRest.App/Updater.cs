@@ -50,7 +50,7 @@ internal sealed class Updater : IDisposable
     }
 
     /// <summary>Скачать, проверить, разложить файлы, запустить новую версию. Старая после этого выходит.</summary>
-    public async Task InstallAsync(UpdateManifest manifest, IProgress<string>? status, Action quit)
+    public async Task InstallAsync(UpdateManifest manifest, IProgress<(string Text, int Percent)>? status, Action quit)
     {
         if (Interlocked.Exchange(ref _busy, 1) == 1) return;
         try
@@ -61,7 +61,7 @@ internal sealed class Updater : IDisposable
             var zip = Path.Combine(work, manifest.Zip);
             await DownloadAsync(manifest.ZipUrl(Channel), zip, status);
 
-            status?.Report("Проверяем архив…");
+            status?.Report(("Проверяем архив…", -1));
             await using (var check = File.OpenRead(zip))
             {
                 var actual = Convert.ToHexString(await SHA256.HashDataAsync(check));
@@ -69,7 +69,7 @@ internal sealed class Updater : IDisposable
                     throw new InvalidOperationException("Архив обновления повреждён (не сходится контрольная сумма). Попробуйте ещё раз.");
             }
 
-            status?.Report("Раскладываем файлы…");
+            status?.Report(("Раскладываем файлы…", -1));
             var unpack = Path.Combine(work, "unpack");
             ZipFile.ExtractToDirectory(zip, unpack, overwriteFiles: true);
             var root = Directory.Exists(Path.Combine(unpack, "GigaRest")) ? Path.Combine(unpack, "GigaRest") : unpack;
@@ -87,6 +87,7 @@ internal sealed class Updater : IDisposable
             var psi = new ProcessStartInfo(Path.Combine(AppDir, "GigaRest.exe")) { UseShellExecute = false, WorkingDirectory = AppDir };
             psi.ArgumentList.Add("--after-update");
             Process.Start(psi)?.Dispose();
+            status?.Report(("Готово — перезапускаемся…", 100));
             quit();
         }
         finally
@@ -95,7 +96,7 @@ internal sealed class Updater : IDisposable
         }
     }
 
-    private async Task DownloadAsync(string url, string path, IProgress<string>? status)
+    private async Task DownloadAsync(string url, string path, IProgress<(string Text, int Percent)>? status)
     {
         Log.Info("Обновления: скачиваю " + url);
         using var response = await _http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
@@ -119,7 +120,7 @@ internal sealed class Updater : IDisposable
             if (percent != last && percent >= 0)
             {
                 last = percent;
-                status?.Report($"Скачиваем обновление: {percent}% ({done / 1048576} из {total / 1048576} МБ)");
+                status?.Report(($"Скачиваем: {percent}% ({done / 1048576} из {total / 1048576} МБ)", percent));
             }
         }
     }

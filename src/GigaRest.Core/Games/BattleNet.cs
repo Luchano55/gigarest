@@ -4,7 +4,7 @@ using System.Text.RegularExpressions;
 namespace GigaRest.Core.Games;
 
 /// <summary>Запись из «Установка и удаление программ» (реестр Uninstall).</summary>
-public sealed record UninstallEntry(string? DisplayName, string? Publisher, string? UninstallString);
+public sealed record UninstallEntry(string? DisplayName, string? Publisher, string? UninstallString, string? DisplayIcon = null);
 
 /// <summary>
 /// Игры Battle.net. Свой список Battle.net хранит в закрытом виде, но каждая игра записана в «Установка и удаление программ»
@@ -91,9 +91,21 @@ public static partial class BattleNet
                 Id = "bnet:" + uid, Name = e.DisplayName.Trim(), Store = "Battle.net", ExePath = battleNetExe,
                 LaunchArgs = LaunchCodes.TryGetValue(uid, out var code) ? ["--exec=launch " + code] : [],
                 LastPlayedUtc = lastPlayed is not null && lastPlayed.TryGetValue(uid, out var last) ? last : null,
+                IconPath = IconFile(e.DisplayIcon),
             });
         }
         return games;
+    }
+
+    /// <summary>«"C:\Games\Diablo IV\Diablo IV Launcher.exe",0» → путь без кавычек и номера значка.</summary>
+    public static string? IconFile(string? displayIcon)
+    {
+        if (string.IsNullOrWhiteSpace(displayIcon)) return null;
+        var s = displayIcon.Trim();
+        var comma = s.LastIndexOf(',');
+        if (comma > 0 && int.TryParse(s[(comma + 1)..], out _)) s = s[..comma];
+        s = s.Trim().Trim('"');
+        return s.Length > 0 ? s : null;
     }
 
     [GeneratedRegex(@"--uid=(""[^""]+""|\S+)", RegexOptions.IgnoreCase)]
