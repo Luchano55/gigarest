@@ -425,7 +425,7 @@ public sealed class SwitcherWindow : Window
         {
             var check = new CheckBox
             {
-                Content = Text("можно завершать, если спрячется в трей", 13, Lead, wrap: true),
+                Content = Text("если вместо закрытия уйдёт в значок у часов — завершить", 13, Lead, wrap: true),
                 IsChecked = p.AllowTerminate,
                 Margin = new Thickness(64, -4, 0, 4),
                 MinHeight = 28,

@@ -243,7 +243,7 @@ public sealed class ProgramsWindow : Window
         {
             var check = new CheckBox
             {
-                Content = Text("можно завершать, если спрячется в трей", 13, Lead, wrap: true),
+                Content = Text("если вместо закрытия уйдёт в значок у часов — завершить", 13, Lead, wrap: true),
                 IsChecked = r.AllowTerminate, Margin = new Thickness(64, -6, 0, 4), MinHeight = 28,
             };
             check.Checked += (_, _) => r.AllowTerminate = true;
