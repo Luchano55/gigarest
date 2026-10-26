@@ -457,7 +457,7 @@ public sealed class QuietWindow : Window
             _panel.Width = 560;
             _panelContent.Children.Add(Text("Смотреть", 17, Hex("#E6FFFFFF"), FontWeights.Medium));
             var list = new StackPanel { Spacing = 2, Margin = new Thickness(-12, 6, -12, 0) };
-            list.Children.Add(LinkRow("▶  YouTube", "главная, прямо здесь", () => ShowYouTube(lastWatched: false)));
+            list.Children.Add(LinkRow(_web.ContainsKey(YouTube) ? "▶  Вернуться к YouTube" : "▶  YouTube", _web.ContainsKey(YouTube) ? "продолжить, где были" : "главная, прямо здесь", () => ShowYouTube(lastWatched: false)));
             list.Children.Add(LinkRow("▶  YouTube · последний ролик", "тот, что смотрели последним", () => ShowYouTube(lastWatched: true)));
             if (_films is { Count: > 0 })
                 foreach (var film in _films.Take(30)) list.Children.Add(FilmRow(film));
@@ -799,31 +799,45 @@ public sealed class QuietWindow : Window
     private const string MusicUrl = "https://music.yandex.ru/";
     private const string YouTubeUrl = "https://www.youtube.com/";
     private const string YouTubeHistoryUrl = "https://www.youtube.com/feed/history";
-    private readonly Dictionary<string, (Grid Host, WebView2 Web)> _web = [];
+    /// <summary>Встроенный сайт: панель, сам браузер, кнопка «Свернуть/Развернуть», состояние.</summary>
+    private sealed class WebPanel
+    {
+        public required Grid Host { get; init; }
+        public required WebView2 Web { get; init; }
+        public required TextBlock Toggle { get; init; }
+        public required Grid Bar { get; init; }
+        public bool Mini { get; set; }
+        public bool Full { get; set; }
+    }
+
+    private readonly Dictionary<string, WebPanel> _web = [];
 
     /// <summary>Папка профиля встроенного браузера: вход в Яндекс и YouTube, настройки сайтов. Удаляется вместе с программой.</summary>
     public static string WebProfileFolder => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "GigaRest", "WebView2");
 
-    private bool WebVisible => _web.Values.Any(w => w.Host.Visibility == Visibility.Visible);
+    /// <summary>Есть развёрнутая панель — её смотрят, экран не гасим и слова не показываем.</summary>
+    private bool WebVisible => _web.Values.Any(w => !w.Mini);
 
-    private void ShowWebMusic() => ShowWeb(Music, "Яندекс Музыка", MusicUrl, "Свернуть — музыка играет дальше");
+    private void ShowWebMusic() => ShowWeb(Music, "Яндекс Музыка", MusicUrl);
 
-    private void ShowYouTube(bool lastWatched) =>
-        ShowWeb(YouTube, "YouTube", lastWatched ? YouTubeHistoryUrl : YouTubeUrl, "Свернуть", navigate: true, openLastWatched: lastWatched);
+    private void ShowYouTube(bool lastWatched)
+    {
+        // Уже открыт и просто свёрнут — разворачиваем, страницу не трогаем (ролик продолжается).
+        if (!lastWatched && _web.ContainsKey(YouTube)) { Expand(YouTube); return; }
+        ShowWeb(YouTube, "YouTube", lastWatched ? YouTubeHistoryUrl : YouTubeUrl, navigate: true, openLastWatched: lastWatched);
+    }
 
     /// <summary>
-    /// Открыть сайт панелью поверх сцены. Уже открыт — показать (navigate — перейти на адрес).
+    /// Открыть сайт панелью поверх сцены. Уже открыт — развернуть (navigate — перейти на адрес).
     /// openLastWatched — на странице истории YouTube сразу открыть верхний (последний просмотренный) ролик.
     /// </summary>
-    private async void ShowWeb(string key, string titleText, string url, string hideText, bool navigate = false, bool openLastWatched = false)
+    private async void ShowWeb(string key, string titleText, string url, bool navigate = false, bool openLastWatched = false)
     {
         Wake();
         ClosePanel();
-        foreach (var other in _web.Where(w => w.Key != key)) other.Value.Host.Visibility = Visibility.Collapsed;
         if (_web.TryGetValue(key, out var open))
         {
-            open.Host.Visibility = Visibility.Visible;
-            _overlay.Visibility = Visibility.Collapsed;
+            Expand(key);
             if (navigate && open.Web.CoreWebView2 is { } core)
             {
                 _openLastWatched = openLastWatched;
@@ -834,24 +848,23 @@ public sealed class QuietWindow : Window
         var web = new WebView2();
         var host = new Grid
         {
-            Margin = new Thickness(56, 40, 56, 40), CornerRadius = new CornerRadius(20), Background = Brush("#FF0C0D12"),
+            CornerRadius = new CornerRadius(20), Background = Brush("#FF0C0D12"),
             BorderBrush = Brush("#1AFFFFFF"), BorderThickness = new Thickness(1),
         };
         host.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         host.RowDefinitions.Add(new RowDefinition());
-        var bar = new Grid { Padding = new Thickness(24, 10, 16, 10) };
+        var bar = new Grid { Padding = new Thickness(20, 8, 14, 8) };
         bar.ColumnDefinitions.Add(new ColumnDefinition());
         bar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         bar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var title = Text(titleText, 15, Hex("#E6FFFFFF"), FontWeights.Medium);
+        var title = Text(titleText, 14, Hex("#E6FFFFFF"), FontWeights.Medium);
         title.VerticalAlignment = VerticalAlignment.Center;
         bar.Children.Add(title);
-        var hide = QuietButton(hideText, 13);
-        hide.Click += (_, _) => HideWeb(key);
-        Grid.SetColumn(hide, 1);
-        bar.Children.Add(hide);
+        var toggle = QuietButton("Свернуть", 13);
+        Grid.SetColumn(toggle, 1);
+        bar.Children.Add(toggle);
         var close = QuietButton("Закрыть", 13);
-        close.Margin = new Thickness(18, 0, 0, 0);
+        close.Margin = new Thickness(14, 0, 0, 0);
         close.Click += (_, _) => CloseWeb(key);
         Grid.SetColumn(close, 2);
         bar.Children.Add(close);
@@ -859,9 +872,11 @@ public sealed class QuietWindow : Window
         Grid.SetRow(web, 1);
         host.Children.Add(web);
 
-        _web[key] = (host, web);
+        var panel = new WebPanel { Host = host, Web = web, Toggle = (TextBlock)toggle.Content, Bar = bar };
+        toggle.Click += (_, _) => { if (panel.Mini) Expand(key); else Minimize(key); };
+        _web[key] = panel;
         _root.Children.Add(host);
-        _overlay.Visibility = Visibility.Collapsed;
+        Expand(key);
         try
         {
             Directory.CreateDirectory(WebProfileFolder);
@@ -869,6 +884,8 @@ public sealed class QuietWindow : Window
             await web.EnsureCoreWebView2Async(env);
             // Окна входа и ссылки «в новой вкладке» — здесь же, без отдельного браузера.
             web.CoreWebView2.NewWindowRequested += (_, e) => { e.Handled = true; web.CoreWebView2.Navigate(e.Uri); };
+            // Кнопка «во весь экран» в самом ролике — панель на весь монитор, без рамки и полосы.
+            web.CoreWebView2.ContainsFullScreenElementChanged += (_, _) => SetFull(panel, web.CoreWebView2.ContainsFullScreenElement);
             if (key == YouTube) web.CoreWebView2.NavigationCompleted += async (_, _) => await OpenLastWatchedAsync(web);
             _openLastWatched = openLastWatched;
             web.Source = new Uri(url);
@@ -879,6 +896,75 @@ public sealed class QuietWindow : Window
             CloseWeb(key);
             ShowSummary($"{titleText} не открылся: в Windows нет компонента Microsoft Edge WebView2. Его можно поставить с сайта Microsoft.", hasProblems: true);
         }
+    }
+
+    /// <summary>Развернуть панель на большую часть экрана; остальные — свернуть в уголок.</summary>
+    private void Expand(string key)
+    {
+        foreach (var (k, w) in _web) if (k != key && !w.Mini) SetMini(w, true);
+        if (_web.TryGetValue(key, out var panel)) SetMini(panel, false);
+        Layout();
+        Wake();
+    }
+
+    private void Minimize(string key)
+    {
+        if (!_web.TryGetValue(key, out var panel)) return;
+        if (panel.Full) panel.Web.CoreWebView2?.ExecuteScriptAsync("document.exitFullscreen && document.exitFullscreen()");
+        SetMini(panel, true);
+        Layout();
+        Wake();
+    }
+
+    private static void SetMini(WebPanel panel, bool mini)
+    {
+        panel.Mini = mini;
+        panel.Toggle.Text = mini ? "Развернуть" : "Свернуть";
+    }
+
+    private void SetFull(WebPanel panel, bool full)
+    {
+        panel.Full = full;
+        if (full) SetMini(panel, false);
+        Layout();
+    }
+
+    /// <summary>
+    /// Где стоят панели: развёрнутая — почти на весь экран (или ровно на весь, если ролик во весь экран),
+    /// свёрнутые — маленькими окошками в правом нижнем углу, одно над другим: видно, что играет, и можно развернуть.
+    /// </summary>
+    private void Layout()
+    {
+        var miniIndex = 0;
+        foreach (var w in _web.Values)
+        {
+            if (w.Mini)
+            {
+                w.Host.Width = 400;
+                w.Host.Height = 260;
+                w.Host.HorizontalAlignment = HorizontalAlignment.Right;
+                w.Host.VerticalAlignment = VerticalAlignment.Bottom;
+                w.Host.Margin = new Thickness(0, 0, 40, 40 + miniIndex * 276);
+                w.Host.CornerRadius = new CornerRadius(14);
+                w.Bar.Visibility = Visibility.Visible;
+                miniIndex++;
+            }
+            else
+            {
+                w.Host.Width = double.NaN;
+                w.Host.Height = double.NaN;
+                w.Host.HorizontalAlignment = HorizontalAlignment.Stretch;
+                w.Host.VerticalAlignment = VerticalAlignment.Stretch;
+                w.Host.Margin = w.Full ? new Thickness(0) : new Thickness(56, 40, 56, 40);
+                w.Host.CornerRadius = new CornerRadius(w.Full ? 0 : 20);
+                w.Host.BorderThickness = new Thickness(w.Full ? 0 : 1);
+                w.Bar.Visibility = w.Full ? Visibility.Collapsed : Visibility.Visible;
+                // Развёрнутая — поверх свёрнутых.
+                _root.Children.Remove(w.Host);
+                _root.Children.Add(w.Host);
+            }
+        }
+        _overlay.Visibility = WebVisible ? Visibility.Collapsed : Visibility.Visible;
     }
 
     private bool _openLastWatched;
@@ -902,20 +988,12 @@ public sealed class QuietWindow : Window
         catch (Exception ex) { GigaRest.Core.Logging.Log.Warn("YouTube, последний ролик: " + ex.Message); }
     }
 
-    private void HideWeb(string key)
-    {
-        if (!_web.TryGetValue(key, out var w)) return;
-        w.Host.Visibility = Visibility.Collapsed;
-        _overlay.Visibility = Visibility.Visible;
-        Wake();
-    }
-
     private void CloseWeb(string key)
     {
         if (!_web.Remove(key, out var w)) return;
         try { w.Web.Close(); } catch (Exception ex) { GigaRest.Core.Logging.Log.Warn("Встроенный сайт, закрытие: " + ex.Message); }
         _root.Children.Remove(w.Host);
-        if (!WebVisible) _overlay.Visibility = Visibility.Visible;
+        Layout();
         Wake();
     }
 
