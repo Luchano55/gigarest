@@ -1,4 +1,5 @@
 using GigaRest.Core.Desktop;
+using GigaRest.Core.Tiles;
 using GigaRest.Windows;
 using Microsoft.UI;
 using Microsoft.UI.Text;
@@ -26,6 +27,11 @@ public sealed class TilesWindow : Window
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromSeconds(1) };
     private readonly List<(TileInfo Info, Border Slot, TextBlock Status, Thumbnail? Thumb)> _tiles = [];
     private bool _closing;
+    // Окно, открытое с плитки: его копия остаётся на весь экран (под окном её не видно).
+    // Свернули окно — под ним уже та же картинка, и она плавно уменьшается в плитку, без скачка.
+    private long _openHwnd;
+    private bool _liveCaptions, _refreshing;
+    private int _ticks;
 
     public event Action<TileInfo>? OpenRequested;
     public FrameworkElement Root => _root;
@@ -70,7 +76,11 @@ public sealed class TilesWindow : Window
         Content = _root;
         _root.SizeChanged += (_, _) => PlaceThumbnails();
         _root.Loaded += (_, _) => PlaceThumbnails();
-        _timer.Tick += (_, _) => _clock.Text = DateTime.Now.ToString("HH:mm");
+        _timer.Tick += (_, _) =>
+        {
+            _clock.Text = DateTime.Now.ToString("HH:mm");
+            if (_liveCaptions && ++_ticks % 2 == 0) RefreshCaptions();
+        };
         _clock.Text = DateTime.Now.ToString("HH:mm");
         _timer.Start();
         AppWindow.SetIcon(Path.Combine(AppContext.BaseDirectory, "Assets", "GigaRest.ico"));
@@ -106,6 +116,8 @@ public sealed class TilesWindow : Window
             }
             _tiles.Add((info, slot, status, thumb));
         }
+        _liveCaptions = liveCopies;
+        if (liveCopies) RefreshCaptions();
         _caption.Text = $"второй монитор · {GigaRest.Core.Text.Sizes.Plural(shown.Count, "окно", "окна", "окон")} · щёлкните, чтобы открыть";
         PlaceThumbnails();
     }
@@ -130,7 +142,9 @@ public sealed class TilesWindow : Window
         Grid.SetRow(slot, 1);
         grid.Children.Add(slot);
 
-        var status = Text("щёлкните, чтобы открыть", 12, Hex("#8CFFFFFF"));
+        var status = Text(DefaultStatus, 12, Hex("#8CFFFFFF"));
+        status.TextTrimming = TextTrimming.CharacterEllipsis;
+        status.MaxLines = 1;
         status.Margin = new Thickness(16, 10, 16, 10);
         Grid.SetRow(status, 2);
         grid.Children.Add(status);
@@ -149,14 +163,52 @@ public sealed class TilesWindow : Window
         return (tile, slot, status);
     }
 
+    private const string DefaultStatus = "щёлкните, чтобы открыть";
+
+    /// <summary>
+    /// Подписи под плитками раз в 2 секунды: что играет, сколько непрочитанных в Telegram, какая страница в браузере.
+    /// </summary>
+    private async void RefreshCaptions()
+    {
+        if (_refreshing || _closing) return;
+        _refreshing = true;
+        try
+        {
+            var media = await NowPlaying.ReadAsync();
+            foreach (var (info, _, status, _) in _tiles)
+            {
+                if (!WindowTools.IsAlive(info.Hwnd)) continue; // закрытую отмечает MarkClosed
+                var playing = media.FirstOrDefault(m => TileCaptions.MediaMatches(m.Aumid, info.ProgramId, info.ExePath)).Text;
+                status.Text = TileCaptions.For(info.ProgramId, info.Name, WindowTools.Title(info.Hwnd), playing) ?? DefaultStatus;
+            }
+        }
+        catch (Exception ex)
+        {
+            GigaRest.Core.Logging.Log.Warn("Подписи плиток: " + ex.Message);
+        }
+        finally
+        {
+            _refreshing = false;
+        }
+    }
+
+    /// <summary>Для скриншотов: подпись плитки без настоящих окон.</summary>
+    public void SetStatusForCapture(int index, string text) => _tiles[index].Status.Text = text;
+
     /// <summary>Копии окон — ровно в прямоугольники плиток (в настоящих пикселях этого монитора).</summary>
     private void PlaceThumbnails()
     {
         if (_root.XamlRoot is null) return;
         var scale = _root.XamlRoot.RasterizationScale;
-        foreach (var (_, slot, _, thumb) in _tiles)
+        foreach (var (info, slot, _, thumb) in _tiles)
         {
-            if (thumb is null || slot.ActualWidth <= 0) continue;
+            if (thumb is null) continue;
+            if (info.Hwnd == _openHwnd)
+            {
+                thumb.Place(0, 0, (int)(_root.ActualWidth * scale), (int)(_root.ActualHeight * scale));
+                continue;
+            }
+            if (slot.ActualWidth <= 0) continue;
             var p = slot.TransformToVisual(_root).TransformPoint(new global::Windows.Foundation.Point(0, 0));
             thumb.Place((int)(p.X * scale), (int)(p.Y * scale), (int)(slot.ActualWidth * scale), (int)(slot.ActualHeight * scale));
         }
@@ -203,6 +255,7 @@ public sealed class TilesWindow : Window
         (double L, double T, double W, double H) tile = (p.X * scale, p.Y * scale, slot.ActualWidth * scale, slot.ActualHeight * scale);
         (double L, double T, double W, double H) full = (0, 0, _root.ActualWidth * scale, _root.ActualHeight * scale);
         var (from, to) = opening ? (tile, full) : (full, tile);
+        _openHwnd = opening ? hwnd : 0;
 
         // Остальные копии на время анимации прячем: эта — главная.
         for (var i = 0; i < _tiles.Count; i++) if (i != index) _tiles[i].Thumb?.Hide();
@@ -235,6 +288,7 @@ public sealed class TilesWindow : Window
         {
             var t = _tiles[i];
             if (t.Info.Hwnd != hwnd) continue;
+            if (_openHwnd == hwnd) _openHwnd = 0;
             t.Thumb?.Dispose();
             _tiles[i] = (t.Info, t.Slot, t.Status, null);
             t.Status.Text = $"{t.Info.Name} закрыта · щёлкните, чтобы открыть";

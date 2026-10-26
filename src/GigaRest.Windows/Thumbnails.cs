@@ -78,14 +78,16 @@ public sealed class Thumbnail : IDisposable
 public static class WindowTools
 {
     /// <summary>
-    /// Окно с плитки свернули: развернуть его обратно на втором мониторе и убрать в самый низ —
-    /// под экран плиток. Иначе Windows выводит развёрнутое окно наверх, и оно снова закрывает плитки.
+    /// Окно с плитки свернули (или нажали клавишу «обратно в плитки»): развернуть его обратно на втором мониторе
+    /// и убрать в самый низ — под экран плиток. Экран плиток в это время «поверх всех» (см. <see cref="SetTopmost"/>),
+    /// поэтому разворачивание окна не видно; в конце он снова обычный и остаётся наверху.
     /// </summary>
     public static void ParkUnderTiles(long hwnd, nint tilesWindow)
     {
         var h = (nint)hwnd;
+        SetTopmost(tilesWindow, true);
         var wp = new Native.WINDOWPLACEMENT { length = Marshal.SizeOf<Native.WINDOWPLACEMENT>() };
-        if (Native.GetWindowPlacement(h, ref wp))
+        if (Native.IsIconic(h) && Native.GetWindowPlacement(h, ref wp))
         {
             wp.showCmd = 3; // SW_SHOWMAXIMIZED
             wp.flags = 0;
@@ -95,6 +97,25 @@ public static class WindowTools
         Native.SetWindowPos(h, 1 /* HWND_BOTTOM */, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
         RaiseAboveAll(tilesWindow);
     }
+
+    /// <summary>Сделать окно «поверх всех» (или вернуть обычным), не активируя.</summary>
+    public static void SetTopmost(nint hwnd, bool on)
+    {
+        const uint SWP_NOSIZE = 0x1, SWP_NOMOVE = 0x2, SWP_NOACTIVATE = 0x10;
+        Native.SetWindowPos(hwnd, on ? -1 /* HWND_TOPMOST */ : -2 /* HWND_NOTOPMOST */, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+    }
+
+    /// <summary>
+    /// Выключить (или вернуть) системную анимацию сворачивания у окна с плитки: вместо неё — наша, окно уменьшается в плитку.
+    /// Чужое окно Windows может не разрешить менять — тогда возвращаем код ошибки, а нашу анимацию просто видно поверх.
+    /// </summary>
+    public static int SetTransitions(long hwnd, bool enabled)
+    {
+        var disabled = enabled ? 0 : 1;
+        return DwmSetWindowAttribute((nint)hwnd, 3 /* DWMWA_TRANSITIONS_FORCEDISABLED */, ref disabled, sizeof(int));
+    }
+
+    [DllImport("dwmapi.dll")] private static extern int DwmSetWindowAttribute(nint hwnd, int attribute, ref int value, int size);
 
     /// <summary>
     /// Поднять окно над всеми без прав «переднего плана»: на миг «поверх всех», потом обратно в обычные —
@@ -115,6 +136,16 @@ public static class WindowTools
     }
 
     public static bool IsAlive(long hwnd) => Native.IsWindow((nint)hwnd);
+
+    /// <summary>Заголовок окна (у Telegram в нём число непрочитанных).</summary>
+    public static string Title(long hwnd)
+    {
+        var len = Native.GetWindowTextLengthW((nint)hwnd);
+        if (len <= 0) return "";
+        var sb = new System.Text.StringBuilder(len + 1);
+        Native.GetWindowTextW((nint)hwnd, sb, sb.Capacity);
+        return sb.ToString();
+    }
 
     /// <summary>Прозрачность экрана плиток (0–254): так окно под ним открывается плавно, без «перерисовки».</summary>
     public static void SetAlpha(nint hwnd, byte alpha) => SetLayeredWindowAttributes(hwnd, 0, Math.Min(alpha, (byte)254), 0x2);

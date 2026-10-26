@@ -23,6 +23,7 @@ public sealed class SettingsStore
     internal static void Normalize(AppSettings s)
     {
         s.Programs ??= [];
+        s.GamesPlayed ??= [];
         s.ReturnSchedule ??= new DaySchedule();
         s.RestOffer ??= new DaySchedule { Time = "19:00" };
         foreach (var schedule in new[] { s.ReturnSchedule, s.RestOffer })

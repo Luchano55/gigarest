@@ -1,0 +1,18 @@
+namespace GigaRest.Core.Games;
+
+/// <summary>
+/// Установленная игра из библиотеки. Запуск — через сам магазин (ссылка steam://, com.epicgames.launcher://)
+/// или напрямую exe (GOG).
+/// </summary>
+public sealed record Game
+{
+    /// <summary>«steam:570», «epic:Fortnite», «gog:1207658924».</summary>
+    public required string Id { get; init; }
+    public required string Name { get; init; }
+    /// <summary>«Steam», «Epic», «GOG».</summary>
+    public required string Store { get; init; }
+    public DateTime? LastPlayedUtc { get; init; }
+    public string? LaunchUri { get; init; }
+    public string? ExePath { get; init; }
+    public string? WorkingDirectory { get; init; }
+}

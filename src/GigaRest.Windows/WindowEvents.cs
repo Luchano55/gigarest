@@ -29,6 +29,7 @@ public sealed class WindowEvents : IDisposable
     public void Watch(long hwnd) => _watched.Add(hwnd);
     public void Clear() => _watched.Clear();
     public bool IsWatched(long hwnd) => _watched.Contains(hwnd);
+    public IReadOnlyCollection<long> Watched => _watched;
 
     private void OnEvent(nint hook, uint ev, nint hwnd, int idObject, int idChild, uint thread, uint time)
     {

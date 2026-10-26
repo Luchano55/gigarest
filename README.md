@@ -19,7 +19,13 @@
 
 ![Тихий экран](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/claude-system-management-requirements-nobkxi/11-tihiy.png)
 
+«Играть» — установленные игры из Steam, Epic и GOG, недавние сверху; щелчок запускает игру. «Продолжить» — последняя игра.
+
+![Играть](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/claude-system-management-requirements-nobkxi/17-igrat.png)
+
 ![Плитки на втором мониторе](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/claude-system-management-requirements-nobkxi/12-plitki.png)
+
+Под плитками — что играет в музыке, сколько непрочитанных в Telegram, какая страница открыта в браузере.
 
 
 Окно перехода: что будет с каждой программой и сколько памяти освободится.

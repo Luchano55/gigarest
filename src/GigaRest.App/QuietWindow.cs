@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Runtime.InteropServices;
 using GigaRest.Core.Desktop;
+using GigaRest.Core.Games;
 using GigaRest.Core.Scenes;
 using GigaRest.Windows;
 using Microsoft.UI;
@@ -59,6 +60,18 @@ public sealed class QuietWindow : Window
     public event Action<Scene, SceneEffect>? SceneChanged;
     public event Action? OpenMyScenesRequested;
     public event Action? DetailsRequested;
+    /// <summary>Щёлкнули по игре в «Играть» или «Продолжить».</summary>
+    public event Action<Game>? PlayRequested;
+
+    // null — библиотеки ещё читаются.
+    private IReadOnlyList<Game>? _games;
+
+    /// <summary>Установленные игры: сначала недавние. Вызывать из потока окна.</summary>
+    public void SetGames(IReadOnlyList<Game> games)
+    {
+        _games = games;
+        if (_openWord is "Играть" or "Продолжить") { var w = _openWord; _openWord = null; OnWord(w); }
+    }
     public FrameworkElement Root => _root;
 
     public QuietWindow(IReadOnlyList<Scene> scenes, string? sceneId = null, SceneEffect? effect = null)
@@ -323,13 +336,43 @@ public sealed class QuietWindow : Window
             folder.Click += (_, _) => OpenMyScenesRequested?.Invoke();
             _panelContent.Children.Add(folder);
         }
+        else if (word == "Играть")
+        {
+            _panel.Width = 520;
+            _panelContent.Children.Add(Text("Играть", 17, Hex("#E6FFFFFF"), FontWeights.Medium));
+            if (_games is null || _games.Count == 0)
+            {
+                var note = Text(_games is null ? "Ищем игры…" : "Игр не нашлось. GigaRest смотрит в Steam, Epic и GOG; Battle.net — позже.", 13, Hex("#99FFFFFF"), wrap: true);
+                note.Margin = new Thickness(0, 6, 0, 4);
+                _panelContent.Children.Add(note);
+            }
+            else
+            {
+                var list = new StackPanel { Spacing = 2, Margin = new Thickness(-12, 6, -12, 0) };
+                foreach (var game in _games) list.Children.Add(GameRow(game));
+                _panelContent.Children.Add(new ScrollViewer { Content = list, MaxHeight = 420, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
+                var count = Text(GigaRest.Core.Text.Sizes.Plural(_games.Count, "игра", "игры", "игр") + " · Steam, Epic, GOG", 12, Hex("#66FFFFFF"));
+                count.Margin = new Thickness(0, 8, 0, 0);
+                _panelContent.Children.Add(count);
+            }
+        }
+        else if (word == "Продолжить" && _games?.FirstOrDefault(g => g.LastPlayedUtc is not null) is { } last)
+        {
+            _panel.Width = 520;
+            _panelContent.Children.Add(Text("Продолжить", 17, Hex("#E6FFFFFF"), FontWeights.Medium));
+            var row = GameRow(last, big: true);
+            row.Margin = new Thickness(-12, 6, -12, 0);
+            _panelContent.Children.Add(row);
+            var later = Text("Недосмотренное и плейлист появятся здесь позже.", 12, Hex("#66FFFFFF"), wrap: true);
+            later.Margin = new Thickness(0, 6, 0, 0);
+            _panelContent.Children.Add(later);
+        }
         else
         {
             _panel.Width = 460;
             var (title, text) = word switch
             {
-                "Продолжить" => ("Продолжить", "Последняя игра, недосмотренное и плейлист появятся здесь, когда GigaRest научится читать библиотеки игр (этап 5)."),
-                "Играть" => ("Играть", "Последние игры из Steam, Battle.net, Epic и GOG — этап 5."),
+                "Продолжить" => ("Продолжить", _games is null ? "Ищем последнюю игру…" : "Здесь будет последняя игра — как только вы во что-нибудь сыграете. Недосмотренное и плейлист — позже."),
                 "Смотреть" => ("Смотреть", "«Смотреть позже» в личном браузере и папка с фильмами — этап 5."),
                 _ => ("Слушать", "Плейлисты и звуки природы — этап 5. Яндекс Музыка уже на втором мониторе."),
             };
@@ -341,6 +384,38 @@ public sealed class QuietWindow : Window
         _panel.Visibility = Visibility.Visible;
         HighlightWords();
     }
+
+    /// <summary>Строка игры: название слева, магазин и «когда играли» справа; щелчок — запуск.</summary>
+    private Button GameRow(Game game, bool big = false)
+    {
+        var grid = new Grid { ColumnSpacing = 16 };
+        grid.ColumnDefinitions.Add(new ColumnDefinition());
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var name = Text(big ? $"▶  {game.Name}" : game.Name, big ? 19 : 15, Hex("#E6FFFFFF"), big ? FontWeights.SemiBold : null);
+        name.TextTrimming = TextTrimming.CharacterEllipsis;
+        name.VerticalAlignment = VerticalAlignment.Center;
+        grid.Children.Add(name);
+        var when = GameLibraries.LastPlayedText(game.LastPlayedUtc, DateTime.Now);
+        var meta = Text(when.Length > 0 ? $"{game.Store} · {when}" : game.Store, 12, Hex("#73FFFFFF"));
+        meta.VerticalAlignment = VerticalAlignment.Center;
+        Grid.SetColumn(meta, 1);
+        grid.Children.Add(meta);
+        var b = new Button
+        {
+            Content = grid, HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch,
+            Background = Brush(Colors.Transparent), BorderThickness = new Thickness(0), CornerRadius = new CornerRadius(10),
+            Padding = new Thickness(12, big ? 12 : 8, 12, big ? 12 : 8),
+        };
+        b.Resources["ButtonBackgroundPointerOver"] = Brush("#1AFFFFFF");
+        b.Resources["ButtonBackgroundPressed"] = Brush("#26FFFFFF");
+        b.Resources["ButtonBorderBrushPointerOver"] = Brush(Colors.Transparent);
+        b.Resources["ButtonBorderBrushPressed"] = Brush(Colors.Transparent);
+        b.Click += (_, _) => { ClosePanel(); PlayRequested?.Invoke(game); };
+        return b;
+    }
+
+    /// <summary>Для скриншотов: открыть раздел нижней строки.</summary>
+    public void OpenWordForCapture(string word) { _openWord = null; OnWord(word); }
 
     private void ClosePanel()
     {

@@ -190,7 +190,12 @@ public sealed partial class App : Application, IXamlMetadataProvider
             {
                 _windowEvents ??= new WindowEvents();
                 _windowEvents.Clear();
-                foreach (var t in tiles) _windowEvents.Watch(t.Hwnd);
+                foreach (var t in tiles)
+                {
+                    _windowEvents.Watch(t.Hwnd);
+                    var hr = WindowTools.SetTransitions(t.Hwnd, enabled: false);
+                    if (hr != 0) Log.Info($"Плитки: системную анимацию сворачивания у «{t.Name}» не выключить (0x{hr:X8}) — наша идёт поверх");
+                }
                 _windowEvents.Minimized += OnTileMinimized;
                 _windowEvents.Destroyed += OnTileDestroyed;
                 _tilesWindow = new TilesWindow();
@@ -233,6 +238,8 @@ public sealed partial class App : Application, IXamlMetadataProvider
                 System.Diagnostics.Process.Start(psi)?.Dispose();
             };
             _quiet.ReturnRequested += () => _ = ReturnToWorkAsync();
+            _quiet.PlayRequested += PlayGame;
+            LoadGames(_quiet);
             _quiet.DetailsRequested += () => { _quiet?.HideSummary(); _window?.Present(); };
             _quiet.ShowOn(primary);
             _window?.AppWindow.Hide();
@@ -313,6 +320,8 @@ public sealed partial class App : Application, IXamlMetadataProvider
         {
             _windowEvents.Minimized -= OnTileMinimized;
             _windowEvents.Destroyed -= OnTileDestroyed;
+            foreach (var hwnd in _windowEvents.Watched)
+                if (WindowTools.IsAlive(hwnd)) WindowTools.SetTransitions(hwnd, enabled: true);
             _windowEvents.Clear();
         }
         _tilesWindow?.CloseForGood();
@@ -341,15 +350,52 @@ public sealed partial class App : Application, IXamlMetadataProvider
         }
     }
 
-    // Окно с плитки свернули — ставим его обратно развёрнутым под плитки, плитки — сверху.
-    // Ждём, пока Windows досворачивает окно, — иначе наш возврат перебивается её анимацией.
-    private void OnTileMinimized(long hwnd) => _queue.TryEnqueue(async () =>
+    // Окно с плитки свернули — сразу поднимаем плитки «поверх всех» (системное сворачивание уходит под них),
+    // копия окна уменьшается в свою плитку, а само окно потом тихо разворачивается под плитками.
+    private void OnTileMinimized(long hwnd) => _queue.TryEnqueue(() => ReturnToTiles(hwnd));
+
+    private async void ReturnToTiles(long hwnd)
     {
-        await Task.Delay(250);
-        if (_tilesWindow is null) return;
-        WindowTools.ParkUnderTiles(hwnd, _tilesWindow.Handle);
-        _tilesWindow.AnimateClose(hwnd);
-    });
+        if (_tilesWindow is not { } tiles) return;
+        try
+        {
+            WindowTools.SetTopmost(tiles.Handle, true);
+            tiles.AnimateClose(hwnd);
+            await Task.Delay(300); // Windows досворачивает окно — иначе наш возврат перебивается её анимацией
+            if (_tilesWindow != tiles) return;
+            WindowTools.ParkUnderTiles(hwnd, tiles.Handle);
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Обратно в плитки", ex);
+        }
+    }
+
+    // Библиотеки игр читаются в фоне — «Тихий» экран не ждёт.
+    private void LoadGames(QuietWindow quiet)
+    {
+        var played = new Dictionary<string, DateTime>(_settings.GamesPlayed);
+        _ = Task.Run(() =>
+        {
+            List<GigaRest.Core.Games.Game> games;
+            try { games = GigaRest.Core.Games.GameLibraries.Merge(GameSources.FindInstalled(), played); }
+            catch (Exception ex) { Log.Error("Игры", ex); games = []; }
+            _queue.TryEnqueue(() => { if (_quiet == quiet) quiet.SetGames(games); });
+        });
+    }
+
+    private void PlayGame(GigaRest.Core.Games.Game game)
+    {
+        Log.Info($"Играть: {game.Name} ({game.Id})");
+        var error = GameSources.Launch(game);
+        if (error is not null)
+        {
+            _quiet?.ShowSummary($"«{game.Name}» не запустилась: {error}", hasProblems: true);
+            return;
+        }
+        _settings.GamesPlayed[game.Id] = DateTime.UtcNow;
+        SaveSettings();
+    }
 
     private void OnTileDestroyed(long hwnd) => _queue.TryEnqueue(() => _tilesWindow?.MarkClosed(hwnd));
 
@@ -360,8 +406,7 @@ public sealed partial class App : Application, IXamlMetadataProvider
         var foreground = WindowTools.Foreground();
         if (foreground != 0 && _windowEvents?.IsWatched(foreground) == true)
         {
-            WindowTools.ParkUnderTiles(foreground, _tilesWindow.Handle);
-            _tilesWindow.AnimateClose(foreground);
+            ReturnToTiles(foreground);
         }
         else
         {

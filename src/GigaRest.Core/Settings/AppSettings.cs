@@ -43,6 +43,8 @@ public sealed class AppSettings
     public Scenes.SceneEffect? SceneEffect { get; set; }
     /// <summary>Папка «Мои сцены»; пусто — «Изображения\GigaRest».</summary>
     public string? MyScenesFolder { get; set; }
+    /// <summary>Когда игру запускали из «Играть» (код игры → время, UTC): Epic и GOG сами этого не хранят.</summary>
+    public Dictionary<string, DateTime> GamesPlayed { get; set; } = [];
     /// <summary>Показывать окно «Переход в отдых». false — переходить сразу, без вопросов.</summary>
     public bool ConfirmBeforeRest { get; set; } = true;
     /// <summary>Сколько ждать, пока программа закроется (вопросы «Сохранить?» не считаются).</summary>

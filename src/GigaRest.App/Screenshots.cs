@@ -123,6 +123,23 @@ internal static class Screenshots
             await Capture(quiet.Root, Path.Combine(dir, file));
         }
 
+        // «Играть» и «Продолжить»: игры из Steam, Epic и GOG.
+        quiet.ShowSceneForCapture("builtin:winter.jpg", GigaRest.Core.Scenes.SceneEffect.Snow);
+        var now = DateTime.UtcNow;
+        quiet.SetGames(GigaRest.Core.Games.GameLibraries.Merge(
+        [
+            new() { Id = "steam:1", Name = "Тихая гавань", Store = "Steam", LastPlayedUtc = now.AddDays(-1) },
+            new() { Id = "steam:2", Name = "Северный маршрут", Store = "Steam", LastPlayedUtc = now.AddDays(-4) },
+            new() { Id = "epic:3", Name = "Дом у озера", Store = "Epic" },
+            new() { Id = "gog:4", Name = "Старый маяк", Store = "GOG", LastPlayedUtc = now.AddDays(-16) },
+            new() { Id = "steam:5", Name = "Звёздная ферма", Store = "Steam" },
+        ], new Dictionary<string, DateTime>()));
+        await Task.Delay(2500);
+        quiet.OpenWordForCapture("Играть");
+        await Capture(quiet.Root, Path.Combine(dir, "17-igrat.png"));
+        quiet.OpenWordForCapture("Продолжить");
+        await Capture(quiet.Root, Path.Combine(dir, "18-prodolzhit.png"));
+
         // Плитки на втором мониторе (на сервере сборки живых копий нет — заглушки).
         var tilesWindow = new TilesWindow();
         tilesWindow.UseDesignSizeForCapture();
@@ -133,6 +150,9 @@ internal static class Screenshots
             new TileInfo(0, "zen.exe", "Zen", null),
             new TileInfo(0, "яндекс музыка.exe", "Яндекс Музыка", null),
         ], liveCopies: false);
+        tilesWindow.SetStatusForCapture(1, "3 непрочитанных");
+        tilesWindow.SetStatusForCapture(2, "Рецепт пирога с яблоками");
+        tilesWindow.SetStatusForCapture(3, "♪ Земфира — Небо Лондона");
         await Task.Delay(1500);
         await Capture(tilesWindow.Root, Path.Combine(dir, "12-plitki.png"));
 
