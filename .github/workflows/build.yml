@@ -55,6 +55,45 @@ jobs:
           if (-not (Test-Path out/GigaRest/GigaRest.exe)) { Get-ChildItem out/GigaRest; throw "Нет GigaRest.exe" }
           "{0,8:N1} MB  всего" -f ((Get-ChildItem out/GigaRest -Recurse -File | Measure-Object Length -Sum).Sum / 1MB)
           Compress-Archive out/GigaRest GigaRest-win-x64.zip
+      - name: Установщик (Inno Setup)
+        # packaging/installer/GigaRest.iss → GigaRest-Setup.exe. Inno Setup есть не на каждом образе — ставим через choco.
+        shell: pwsh
+        run: |
+          function Find-Iscc {
+            $cmd = Get-Command iscc.exe -ErrorAction SilentlyContinue
+            if ($cmd) { return $cmd.Source }
+            @("${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe", "$env:ProgramFiles\Inno Setup 6\ISCC.exe",
+              "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe") | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
+          }
+          $iscc = Find-Iscc
+          if (-not $iscc) {
+            Write-Host "Inno Setup не найден — ставлю через choco"
+            choco install innosetup -y --no-progress
+            $iscc = Find-Iscc
+          }
+          if (-not $iscc) { throw "ISCC.exe не найден и после choco install innosetup" }
+          $out = "$PWD\out\installer"
+          & $iscc "/DAppVersion=$env:GR_VERSION" "/DFileVersion=$env:GR_FILE_VERSION" `
+            "/DAppSource=$PWD\out\GigaRest" "/DOutputDir=$out" packaging\installer\GigaRest.iss
+          if ($LASTEXITCODE -ne 0) { throw "ISCC: код $LASTEXITCODE" }
+          Copy-Item "$out\GigaRest-Setup.exe" GigaRest-Setup.exe
+          "{0,8:N1} MB  GigaRest-Setup.exe" -f ((Get-Item GigaRest-Setup.exe).Length / 1MB)
+      - name: Установщик — проверка (тихая установка и удаление)
+        shell: pwsh
+        run: |
+          $p = Start-Process .\GigaRest-Setup.exe -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/TASKS=','/LOG=setup.log' -PassThru -Wait
+          if ($p.ExitCode -ne 0) { Get-Content setup.log -Tail 40; throw "Установка: код $($p.ExitCode)" }
+          $app = "$env:LOCALAPPDATA\Programs\GigaRest"
+          if (-not (Test-Path "$app\GigaRest.exe")) { throw "После установки нет $app\GigaRest.exe" }
+          $entry = Get-ChildItem HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall | Where-Object { (Get-ItemProperty $_.PSPath).DisplayName -eq 'GigaRest' }
+          if (-not $entry) { throw "GigaRest нет в «Установленных приложениях»" }
+          if (-not (Test-Path "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\GigaRest.lnk")) { throw "Нет ярлыка в меню «Пуск»" }
+          $code = (Start-Process "$app\GigaRest.exe" -ArgumentList '--exit' -PassThru -Wait).ExitCode
+          if ($code -ne 0) { throw "--exit без запущенной программы: код $code (ждали 0)" }
+          $u = Start-Process "$app\unins000.exe" -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -PassThru -Wait
+          Start-Sleep -Seconds 3
+          if (Test-Path "$app\GigaRest.exe") { throw "После удаления осталась программа" }
+          Write-Host "Установка и удаление — в порядке"
       - name: Скриншоты интерфейса
         # Программа рисует окно на демо-данных во всех состояниях и сама выходит.
         shell: pwsh
@@ -161,10 +200,11 @@ jobs:
           gh release delete dev-build --yes --cleanup-tag 2>$null
           $notes = "Свежая сборка GigaRest $env:GR_VERSION. Первый раз: скачайте GigaRest-win-x64.zip, распакуйте в обычную папку и запустите GigaRest.exe. " +
                    "Дальше программа обновляется сама (значок в трее → «Проверить обновления»)."
-          gh release create dev-build GigaRest-win-x64.zip version.json --prerelease --target $env:GITHUB_SHA `
+          gh release create dev-build GigaRest-win-x64.zip GigaRest-Setup.exe version.json --prerelease --target $env:GITHUB_SHA `
             --title "Свежая сборка $env:GR_VERSION" --notes $notes
           if ($LASTEXITCODE -ne 0) { throw "gh release create dev-build: код $LASTEXITCODE" }
           "Скачать: https://github.com/$env:GITHUB_REPOSITORY/releases/download/dev-build/GigaRest-win-x64.zip" >> $env:GITHUB_STEP_SUMMARY
+          "Установщик: https://github.com/$env:GITHUB_REPOSITORY/releases/download/dev-build/GigaRest-Setup.exe" >> $env:GITHUB_STEP_SUMMARY
       - uses: actions/upload-artifact@v4
         with:
           name: GigaRest-win-x64

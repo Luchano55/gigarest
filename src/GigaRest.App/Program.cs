@@ -12,6 +12,10 @@ public static class Program
         if (args.Contains("--test-window"))
             return GigaRest.Windows.TestWindow.Run(args);
 
+        // Установщик и удаление: попросить запущенный GigaRest выйти. 2 — был запущен и вышел, 0 — не был, 1 — не вышел.
+        if (args.Contains("--exit"))
+            return SingleInstance.AskToExit();
+
         WinRT.ComWrappersSupport.InitializeComWrappers();
 
         var screenshots = ScreenshotDir(args);
@@ -105,6 +109,25 @@ public sealed class SingleInstance : IDisposable
         catch (IOException) { }
         catch (UnauthorizedAccessException) { }
         return new SingleInstance(mutex, show, quit);
+    }
+
+    /// <summary>Попросить работающую копию выйти (как при запуске новой версии) и дождаться.</summary>
+    public static int AskToExit()
+    {
+        if (!Mutex.TryOpenExisting(MutexName, out var mutex)) return 0;
+        using (mutex)
+        {
+            if (EventWaitHandle.TryOpenExisting(QuitEventName, out var quit))
+                using (quit) quit.Set();
+            try
+            {
+                if (!mutex.WaitOne(TimeSpan.FromSeconds(15))) return 1;
+                mutex.ReleaseMutex();
+            }
+            catch (AbandonedMutexException) { }
+            Thread.Sleep(500); // процесс отпускает файлы
+            return 2;
+        }
     }
 
     /// <summary>Ждём просьб «покажись» и «выйди» в отдельном потоке; действия — в UI-потоке.</summary>
