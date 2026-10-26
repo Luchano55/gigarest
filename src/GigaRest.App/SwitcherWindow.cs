@@ -404,7 +404,7 @@ public sealed class SwitcherWindow : Window
         var tiles = TilePlan.Ordered(Programs).ToList();
         _secondHint.Text = tiles.Count > 0 ? "Сейчас на втором мониторе только эти окна" : "";
         RenderSecondScreen(tiles, interactive: false);
-        _tilesValue.Text = report.MovedWindows > 0 ? $"{Math.Min(report.MovedWindows, TilePlan.Max)} из {TilePlan.Max}" : "—";
+        _tilesValue.Text = tiles.Count > 0 ? $"{tiles.Count} из {TilePlan.Max}" : "—";
 
         _list.Children.Clear();
         var closed = report.Results.Count(r => r.IsGone);
@@ -596,13 +596,29 @@ public sealed class SwitcherWindow : Window
             right = Segmented(p, options);
         }
         var box = new StackPanel();
-        box.Children.Add(Row(p.DisplayName, p.Id, p.ExePath, p.IsElevated ? Detail(p) : Detail(p), right, wrap: false));
+        var row = Row(p.DisplayName, p.Id, p.ExePath, Detail(p), right, wrap: false);
+        box.Children.Add(row);
 
         if (p.Action == ProgramAction.Close && !p.IsBackground && !p.IsElevated)
         {
-            box.Children.Add(Check("не открывать снова после отдыха — закрыть насовсем", p.NoRelaunch,
-                v => { p.NoRelaunch = v; ActionChanged?.Invoke(p); },
-                "Закроем при переходе в отдых и не откроем при возврате к работе"));
+            // «Насовсем» — короткой ссылкой в строке подписи: «2 окна · 3,0 ГБ · откроется после отдыха».
+            var names = (StackPanel)row.Children[1];
+            var meta = (TextBlock)names.Children[1];
+            names.Children.Remove(meta);
+            var line = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+            line.Children.Add(meta);
+            line.Children.Add(Text("·", 12, Hex("#5A5F6A")));
+            var toggle = new HyperlinkButton
+            {
+                Content = Text(p.NoRelaunch ? "не откроется после отдыха" : "откроется после отдыха", 12, p.NoRelaunch ? Warm : Hex("#8F95A1")),
+                Padding = new Thickness(0), MinHeight = 0,
+            };
+            ToolTipService.SetToolTip(toggle, p.NoRelaunch
+                ? "Закроем насовсем: при возврате к работе не откроем. Щёлкните, чтобы открывать снова"
+                : "Щёлкните, чтобы закрыть насовсем: при возврате к работе не открывать");
+            toggle.Click += (_, _) => { p.NoRelaunch = !p.NoRelaunch; ActionChanged?.Invoke(p); RenderPlanList(); };
+            line.Children.Add(toggle);
+            names.Children.Add(line);
             if (p.Known?.HidesToTray == true || p.Windows.Count == 0)
                 box.Children.Add(Check("если вместо закрытия уйдёт в значок у часов — завершить", p.AllowTerminate,
                     v => { p.AllowTerminate = v; ActionChanged?.Invoke(p); },
