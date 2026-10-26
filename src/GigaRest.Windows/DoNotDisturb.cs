@@ -33,11 +33,15 @@ public sealed class DoNotDisturb
             var current = Read();
             // Файл уже есть — значит, режим включали мы (до перезагрузки); «до отдыха» — то, что в файле.
             if (!File.Exists(_beforeFile)) File.WriteAllText(_beforeFile, (current ?? 0).ToString());
-            if (current == PriorityOnly) return true;
+            if (current == PriorityOnly)
+            {
+                Log.Info($"Не беспокоить: уже включено (1), состояние уведомлений {UserState.NotificationState()}");
+                return true;
+            }
             var status = Write(PriorityOnly);
             Thread.Sleep(300);
             var after = Read();
-            Log.Info($"Не беспокоить: было {current?.ToString() ?? "?"}, запись 0x{status:X8}, стало {after?.ToString() ?? "?"}");
+            Log.Info($"Не беспокоить: было {current?.ToString() ?? "?"}, запись 0x{status:X8}, стало {after?.ToString() ?? "?"}, состояние уведомлений {UserState.NotificationState()}");
             return after == PriorityOnly;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or DllNotFoundException or EntryPointNotFoundException)

@@ -117,6 +117,7 @@ public static class GameLibraries
             <= 0 => "сегодня",
             1 => "вчера",
             < 7 => Text.Sizes.Plural(days, "день", "дня", "дней") + " назад",
+            < 14 => "неделю назад",
             < 31 => Text.Sizes.Plural(days / 7, "неделю", "недели", "недель") + " назад",
             _ => lastUtc.Value.ToLocalTime().ToString(lastUtc.Value.Year == nowLocal.Year ? "d MMMM" : "d MMMM yyyy", System.Globalization.CultureInfo.GetCultureInfo("ru-RU")),
         };

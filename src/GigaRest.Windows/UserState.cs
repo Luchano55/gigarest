@@ -13,6 +13,9 @@ public static class UserState
         NotPresent = 1, Busy = 2, RunningD3DFullScreen = 3, PresentationMode = 4, AcceptsNotifications = 5, QuietTime = 6, App = 7,
     }
 
+    /// <summary>Для журнала: что Windows говорит об уведомлениях (5 — принимает, 6 — «тихие часы»).</summary>
+    public static int NotificationState() => SHQueryUserNotificationState(out var state) == 0 ? (int)state : -1;
+
     /// <summary>true — лучше не беспокоить (игра, фильм на весь экран, презентация, ПК заблокирован).</summary>
     public static bool ShouldNotDisturb()
     {
