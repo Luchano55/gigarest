@@ -155,4 +155,10 @@ begin
     ExitRunning(AppExePath);
     RemoveAutoStart;
   end;
+  if CurUninstallStep = usPostUninstall then
+  begin
+    { Профиль встроенного браузера (вход в Яндекс Музыку) — служебный. Настройки в %AppData%\GigaRest не трогаем. }
+    DelTree(ExpandConstant('{localappdata}\GigaRest\WebView2'), True, True, True);
+    RemoveDir(ExpandConstant('{localappdata}\GigaRest'));
+  end;
 end;

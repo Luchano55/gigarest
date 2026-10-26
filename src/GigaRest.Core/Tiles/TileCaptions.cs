@@ -64,6 +64,7 @@ public static partial class TileCaptions
         if (string.IsNullOrWhiteSpace(aumid)) return "";
         var s = Squash(aumid);
         if ((s.Contains("yandex") && s.Contains("music")) || s.Contains("яндексмузык")) return "Яндекс Музыка";
+        if (s.Contains("gigarest") || s.Contains("msedgewebview2")) return "GigaRest"; // встроенная Яндекс Музыка или плеер
         if (s.Contains("chrome")) return "Chrome";
         if (s.Contains("zen")) return "Zen";
         if (s.Contains("firefox")) return "Firefox";

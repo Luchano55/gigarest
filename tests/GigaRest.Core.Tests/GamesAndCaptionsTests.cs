@@ -42,6 +42,7 @@ public class TileCaptionsTests
     [InlineData("ru.yandex.desktop.music", "Яндекс Музыка")]
     [InlineData("Яндекс Музыка.exe", "Яндекс Музыка")]
     [InlineData("chrome.exe", "Chrome")]
+    [InlineData(@"C:\Users\Роман\AppData\Local\Programs\GigaRest\GigaRest.exe", "GigaRest")]
     [InlineData("foobar2000.exe", "Foobar2000")]
     [InlineData(null, "")]
     public void MediaSourceName_Friendly(string? aumid, string expected) => Assert.Equal(expected, TileCaptions.MediaSourceName(aumid));

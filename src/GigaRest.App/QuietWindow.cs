@@ -435,6 +435,9 @@ public sealed class QuietWindow : Window
         {
             _panel.Width = 520;
             _panelContent.Children.Add(Text("Слушать", 17, Hex("#E6FFFFFF"), FontWeights.Medium));
+            var web = LinkRow(_webMusic is null ? "♫  Яндекс Музыка здесь" : "♫  Вернуть Яндекс Музыку", "поиск, плейлисты, «Моя волна»", ShowWebMusic, big: true);
+            web.Margin = new Thickness(-12, 6, -12, 0);
+            _panelContent.Children.Add(web);
             var box = new StackPanel { Spacing = 8, Margin = new Thickness(0, 8, 0, 0) };
             box.Children.Add(Text("…", 13, Hex("#99FFFFFF")));
             _panelContent.Children.Add(box);
@@ -654,7 +657,7 @@ public sealed class QuietWindow : Window
         var now = DateTime.Now;
         _clock.Text = now.ToString("HH:mm", Ru);
         _date.Text = now.ToString("dddd, d MMMM", Ru);
-        if (_film is not null) _lastInput = now; // фильм смотрят — не гасим экран
+        if (_film is not null || _webMusic?.Host.Visibility == Visibility.Visible) _lastInput = now; // смотрят или выбирают музыку — не гасим экран
         var idle = now - _lastInput;
 
         // 20 секунд без действий — список закрывается, строка приглушается до 40%.
@@ -680,6 +683,90 @@ public sealed class QuietWindow : Window
         var busy = _monitor is not null && UserState.CoversMonitor(_monitor);
         if (busy && !_paused) { _kenBurns.Pause(); _effects.Pause(true); _video?.Pause(); _paused = true; }
         else if (!busy && _paused) { _kenBurns.Resume(); _effects.Pause(false); _video?.Resume(); _paused = false; }
+    }
+
+    // ---------- Яндекс Музыка (сайт) внутри «Тихого» экрана: WebView2, свой профиль — вход запоминается ----------
+
+    private (Grid Host, WebView2 Web)? _webMusic;
+    private const string WebMusicUrl = "https://music.yandex.ru/";
+
+    /// <summary>Папка профиля встроенного браузера: вход в Яндекс, настройки сайта. Удаляется вместе с программой.</summary>
+    public static string WebProfileFolder => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "GigaRest", "WebView2");
+
+    private async void ShowWebMusic()
+    {
+        Wake();
+        ClosePanel();
+        if (_webMusic is { } open)
+        {
+            open.Host.Visibility = Visibility.Visible;
+            _overlay.Visibility = Visibility.Collapsed;
+            return;
+        }
+        var web = new WebView2();
+        var host = new Grid
+        {
+            Margin = new Thickness(56, 40, 56, 40), CornerRadius = new CornerRadius(20), Background = Brush("#FF0C0D12"),
+            BorderBrush = Brush("#1AFFFFFF"), BorderThickness = new Thickness(1),
+        };
+        host.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        host.RowDefinitions.Add(new RowDefinition());
+        var bar = new Grid { Padding = new Thickness(24, 10, 16, 10) };
+        bar.ColumnDefinitions.Add(new ColumnDefinition());
+        bar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        bar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var title = Text("Яндекс Музыка", 15, Hex("#E6FFFFFF"), FontWeights.Medium);
+        title.VerticalAlignment = VerticalAlignment.Center;
+        bar.Children.Add(title);
+        var hide = QuietButton("Свернуть — музыка играет дальше", 13);
+        hide.Click += (_, _) => HideWebMusic();
+        Grid.SetColumn(hide, 1);
+        bar.Children.Add(hide);
+        var close = QuietButton("Закрыть", 13);
+        close.Margin = new Thickness(18, 0, 0, 0);
+        close.Click += (_, _) => CloseWebMusic();
+        Grid.SetColumn(close, 2);
+        bar.Children.Add(close);
+        host.Children.Add(bar);
+        Grid.SetRow(web, 1);
+        host.Children.Add(web);
+
+        _webMusic = (host, web);
+        _root.Children.Add(host);
+        _overlay.Visibility = Visibility.Collapsed;
+        try
+        {
+            Directory.CreateDirectory(WebProfileFolder);
+            var env = await Microsoft.Web.WebView2.Core.CoreWebView2Environment.CreateWithOptionsAsync(null, WebProfileFolder, new Microsoft.Web.WebView2.Core.CoreWebView2EnvironmentOptions());
+            await web.EnsureCoreWebView2Async(env);
+            // Окна входа и ссылки «в новой вкладке» — здесь же, без отдельного браузера.
+            web.CoreWebView2.NewWindowRequested += (_, e) => { e.Handled = true; web.CoreWebView2.Navigate(e.Uri); };
+            web.Source = new Uri(WebMusicUrl);
+        }
+        catch (Exception ex)
+        {
+            GigaRest.Core.Logging.Log.Error("Встроенная Яндекс Музыка", ex);
+            CloseWebMusic();
+            ShowSummary("Встроенная Яндекс Музыка не открылась: в Windows нет компонента Microsoft Edge WebView2. Его можно поставить с сайта Microsoft.", hasProblems: true);
+        }
+    }
+
+    private void HideWebMusic()
+    {
+        if (_webMusic is not { } m) return;
+        m.Host.Visibility = Visibility.Collapsed;
+        _overlay.Visibility = Visibility.Visible;
+        Wake();
+    }
+
+    private void CloseWebMusic()
+    {
+        if (_webMusic is not { } m) return;
+        _webMusic = null;
+        try { m.Web.Close(); } catch (Exception ex) { GigaRest.Core.Logging.Log.Warn("Яндекс Музыка, закрытие: " + ex.Message); }
+        _root.Children.Remove(m.Host);
+        _overlay.Visibility = Visibility.Visible;
+        Wake();
     }
 
     // ---------- встроенный плеер: системный MediaPlayer с аппаратным декодированием, на весь «Тихий» экран ----------
@@ -809,6 +896,7 @@ public sealed class QuietWindow : Window
     public void CloseForGood()
     {
         CloseFilm(); // где остановились — запомнится
+        CloseWebMusic();
         _closing = true;
         _tick.Stop();
         _kenBurns.Stop();
