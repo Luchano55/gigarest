@@ -26,6 +26,7 @@ public sealed class SettingsStore
         s.GamesPlayed ??= [];
         s.FilmsOpened ??= [];
         s.FilmsPosition ??= [];
+        s.UpdateChannel = Updates.UpdateChannels.Normalize(s.UpdateChannel);
         s.ReturnSchedule ??= new DaySchedule();
         s.RestOffer ??= new DaySchedule { Time = "19:00" };
         foreach (var schedule in new[] { s.ReturnSchedule, s.RestOffer })

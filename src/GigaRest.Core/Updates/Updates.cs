@@ -5,13 +5,42 @@ using System.Text.Json.Serialization;
 namespace GigaRest.Core.Updates;
 
 /// <summary>
-/// version.json в выпуске «свежая сборка» (dev-build): номер сборки, версия, коммит, архив и его SHA-256.
+/// Каналы обновлений (D-RELEASE): стабильный — последний обычный релиз vX.Y.Z (releases/latest),
+/// тестовый — выпуск dev-build, его обновляет каждая зелёная сборка. «Как при установке» — по версии программы:
+/// «0.2.0» — стабильная, «0.2.0-dev.40» — тестовая.
+/// </summary>
+public static class UpdateChannels
+{
+    public const string Auto = "auto";
+    public const string Stable = "stable";
+    public const string Dev = "dev";
+
+    private const string Releases = "https://github.com/Luchano55/gigarest/releases/";
+
+    public static string Normalize(string? value) => value is Stable or Dev ? value : Auto;
+
+    /// <summary>Канал, который действует: из настройки или по версии программы.</summary>
+    public static string Resolve(string? setting, string displayVersion) => Normalize(setting) switch
+    {
+        Stable => Stable,
+        Dev => Dev,
+        _ => displayVersion.Contains("-dev", StringComparison.OrdinalIgnoreCase) || displayVersion == "разработчика" ? Dev : Stable,
+    };
+
+    /// <summary>Папка с файлами выпуска канала (version.json, архив, установщик).</summary>
+    public static string BaseUrl(string channel) => channel == Stable ? Releases + "latest/download/" : Releases + "download/dev-build/";
+
+    public static string Describe(string channel) => channel == Stable ? "стабильные версии" : "тестовые сборки";
+}
+
+/// <summary>
+/// version.json в выпуске: номер сборки, версия, коммит, архив и его SHA-256.
 /// Пишет CI, читает программа при проверке обновлений (как в DropWheel).
 /// </summary>
 public sealed record UpdateManifest(int Build, string Version, string Commit, string Zip, string Sha256)
 {
-    public const string ManifestUrl = "https://github.com/Luchano55/gigarest/releases/download/dev-build/version.json";
-    public string ZipUrl => "https://github.com/Luchano55/gigarest/releases/download/dev-build/" + Zip;
+    public static string ManifestUrl(string channel) => UpdateChannels.BaseUrl(channel) + "version.json";
+    public string ZipUrl(string channel) => UpdateChannels.BaseUrl(channel) + Zip;
 
     private static readonly JsonSerializerOptions Json = new()
     {

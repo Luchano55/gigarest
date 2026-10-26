@@ -24,6 +24,9 @@ internal sealed class Updater : IDisposable
     }
 
     public UpdateManifest? Available { get; private set; }
+
+    /// <summary>Канал обновлений (stable или dev) — из настроек, «как при установке» — по версии программы.</summary>
+    public string Channel { get; set; } = UpdateChannels.Resolve(null, AppVersion.Display);
     public static string AppDir => AppContext.BaseDirectory;
 
     /// <returns>Найденное обновление или null. Ручная проверка пробрасывает ошибку сети.</returns>
@@ -32,9 +35,9 @@ internal sealed class Updater : IDisposable
         try
         {
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-            var json = await _http.GetStringAsync(UpdateManifest.ManifestUrl, cts.Token);
+            var json = await _http.GetStringAsync(UpdateManifest.ManifestUrl(Channel), cts.Token);
             var manifest = UpdateManifest.Parse(json);
-            Log.Info($"Обновления: у нас {AppVersion.CurrentBuild} ({AppVersion.Display}), в выпуске {manifest?.Build} ({manifest?.Version})");
+            Log.Info($"Обновления ({Channel}): у нас {AppVersion.CurrentBuild} ({AppVersion.Display}), в выпуске {manifest?.Build} ({manifest?.Version})");
             Available = manifest is not null && manifest.IsNewerThan(AppVersion.CurrentBuild) ? manifest : null;
             return Available;
         }
@@ -56,7 +59,7 @@ internal sealed class Updater : IDisposable
             if (Directory.Exists(work)) Directory.Delete(work, recursive: true);
             var staging = Directory.CreateDirectory(Path.Combine(work, "staging")).FullName;
             var zip = Path.Combine(work, manifest.Zip);
-            await DownloadAsync(manifest.ZipUrl, zip, status);
+            await DownloadAsync(manifest.ZipUrl(Channel), zip, status);
 
             status?.Report("Проверяем архив…");
             await using (var check = File.OpenRead(zip))

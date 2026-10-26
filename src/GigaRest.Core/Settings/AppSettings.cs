@@ -55,6 +55,8 @@ public sealed class AppSettings
     public string? FilmPlayer { get; set; }
     /// <summary>Музыкальная программа для «Слушать»: пусто — найти самим (Яндекс Музыка и другие из меню «Пуск»).</summary>
     public string? MusicApp { get; set; }
+    /// <summary>Откуда брать обновления: auto (как при установке), stable, dev.</summary>
+    public string UpdateChannel { get; set; } = Updates.UpdateChannels.Auto;
     /// <summary>На время отдыха включать «Не беспокоить» (только приоритетные уведомления).</summary>
     public bool DoNotDisturb { get; set; } = true;
     /// <summary>Показывать окно «Переход в отдых». false — переходить сразу, без вопросов.</summary>

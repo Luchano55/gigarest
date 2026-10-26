@@ -12,7 +12,7 @@ using static GigaRest.App.Ui;
 
 namespace GigaRest.App;
 
-public sealed record SettingsResult(DaySchedule Schedule, DaySchedule RestOffer, string Hotkey, string TilesHotkey, bool ConfirmBeforeRest, bool Autostart, bool DoNotDisturb, string FilmsFolder);
+public sealed record SettingsResult(DaySchedule Schedule, DaySchedule RestOffer, string Hotkey, string TilesHotkey, bool ConfirmBeforeRest, bool Autostart, bool DoNotDisturb, string FilmsFolder, string UpdateChannel);
 
 /// <summary>Настройки: расписание возврата, горячая клавиша, окно перехода, автозапуск.</summary>
 public sealed class SettingsWindow : Window
@@ -22,6 +22,7 @@ public sealed class SettingsWindow : Window
     private readonly Grid _root;
     private readonly ToggleSwitch _confirm, _autostart, _dnd;
     private readonly TextBox _films;
+    private readonly ComboBox _channel;
     private readonly ScheduleEditor _return, _rest;
     private readonly TextBox _hotkey, _tilesHotkey;
     private readonly TextBlock _hotkeyHint;
@@ -81,6 +82,14 @@ public sealed class SettingsWindow : Window
         other.Children.Add(filmsLabel);
         _films = new TextBox { PlaceholderText = GigaRest.Core.Media.FilmLibrary.DefaultFolder(), Width = 460, HorizontalAlignment = HorizontalAlignment.Left };
         other.Children.Add(_films);
+        var channelLabel = Text("Обновления", 14, Ink, FontWeights.SemiBold);
+        channelLabel.Margin = new Thickness(0, 10, 0, 0);
+        other.Children.Add(channelLabel);
+        _channel = new ComboBox { Width = 460, HorizontalAlignment = HorizontalAlignment.Left };
+        _channel.Items.Add(new ComboBoxItem { Content = $"Как при установке ({GigaRest.Core.Updates.UpdateChannels.Describe(GigaRest.Core.Updates.UpdateChannels.Resolve(null, GigaRest.Core.Updates.AppVersion.Display))})", Tag = GigaRest.Core.Updates.UpdateChannels.Auto });
+        _channel.Items.Add(new ComboBoxItem { Content = "Стабильные версии — проверенные выпуски", Tag = GigaRest.Core.Updates.UpdateChannels.Stable });
+        _channel.Items.Add(new ComboBoxItem { Content = "Тестовые сборки — всё новое сразу, могут быть ошибки", Tag = GigaRest.Core.Updates.UpdateChannels.Dev });
+        other.Children.Add(_channel);
         body.Children.Add(CardBorder(other, radius: 18, padding: 22));
 
         var scroll = new ScrollViewer { Content = body, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Padding = new Thickness(0, 0, 12, 0) };
@@ -115,6 +124,7 @@ public sealed class SettingsWindow : Window
         _autostart.IsOn = autostart;
         _dnd.IsOn = settings.DoNotDisturb;
         _films.Text = settings.FilmsFolder ?? "";
+        _channel.SelectedItem = _channel.Items.Cast<ComboBoxItem>().FirstOrDefault(i => (string)i.Tag == settings.UpdateChannel) ?? _channel.Items[0];
         UpdateHotkeyHint(hotkeyProblem);
     }
 
@@ -133,7 +143,7 @@ public sealed class SettingsWindow : Window
             return;
         }
         var tiles = Hotkey.TryParse(_tilesHotkey.Text, out var t) && t != hotkey ? t.ToString() : "Ctrl+Alt+End";
-        Saved?.Invoke(new SettingsResult(_return.Current(), _rest.Current(), hotkey.ToString(), tiles, _confirm.IsOn, _autostart.IsOn, _dnd.IsOn, _films.Text));
+        Saved?.Invoke(new SettingsResult(_return.Current(), _rest.Current(), hotkey.ToString(), tiles, _confirm.IsOn, _autostart.IsOn, _dnd.IsOn, _films.Text, (_channel.SelectedItem as ComboBoxItem)?.Tag as string ?? GigaRest.Core.Updates.UpdateChannels.Auto));
         AppWindow.Hide();
     }
 

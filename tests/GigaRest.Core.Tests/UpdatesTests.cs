@@ -19,8 +19,18 @@ public sealed class UpdatesTests : IDisposable
         Assert.True(m.IsNewerThan(28));
         Assert.False(m.IsNewerThan(31));
         Assert.False(m.IsNewerThan(0)); // сборка разработчика не обновляется
-        Assert.EndsWith("/dev-build/GigaRest-win-x64.zip", m.ZipUrl);
+        Assert.EndsWith("/dev-build/GigaRest-win-x64.zip", m.ZipUrl(UpdateChannels.Dev));
+        Assert.EndsWith("/releases/latest/download/GigaRest-win-x64.zip", m.ZipUrl(UpdateChannels.Stable));
     }
+
+    [Theory]
+    [InlineData(null, "0.2.0", "stable")]
+    [InlineData("auto", "0.2.0-dev.40", "dev")]
+    [InlineData("stable", "0.2.0-dev.40", "stable")]
+    [InlineData("dev", "0.2.0", "dev")]
+    [InlineData("что-то", "0.3.1", "stable")]
+    public void ChannelFromSettingOrVersion(string? setting, string version, string expected) =>
+        Assert.Equal(expected, UpdateChannels.Resolve(setting, version));
 
     [Theory]
     [InlineData("не json")]

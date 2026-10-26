@@ -14,7 +14,7 @@
 
 - Роман не программист. Писать по-русски, коротко, без жаргона, в форме: **что сделано → что дальше → что нужно от него**.
 - Для проверки на Windows — пошаговая инструкция: что скачать, что запустить, куда нажать.
-- **Каждый отчёт о новой сборке — со ссылкой на скачивание** (правило Романа): установщик https://github.com/Luchano55/gigarest/releases/download/dev-build/GigaRest-Setup.exe (zip без установки: https://github.com/Luchano55/gigarest/releases/download/dev-build/GigaRest-win-x64.zip) — CI обновляет её после каждой зелёной сборки из `main` и `claude/*` (D-RELEASE). Давать ссылку только после того, как сборка с изменениями прошла. Программа обновляется и сама.
+- **Каждый отчёт о новой сборке — со ссылкой на скачивание** (правило Романа): тестовая сборка — установщик https://github.com/Luchano55/gigarest/releases/download/dev-build/GigaRest-Setup.exe (zip без установки: https://github.com/Luchano55/gigarest/releases/download/dev-build/GigaRest-win-x64.zip); стабильная версия — https://github.com/Luchano55/gigarest/releases/latest/download/GigaRest-Setup.exe (выпуск — тегом `vX.Y.Z`, D-RELEASE) — CI обновляет её после каждой зелёной сборки из `main` и `claude/*` (D-RELEASE). Давать ссылку только после того, как сборка с изменениями прошла. Программа обновляется и сама.
 - Коммиты — на русском.
 - Не упоминать чужие продукты как образец в README и документации.
 - Токены и секреты никогда не просить в чат и не класть в репозиторий.

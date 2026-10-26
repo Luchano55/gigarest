@@ -124,7 +124,7 @@ public sealed partial class App : Application, IXamlMetadataProvider
 
         // Самообновление: через 30 секунд после запуска и раз в 6 часов. Остатки прошлого обновления (*.old) — убрать.
         _ = Task.Run(() => GigaRest.Core.Updates.UpdateApplier.CleanupOld(Updater.AppDir));
-        _updater = new Updater();
+        _updater = new Updater { Channel = GigaRest.Core.Updates.UpdateChannels.Resolve(_settings.UpdateChannel, GigaRest.Core.Updates.AppVersion.Display) };
         _updateTimer = queue.CreateTimer();
         _updateTimer.Interval = TimeSpan.FromSeconds(30);
         _updateTimer.Tick += async (_, _) =>
@@ -786,6 +786,8 @@ public sealed partial class App : Application, IXamlMetadataProvider
                 _settings.ConfirmBeforeRest = r.ConfirmBeforeRest;
                 _settings.DoNotDisturb = r.DoNotDisturb;
                 _settings.FilmsFolder = string.IsNullOrWhiteSpace(r.FilmsFolder) ? null : r.FilmsFolder.Trim();
+                _settings.UpdateChannel = r.UpdateChannel;
+                if (_updater is not null) _updater.Channel = GigaRest.Core.Updates.UpdateChannels.Resolve(r.UpdateChannel, GigaRest.Core.Updates.AppVersion.Display);
                 var hotkeyChanged = r.Hotkey != _settings.Hotkey;
                 _settings.Hotkey = r.Hotkey;
                 _settings.TilesHotkey = r.TilesHotkey;
