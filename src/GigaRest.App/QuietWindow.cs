@@ -517,9 +517,10 @@ public sealed class QuietWindow : Window
         {
             if (_musicApp is { } app)
             {
-                var start = LinkRow($"▶  Открыть {app.Name}", "включите музыку — здесь появятся кнопки", () => MusicAppRequested?.Invoke(app), big: true);
+                var start = LinkRow($"▶  Открыть {app.Name}", "", () => MusicAppRequested?.Invoke(app), big: true);
                 start.Margin = new Thickness(-12, 0, -12, 0);
                 box.Children.Add(start);
+                box.Children.Add(Text("Включите музыку — здесь появятся кнопки «назад», «пауза», «дальше».", 12, Hex("#73FFFFFF"), wrap: true));
             }
             else
             {
