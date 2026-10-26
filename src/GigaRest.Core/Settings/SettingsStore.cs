@@ -32,6 +32,13 @@ public sealed class SettingsStore
         foreach (var schedule in new[] { s.ReturnSchedule, s.RestOffer })
             schedule.Days = (schedule.Days ?? []).Distinct().ToList();
         s.Programs.RemoveAll(p => string.IsNullOrWhiteSpace(p.Id));
+        // Яндекс Музыкой управляет «Слушать» на основном экране — на второй монитор её больше не переносим (один раз).
+        if (!s.MusicOnMainScreen)
+        {
+            foreach (var p in s.Programs.Where(p => p.Id.Equals("яндекс музыка.exe", StringComparison.OrdinalIgnoreCase) && p.Action == ProgramAction.SecondMonitor))
+                p.Action = ProgramAction.Keep;
+            s.MusicOnMainScreen = true;
+        }
         // Дубликаты по ключу: оставляем первую запись.
         s.Programs = s.Programs
             .GroupBy(p => p.Id, StringComparer.OrdinalIgnoreCase)

@@ -63,7 +63,8 @@ public static class KnownPrograms
         new() { Exe = "claude.exe", DisplayName = "Claude", DefaultAction = ProgramAction.SecondMonitor, IsChromium = true, HidesToTray = true },
         new()
         {
-            Exe = "яндекс музыка.exe", DisplayName = "Яндекс Музыка", DefaultAction = ProgramAction.SecondMonitor,
+            // Музыкой управляем из «Слушать» на основном экране — по умолчанию не трогаем.
+            Exe = "яндекс музыка.exe", DisplayName = "Яндекс Музыка", DefaultAction = ProgramAction.Keep,
             IsChromium = true, HidesToTray = true,
         },
         new() { Exe = "sharex.exe", DisplayName = "ShareX", HidesToTray = true, TrayWaitSeconds = 2 },

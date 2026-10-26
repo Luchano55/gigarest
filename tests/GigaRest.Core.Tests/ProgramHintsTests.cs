@@ -13,7 +13,7 @@ public class ProgramHintsTests
     [InlineData("ShareX.exe", ProgramAction.Close)]
     [InlineData("1cv8c.exe", ProgramAction.Close)]
     [InlineData("Telegram.exe", ProgramAction.SecondMonitor)]
-    [InlineData("Яндекс Музыка.exe", ProgramAction.SecondMonitor)]
+    [InlineData("Яндекс Музыка.exe", ProgramAction.Keep)]
     [InlineData("steam.exe", ProgramAction.Keep)]
     public void SuggestsByKind(string exe, ProgramAction expected) =>
         Assert.Equal(expected, ProgramHints.Suggest(exe)!.Action);

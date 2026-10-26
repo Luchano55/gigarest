@@ -33,7 +33,14 @@ public static class ProgramHints
     {
         ["telegram.exe"] = "мессенджер", ["whatsapp.exe"] = "мессенджер", ["discord.exe"] = "мессенджер",
         ["zen.exe"] = "личный браузер", ["claude.exe"] = "ассистент",
-        ["яндекс музыка.exe"] = "музыка", ["spotify.exe"] = "музыка", ["vlc.exe"] = "видео",
+    };
+
+    // Музыка и плееры управляются с основного экрана («Слушать», «Смотреть») — на второй монитор их не предлагаем.
+    private static readonly Dictionary<string, string> MainScreen = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["яндекс музыка.exe"] = "музыка — кнопки в «Слушать»", ["spotify.exe"] = "музыка — кнопки в «Слушать»",
+        ["aimp.exe"] = "музыка — кнопки в «Слушать»", ["foobar2000.exe"] = "музыка — кнопки в «Слушать»",
+        ["vlc.exe"] = "плеер — фильмы в «Смотреть»", ["potplayermini64.exe"] = "плеер — фильмы в «Смотреть»",
     };
 
     private static readonly Dictionary<string, string> Games = new(StringComparer.OrdinalIgnoreCase)
@@ -48,6 +55,7 @@ public static class ProgramHints
     {
         if (Work.TryGetValue(programId, out var w)) return new(ProgramAction.Close, "похоже на рабочую: " + w);
         if (Personal.TryGetValue(programId, out var p)) return new(ProgramAction.SecondMonitor, "похоже на личную: " + p);
+        if (MainScreen.TryGetValue(programId, out var m)) return new(ProgramAction.Keep, "не трогаем: " + m);
         if (Games.TryGetValue(programId, out var g)) return new(ProgramAction.Keep, "не трогаем: " + g);
         if (exePath is not null && (exePath.Contains(@"\steamapps\", StringComparison.OrdinalIgnoreCase)
                                     || exePath.Contains(@"\Epic Games\", StringComparison.OrdinalIgnoreCase)

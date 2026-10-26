@@ -45,6 +45,17 @@ public sealed class StorageTests : IDisposable
     }
 
     [Fact]
+    public void MusicMovesToMainScreenOnce()
+    {
+        var s = new AppSettings { Programs = { new ProgramSetting { Id = "яндекс музыка.exe", Action = ProgramAction.SecondMonitor } } };
+        SettingsStore.Normalize(s);
+        Assert.Equal(ProgramAction.Keep, s.Programs[0].Action);
+        s.Programs[0].Action = ProgramAction.SecondMonitor; // Роман вернул сам — больше не трогаем
+        SettingsStore.Normalize(s);
+        Assert.Equal(ProgramAction.SecondMonitor, s.Programs[0].Action);
+    }
+
+    [Fact]
     public void NormalizeFixesBadValuesAndDuplicates()
     {
         var s = new AppSettings
