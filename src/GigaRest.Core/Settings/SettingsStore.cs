@@ -25,6 +25,7 @@ public sealed class SettingsStore
         s.Programs ??= [];
         s.GamesPlayed ??= [];
         s.FilmsOpened ??= [];
+        s.FilmsPosition ??= [];
         s.ReturnSchedule ??= new DaySchedule();
         s.RestOffer ??= new DaySchedule { Time = "19:00" };
         foreach (var schedule in new[] { s.ReturnSchedule, s.RestOffer })

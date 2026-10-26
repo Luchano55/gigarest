@@ -49,6 +49,12 @@ public sealed class AppSettings
     public string? FilmsFolder { get; set; }
     /// <summary>Какие фильмы открывали из «Смотреть» (путь → время, UTC) — для «Продолжить».</summary>
     public Dictionary<string, DateTime> FilmsOpened { get; set; } = [];
+    /// <summary>Где остановились во встроенном плеере (путь → секунды) — «Продолжить» с этого места.</summary>
+    public Dictionary<string, double> FilmsPosition { get; set; } = [];
+    /// <summary>Плеер для фильмов: пусто — встроенный (фильм открывается прямо на «Тихом» экране), иначе путь к exe.</summary>
+    public string? FilmPlayer { get; set; }
+    /// <summary>Музыкальная программа для «Слушать»: пусто — найти самим (Яндекс Музыка и другие из меню «Пуск»).</summary>
+    public string? MusicApp { get; set; }
     /// <summary>На время отдыха включать «Не беспокоить» (только приоритетные уведомления).</summary>
     public bool DoNotDisturb { get; set; } = true;
     /// <summary>Показывать окно «Переход в отдых». false — переходить сразу, без вопросов.</summary>

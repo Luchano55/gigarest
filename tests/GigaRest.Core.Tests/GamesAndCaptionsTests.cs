@@ -230,4 +230,57 @@ public class BattleNetTests
         Assert.Equal(@"C:\Program Files (x86)\Battle.net\Battle.net.exe", d4.ExePath);
         Assert.Empty(games[1].LaunchArgs); // неизвестная — просто открыть Battle.net
     }
+
+    [Fact]
+    public void FromUninstall_LocaleSuffixAndLastPlayed()
+    {
+        const string un = @"""C:\ProgramData\Battle.net\Agent\Blizzard Uninstaller.exe"" --lang=ruRU";
+        var last = BattleNet.LastPlayed("""
+            { "Client": {}, "Games": { "wow": { "LastActioned": "1761400000", "ServerUid": "wow_ruru" }, "hs_beta": { "Resumable": "false" } } }
+            """);
+        var games = BattleNet.FromUninstall(
+        [
+            new("World of Warcraft", "Blizzard Entertainment", un + @" --uid=wow_ruru --displayname=""World of Warcraft"""),
+            new("Hearthstone", "Blizzard Entertainment", un + " --uid=hs_beta"),
+        ], "bnet.exe", last);
+
+        var wow = games.Single(g => g.Name == "World of Warcraft");
+        Assert.Equal("bnet:wow", wow.Id);
+        Assert.Equal(["--exec=launch WoW"], wow.LaunchArgs);
+        Assert.Equal(DateTimeOffset.FromUnixTimeSeconds(1761400000).UtcDateTime, wow.LastPlayedUtc);
+        Assert.Equal(["--exec=launch WTCG"], games.Single(g => g.Name == "Hearthstone").LaunchArgs);
+        Assert.Empty(BattleNet.LastPlayed("не json"));
+    }
+}
+
+public class AppsTests
+{
+    private static readonly GigaRest.Core.Programs.ShortcutInfo[] Shortcuts =
+    [
+        new("Яндекс Музыка", @"C:\Users\Роман\AppData\Local\Programs\YandexMusic\Яндекс Музыка.exe"),
+        new("VLC media player", @"C:\Program Files\VideoLAN\VLC\vlc.exe"),
+        new("PotPlayer 64 bit", @"C:\Program Files\DAUM\PotPlayer\PotPlayerMini64.exe"),
+        new("Справка VLC", @"C:\Program Files\VideoLAN\VLC\Documentation.url"),
+        new("Блокнот", @"C:\Windows\notepad.exe"),
+    ];
+
+    [Fact]
+    public void FindsMusicAndPlayers()
+    {
+        Assert.Equal("Яндекс Музыка", Apps.FindMusic(Shortcuts)!.Name);
+        Assert.Equal(["VLC", "PotPlayer"], Apps.FindPlayers(Shortcuts).Select(p => p.Name));
+        Assert.Null(Apps.FindMusic([new("Блокнот", @"C:\Windows\notepad.exe")]));
+    }
+
+    [Theory]
+    [InlineData(4350, "1:12:30")]
+    [InlineData(725, "12:05")]
+    public void Position_Readable(double seconds, string expected) => Assert.Equal(expected, Apps.Position(seconds));
+
+    [Theory]
+    [InlineData(30, 7200, false)]
+    [InlineData(3600, 7200, true)]
+    [InlineData(7100, 7200, false)]
+    [InlineData(600, 0, true)]
+    public void WorthResuming(double pos, double duration, bool expected) => Assert.Equal(expected, Apps.WorthResuming(pos, duration));
 }

@@ -140,7 +140,9 @@ internal static class Screenshots
             new(@"C:\Users\Роман\Videos\Горы, таймлапс.mp4", "Горы, таймлапс", now.AddDays(-9), 1L << 30),
             new(@"C:\Users\Роман\Videos\Новый год.mkv", "Новый год", now.AddDays(-40), 3L << 30),
         };
-        quiet.SetFilms(films, films[0]);
+        quiet.SetFilms(films, films[0], new Dictionary<string, double> { [films[0].Path] = 2412 }, "Видео");
+        quiet.SetMusicApp(new GigaRest.Core.Media.AppChoice("Яндекс Музыка", @"C:\Яндекс Музыка.exe"));
+        quiet.SetPlayers([new GigaRest.Core.Media.AppChoice("VLC", @"C:\Program Files\VideoLAN\VLC\vlc.exe")], null);
         quiet.SetDnd(true);
         quiet.Media = () => Task.FromResult<NowPlaying.Current?>(new("Земфира — Небо Лондона", "Яндекс Музыка", true));
         await Task.Delay(2500);
@@ -152,6 +154,11 @@ internal static class Screenshots
         await Capture(quiet.Root, Path.Combine(dir, "19-slushat.png"));
         quiet.OpenWordForCapture("Смотреть");
         await Capture(quiet.Root, Path.Combine(dir, "20-smotret.png"));
+        quiet.OpenWordForCapture("Плеер");
+        await Capture(quiet.Root, Path.Combine(dir, "21-pleer.png"));
+        quiet.Media = () => Task.FromResult<NowPlaying.Current?>(null);
+        quiet.OpenWordForCapture("Слушать");
+        await Capture(quiet.Root, Path.Combine(dir, "22-muzyka.png"));
 
         // Плитки на втором мониторе (на сервере сборки живых копий нет — заглушки).
         var tilesWindow = new TilesWindow();

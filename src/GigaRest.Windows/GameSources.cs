@@ -17,7 +17,12 @@ public static class GameSources
         try
         {
             if (Registry.GetValue(@"HKEY_CURRENT_USER\Software\Valve\Steam", "SteamPath", null) is string steam && steam.Length > 0)
-                games.AddRange(GameLibraries.Steam(steam.Replace('/', '\\')));
+            {
+                // Запуск через steam.exe -silent -applaunch: игра стартует, а окно Steam не выскакивает.
+                var steamExe = Path.Combine(steam.Replace('/', '\\'), "steam.exe");
+                foreach (var g in GameLibraries.Steam(steam.Replace('/', '\\')))
+                    games.Add(File.Exists(steamExe) ? g with { ExePath = steamExe, LaunchArgs = ["-silent", "-applaunch", g.Id["steam:".Length..]] } : g);
+            }
         }
         catch (Exception ex) { Log.Warn("Steam: " + ex.Message); }
         try
@@ -30,7 +35,18 @@ public static class GameSources
         try
         {
             var exe = BattleNetExe();
-            if (exe is not null) games.AddRange(BattleNet.FromUninstall(UninstallEntries(), exe));
+            if (exe is not null)
+            {
+                var entries = UninstallEntries();
+                var config = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Battle.net", "Battle.net.config");
+                var last = File.Exists(config) ? BattleNet.LastPlayed(File.ReadAllText(config)) : [];
+                var found = BattleNet.FromUninstall(entries, exe, last);
+                games.AddRange(found);
+                // Для разбора, если какой-то игры нет: коды всех записей Blizzard (без путей и личных данных).
+                Log.Info("Battle.net: " + string.Join(", ", entries.Where(e => e.Publisher?.Contains("Blizzard", StringComparison.OrdinalIgnoreCase) == true)
+                    .Select(e => $"{e.DisplayName} [{System.Text.RegularExpressions.Regex.Match(e.UninstallString ?? "", @"--uid=(\S+)").Groups[1].Value}]"))
+                    + $"; в config игр: {last.Count}");
+            }
         }
         catch (Exception ex) { Log.Warn("Battle.net: " + ex.Message); }
         Log.Info($"Игры: Steam {games.Count(g => g.Store == "Steam")}, Epic {games.Count(g => g.Store == "Epic")}, GOG {games.Count(g => g.Store == "GOG")}, Battle.net {games.Count(g => g.Store == "Battle.net")}");
@@ -111,6 +127,7 @@ public static class GameSources
             }
             else return "не найден файл игры";
             using var _ = Process.Start(psi);
+            LauncherWindows.KeepMinimized(game.Store);
             return null;
         }
         catch (Win32Exception ex) { return ex.Message; }

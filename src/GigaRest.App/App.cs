@@ -2,6 +2,7 @@ using GigaRest.Core;
 using GigaRest.Core.Desktop;
 using GigaRest.Core.Input;
 using GigaRest.Core.Logging;
+using GigaRest.Core.Media;
 using GigaRest.Core.Programs;
 using GigaRest.Core.Scenes;
 using GigaRest.Core.Session;
@@ -244,6 +245,14 @@ public sealed partial class App : Application, IXamlMetadataProvider
             LoadGames(_quiet);
             LoadFilms(_quiet);
             _quiet.FilmRequested += OpenFilm;
+            _quiet.FilmClosed += OnFilmClosed;
+            _quiet.FilmFailed += OnFilmFailed;
+            _quiet.FilmsFolderPickRequested += () => _ = PickFilmsFolderAsync();
+            _quiet.PlayerChosen += ChoosePlayer;
+            _quiet.PlayerPickRequested += () => _ = PickPlayerAsync();
+            _quiet.MusicAppRequested += OpenMusicApp;
+            _quiet.MusicAppPickRequested += () => _ = PickMusicAppAsync();
+            LoadApps(_quiet);
             _quiet.WatchLaterRequested += () => OpenShell("https://www.youtube.com/playlist?list=WL");
             _quiet.OpenFilmsFolderRequested += () =>
             {
@@ -405,35 +414,163 @@ public sealed partial class App : Application, IXamlMetadataProvider
     {
         var folder = FilmsFolder;
         var opened = new Dictionary<string, DateTime>(_settings.FilmsOpened);
+        var positions = new Dictionary<string, double>(_settings.FilmsPosition, StringComparer.OrdinalIgnoreCase);
         _ = Task.Run(() =>
         {
-            List<GigaRest.Core.Media.Film> films;
-            try { films = GigaRest.Core.Media.FilmLibrary.Scan(folder); }
+            List<Film> films;
+            try { films = FilmLibrary.Scan(folder); }
             catch (Exception ex) { Log.Error("Фильмы", ex); films = []; }
-            GigaRest.Core.Media.Film? last = null;
+            Film? last = null;
             foreach (var (path, _) in opened.OrderByDescending(p => p.Value))
             {
                 if (!File.Exists(path)) continue;
                 var info = new FileInfo(path);
-                last = new GigaRest.Core.Media.Film(path, GigaRest.Core.Media.FilmLibrary.Title(Path.GetFileNameWithoutExtension(path)), info.LastWriteTimeUtc, info.Length);
+                last = new Film(path, FilmLibrary.Title(Path.GetFileNameWithoutExtension(path)), info.LastWriteTimeUtc, info.Length);
                 break;
             }
             Log.Info($"Фильмы: {films.Count}");
-            _queue.TryEnqueue(() => { if (_quiet == quiet) quiet.SetFilms(films, last); });
+            var name = Path.GetFileName(folder.TrimEnd('\\', '/'));
+            _queue.TryEnqueue(() => { if (_quiet == quiet) quiet.SetFilms(films, last, positions, name.Length > 0 ? name : folder); });
         });
     }
 
-    private void OpenFilm(GigaRest.Core.Media.Film film)
+    // Музыкальная программа и плееры — по ярлыкам меню «Пуск» (в фоне).
+    private void LoadApps(QuietWindow quiet)
     {
-        if (OpenShell(film.Path) is { } error)
+        var musicSetting = _settings.MusicApp;
+        var player = _settings.FilmPlayer;
+        _ = Task.Run(() =>
         {
-            _quiet?.ShowSummary($"«{film.Name}» не открылся: {error}", hasProblems: true);
-            return;
+            List<GigaRest.Core.Programs.ShortcutInfo> shortcuts;
+            try { shortcuts = StartMenu.ReadShortcuts(); }
+            catch (Exception ex) { Log.Error("Меню «Пуск»", ex); shortcuts = []; }
+            var music = !string.IsNullOrEmpty(musicSetting) && File.Exists(musicSetting)
+                ? new AppChoice(Apps.NameOf(musicSetting), musicSetting)
+                : Apps.FindMusic(shortcuts);
+            var players = Apps.FindPlayers(shortcuts);
+            Log.Info($"Музыка: {music?.Name ?? "не найдена"}; плееры: {(players.Count == 0 ? "нет" : string.Join(", ", players.Select(p => p.Name)))}");
+            _queue.TryEnqueue(() =>
+            {
+                if (_quiet != quiet) return;
+                quiet.SetMusicApp(music);
+                quiet.SetPlayers(players, player);
+                _players = players;
+            });
+        });
+    }
+
+    private List<AppChoice> _players = [];
+
+    private void OpenFilm(Film film)
+    {
+        if (_settings.FilmPlayer is { } player)
+        {
+            var spec = new LaunchSpec { FileName = player, WorkingDirectory = Path.GetDirectoryName(player) };
+            spec.Arguments.Add(film.Path);
+            if (_desktop.Launch(spec) is { } error)
+            {
+                _quiet?.ShowSummary($"Плеер не открылся: {error}", hasProblems: true);
+                return;
+            }
+        }
+        else
+        {
+            var start = _settings.FilmsPosition.TryGetValue(film.Path, out var pos) ? pos : 0;
+            _quiet?.PlayFilm(film, start);
         }
         _settings.FilmsOpened[film.Path] = DateTime.UtcNow;
         // Помним только последние 20.
-        foreach (var old in _settings.FilmsOpened.OrderByDescending(p => p.Value).Skip(20).Select(p => p.Key).ToList()) _settings.FilmsOpened.Remove(old);
+        foreach (var old in _settings.FilmsOpened.OrderByDescending(p => p.Value).Skip(20).Select(p => p.Key).ToList())
+        {
+            _settings.FilmsOpened.Remove(old);
+            _settings.FilmsPosition.Remove(old);
+        }
         SaveSettings();
+    }
+
+    private void OnFilmClosed(Film film, double position, double duration)
+    {
+        if (Apps.WorthResuming(position, duration)) _settings.FilmsPosition[film.Path] = Math.Round(position);
+        else _settings.FilmsPosition.Remove(film.Path);
+        SaveSettings();
+        Log.Info($"Фильм закрыт на {Apps.Position(position)} из {Apps.Position(duration)}");
+        if (_quiet is { } q) LoadFilms(q);
+    }
+
+    private void OnFilmFailed(Film film)
+    {
+        var error = OpenShell(film.Path);
+        _quiet?.ShowSummary(error is null
+            ? $"«{film.Name}» встроенный плеер не открыл — открыли плеером Windows. Свой плеер можно выбрать в «Смотреть» → «Плеер»."
+            : $"«{film.Name}» не открылся: {error}", hasProblems: error is not null);
+    }
+
+    // Выбор папки и программ — системными окнами Windows поверх «Тихого» экрана.
+    private async Task<string?> PickFolderAsync()
+    {
+        if (_quiet is null) return null;
+        var picker = new global::Windows.Storage.Pickers.FolderPicker { SuggestedStartLocation = global::Windows.Storage.Pickers.PickerLocationId.VideosLibrary };
+        picker.FileTypeFilter.Add("*");
+        WinRT.Interop.InitializeWithWindow.Initialize(picker, RestScreens.Hwnd(_quiet));
+        var folder = await picker.PickSingleFolderAsync();
+        return folder?.Path;
+    }
+
+    private async Task<string?> PickExeAsync()
+    {
+        if (_quiet is null) return null;
+        var picker = new global::Windows.Storage.Pickers.FileOpenPicker { SuggestedStartLocation = global::Windows.Storage.Pickers.PickerLocationId.ComputerFolder };
+        picker.FileTypeFilter.Add(".exe");
+        WinRT.Interop.InitializeWithWindow.Initialize(picker, RestScreens.Hwnd(_quiet));
+        var file = await picker.PickSingleFileAsync();
+        return file?.Path;
+    }
+
+    private async Task PickFilmsFolderAsync()
+    {
+        try
+        {
+            if (await PickFolderAsync() is not { } path) return;
+            _settings.FilmsFolder = path;
+            SaveSettings();
+            if (_quiet is { } q) LoadFilms(q);
+        }
+        catch (Exception ex) { Log.Error("Выбор папки с фильмами", ex); }
+    }
+
+    private async Task PickPlayerAsync()
+    {
+        try
+        {
+            if (await PickExeAsync() is not { } path) return;
+            ChoosePlayer(path);
+        }
+        catch (Exception ex) { Log.Error("Выбор плеера", ex); }
+    }
+
+    private void ChoosePlayer(string? path)
+    {
+        _settings.FilmPlayer = path;
+        SaveSettings();
+        _quiet?.SetPlayers(_players, path);
+    }
+
+    private async Task PickMusicAppAsync()
+    {
+        try
+        {
+            if (await PickExeAsync() is not { } path) return;
+            _settings.MusicApp = path;
+            SaveSettings();
+            _quiet?.SetMusicApp(new AppChoice(Apps.NameOf(path), path));
+        }
+        catch (Exception ex) { Log.Error("Выбор программы для музыки", ex); }
+    }
+
+    private void OpenMusicApp(AppChoice app)
+    {
+        if (_desktop.Launch(new LaunchSpec { FileName = app.Path, WorkingDirectory = Path.GetDirectoryName(app.Path) }) is { } error)
+            _quiet?.ShowSummary($"{app.Name} не открылась: {error}", hasProblems: true);
     }
 
     /// <summary>Открыть файл или ссылку так, как открыла бы сама Windows (плеер, браузер по умолчанию).</summary>

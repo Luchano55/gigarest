@@ -11,7 +11,9 @@
 
 > Проект в разработке.
 >
-> **Скачать свежую сборку:** [GigaRest-win-x64.zip](https://github.com/Luchano55/gigarest/releases/download/dev-build/GigaRest-win-x64.zip) — распаковать в обычную папку и запустить GigaRest.exe. Дальше программа обновляется сама.
+> **Установить:** [GigaRest-Setup.exe](https://github.com/Luchano55/gigarest/releases/download/dev-build/GigaRest-Setup.exe) — без прав администратора; GigaRest появится в меню «Пуск» и в «Установленных приложениях» (там же удаление). Дальше программа обновляется сама.
+>
+> Без установки: [GigaRest-win-x64.zip](https://github.com/Luchano55/gigarest/releases/download/dev-build/GigaRest-win-x64.zip) — распаковать в обычную папку и запустить GigaRest.exe.
 
 ## Как это выглядит
 
@@ -28,6 +30,10 @@
 ![Слушать](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/claude-system-management-requirements-nobkxi/19-slushat.png)
 
 ![Смотреть](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/claude-system-management-requirements-nobkxi/20-smotret.png)
+
+Фильм открывается прямо на «Тихом» экране встроенным плеером и продолжается с того места, где остановились. Можно выбрать и свой плеер.
+
+![Плеер](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/claude-system-management-requirements-nobkxi/21-pleer.png)
 
 На время отдыха включается «Не беспокоить»: приходят только приоритетные уведомления. После отдыха — как было.
 

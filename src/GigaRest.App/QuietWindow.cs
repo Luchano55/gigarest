@@ -82,6 +82,35 @@ public sealed class QuietWindow : Window
     private IReadOnlyList<Game>? _games;
     private IReadOnlyList<Film>? _films;
     private Film? _lastFilm;
+    private IReadOnlyDictionary<string, double> _positions = new Dictionary<string, double>();
+    private string _filmsFolderName = "Видео";
+    private AppChoice? _musicApp;
+    private IReadOnlyList<AppChoice> _players = [];
+    private string? _player; // null — встроенный
+
+    public event Action<AppChoice>? MusicAppRequested;
+    public event Action? MusicAppPickRequested;
+    public event Action? FilmsFolderPickRequested;
+    public event Action<string?>? PlayerChosen;
+    public event Action? PlayerPickRequested;
+    /// <summary>Встроенный плеер закрыт: фильм, где остановились и длительность (секунды).</summary>
+    public event Action<Film, double, double>? FilmClosed;
+    /// <summary>Встроенный плеер файл не открыл.</summary>
+    public event Action<Film>? FilmFailed;
+
+    public void SetMusicApp(AppChoice? app) { _musicApp = app; Refresh("Слушать"); }
+
+    public void SetPlayers(IReadOnlyList<AppChoice> players, string? current)
+    {
+        _players = players;
+        _player = current;
+        Refresh("Смотреть", "Плеер");
+    }
+
+    private void Refresh(params string[] words)
+    {
+        if (_openWord is { } w && words.Contains(w)) { _openWord = null; OnWord(w); }
+    }
 
     public event Action<Film>? FilmRequested;
     public event Action? WatchLaterRequested;
@@ -92,11 +121,13 @@ public sealed class QuietWindow : Window
     internal Func<MediaCommand, Task> MediaControl { get; set; } = NowPlaying.ControlAsync;
 
     /// <summary>Фильмы из папки (новые сверху) и последний открытый из GigaRest.</summary>
-    public void SetFilms(IReadOnlyList<Film> films, Film? lastOpened)
+    public void SetFilms(IReadOnlyList<Film> films, Film? lastOpened, IReadOnlyDictionary<string, double> positions, string folderName)
     {
         _films = films;
         _lastFilm = lastOpened;
-        if (_openWord is "Смотреть" or "Продолжить") { var w = _openWord; _openWord = null; OnWord(w); }
+        _positions = positions;
+        _filmsFolderName = folderName;
+        Refresh("Смотреть", "Продолжить");
     }
 
     /// <summary>Установленные игры: сначала недавние. Вызывать из потока окна.</summary>
@@ -199,7 +230,7 @@ public sealed class QuietWindow : Window
         Content = _root;
         _root.PointerMoved += (_, _) => Wake();
         _root.PointerPressed += (_, _) => Wake();
-        _root.KeyDown += OnKey;
+        _root.AddHandler(UIElement.KeyDownEvent, new KeyEventHandler(OnKey), handledEventsToo: true);
         _tick.Tick += (_, _) => OnTick();
         var start = sceneId is null ? 0 : Math.Max(0, _scenes.ToList().FindIndex(x => x.Id == sceneId));
         SetScene(start, effect);
@@ -418,13 +449,40 @@ public sealed class QuietWindow : Window
             if (_films is { Count: > 0 })
                 foreach (var film in _films.Take(30)) list.Children.Add(FilmRow(film));
             _panelContent.Children.Add(new ScrollViewer { Content = list, MaxHeight = 420, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
-            var note = _films is null ? "Ищем фильмы…"
-                : _films.Count == 0 ? "В папке с фильмами пока пусто. Папку можно выбрать в настройках."
-                : GigaRest.Core.Text.Sizes.Plural(_films.Count, "видео", "видео", "видео") + " в папке с фильмами";
-            var folder = QuietButton(note + " · открыть папку", 12);
-            folder.Margin = new Thickness(0, 6, 0, 0);
-            folder.Click += (_, _) => OpenFilmsFolderRequested?.Invoke();
-            _panelContent.Children.Add(folder);
+            if (_films is { Count: 0 })
+            {
+                var empty = Text($"В папке «{_filmsFolderName}» видео нет. Выберите папку, где лежат фильмы.", 13, Hex("#99FFFFFF"), wrap: true);
+                empty.Margin = new Thickness(0, 6, 0, 0);
+                _panelContent.Children.Add(empty);
+            }
+            var footer = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 18, Margin = new Thickness(0, 6, 0, 0) };
+            var folder = QuietButton(_films is null ? "Ищем фильмы…" : $"Папка: {_filmsFolderName} · выбрать", 12);
+            folder.Click += (_, _) => FilmsFolderPickRequested?.Invoke();
+            footer.Children.Add(folder);
+            var open = QuietButton("открыть", 12);
+            open.Click += (_, _) => OpenFilmsFolderRequested?.Invoke();
+            footer.Children.Add(open);
+            var player = QuietButton($"Плеер: {PlayerName} · сменить", 12);
+            player.Click += (_, _) => { _openWord = null; OnWord("Плеер"); };
+            footer.Children.Add(player);
+            _panelContent.Children.Add(footer);
+        }
+        else if (word == "Плеер")
+        {
+            _panel.Width = 560;
+            _panelContent.Children.Add(Text("Чем открывать фильмы", 17, Hex("#E6FFFFFF"), FontWeights.Medium));
+            var list = new StackPanel { Spacing = 2, Margin = new Thickness(-12, 6, -12, 0) };
+            list.Children.Add(ChoiceRow("Встроенный плеер GigaRest", "фильм открывается прямо здесь", _player is null, () => PlayerChosen?.Invoke(null)));
+            foreach (var p in _players)
+                list.Children.Add(ChoiceRow(p.Name, "ваш плеер, на весь экран", string.Equals(_player, p.Path, StringComparison.OrdinalIgnoreCase), () => PlayerChosen?.Invoke(p.Path)));
+            if (_player is not null && !_players.Any(p => string.Equals(p.Path, _player, StringComparison.OrdinalIgnoreCase)))
+                list.Children.Add(ChoiceRow(Apps.NameOf(_player), "выбран вами", true, () => { }));
+            list.Children.Add(ChoiceRow("Другой плеер…", "выбрать программу (.exe)", false, () => PlayerPickRequested?.Invoke()));
+            _panelContent.Children.Add(list);
+            var back = QuietButton("← Смотреть", 12);
+            back.Margin = new Thickness(0, 6, 0, 0);
+            back.Click += (_, _) => { _openWord = null; OnWord("Смотреть"); };
+            _panelContent.Children.Add(back);
         }
         else
         {
@@ -457,7 +515,17 @@ public sealed class QuietWindow : Window
         box.Children.Clear();
         if (current is null)
         {
-            box.Children.Add(Text("Сейчас ничего не играет. Включите музыку в Яндекс Музыке — здесь появятся кнопки.", 13, Hex("#99FFFFFF"), wrap: true));
+            if (_musicApp is { } app)
+            {
+                var start = LinkRow($"▶  Открыть {app.Name}", "включите музыку — здесь появятся кнопки", () => MusicAppRequested?.Invoke(app), big: true);
+                start.Margin = new Thickness(-12, 0, -12, 0);
+                box.Children.Add(start);
+            }
+            else
+            {
+                box.Children.Add(Text("Сейчас ничего не играет, а программу для музыки GigaRest не нашёл.", 13, Hex("#99FFFFFF"), wrap: true));
+            }
+            box.Children.Add(MusicAppLink());
             return;
         }
         var track = Text(current.Text, 19, Hex("#E6FFFFFF"), FontWeights.SemiBold, wrap: true);
@@ -483,19 +551,31 @@ public sealed class QuietWindow : Window
             buttons.Children.Add(b);
         }
         box.Children.Add(buttons);
-        var later = Text("Плейлисты и звуки природы — позже.", 12, Hex("#66FFFFFF"));
-        later.Margin = new Thickness(0, 4, 0, 0);
-        box.Children.Add(later);
+        box.Children.Add(MusicAppLink());
     }
+
+    private Button MusicAppLink()
+    {
+        var link = QuietButton(_musicApp is { } app ? $"Программа: {app.Name} · сменить" : "Выбрать программу для музыки…", 12);
+        link.Click += (_, _) => MusicAppPickRequested?.Invoke();
+        return link;
+    }
+
+    private string PlayerName => _player is null ? "встроенный" : _players.FirstOrDefault(p => string.Equals(p.Path, _player, StringComparison.OrdinalIgnoreCase))?.Name ?? Apps.NameOf(_player);
+
+    private Button ChoiceRow(string title, string meta, bool selected, Action click) =>
+        LinkRow((selected ? "✓  " : "     ") + title, meta, () => { click(); }, keepOpen: true);
 
     private Button FilmRow(Film film, bool big = false)
     {
         var added = GameLibraries.LastPlayedText(film.ModifiedUtc, DateTime.Now);
-        return LinkRow(big ? $"▶  {film.Name}" : film.Name, big ? "фильм" : (added.Length > 0 ? "добавлен " + added : ""), () => FilmRequested?.Invoke(film), big);
+        var meta = _positions.TryGetValue(film.Path, out var pos) ? "с " + Apps.Position(pos)
+            : big ? "фильм" : added.Length > 0 ? "добавлен " + added : "";
+        return LinkRow(big ? $"▶  {film.Name}" : film.Name, meta, () => FilmRequested?.Invoke(film), big);
     }
 
     /// <summary>Строка списка: название слева, пояснение справа, щелчок — действие.</summary>
-    private Button LinkRow(string title, string meta, Action click, bool big = false)
+    private Button LinkRow(string title, string meta, Action click, bool big = false, bool keepOpen = false)
     {
         var grid = new Grid { ColumnSpacing = 16 };
         grid.ColumnDefinitions.Add(new ColumnDefinition());
@@ -518,7 +598,7 @@ public sealed class QuietWindow : Window
         b.Resources["ButtonBackgroundPressed"] = Brush("#26FFFFFF");
         b.Resources["ButtonBorderBrushPointerOver"] = Brush(Colors.Transparent);
         b.Resources["ButtonBorderBrushPressed"] = Brush(Colors.Transparent);
-        b.Click += (_, _) => { ClosePanel(); click(); };
+        b.Click += (_, _) => { if (!keepOpen) ClosePanel(); click(); };
         return b;
     }
 
@@ -544,6 +624,20 @@ public sealed class QuietWindow : Window
     private void OnKey(object sender, KeyRoutedEventArgs e)
     {
         Wake();
+        if (_film is not null)
+        {
+            var session = _film.Value.Player.PlaybackSession;
+            switch (e.Key)
+            {
+                case global::Windows.System.VirtualKey.Escape: CloseFilm(); e.Handled = true; return;
+                case global::Windows.System.VirtualKey.Space when e.OriginalSource is not Button:
+                    if (session.PlaybackState == global::Windows.Media.Playback.MediaPlaybackState.Playing) _film.Value.Player.Pause(); else _film.Value.Player.Play();
+                    e.Handled = true; return;
+                case global::Windows.System.VirtualKey.Left: session.Position -= TimeSpan.FromSeconds(10); e.Handled = true; return;
+                case global::Windows.System.VirtualKey.Right: session.Position += TimeSpan.FromSeconds(10); e.Handled = true; return;
+            }
+            return;
+        }
         if (e.Key == global::Windows.System.VirtualKey.Escape && _openWord is not null) { ClosePanel(); e.Handled = true; }
     }
 
@@ -559,6 +653,7 @@ public sealed class QuietWindow : Window
         var now = DateTime.Now;
         _clock.Text = now.ToString("HH:mm", Ru);
         _date.Text = now.ToString("dddd, d MMMM", Ru);
+        if (_film is not null) _lastInput = now; // фильм смотрят — не гасим экран
         var idle = now - _lastInput;
 
         // 20 секунд без действий — список закрывается, строка приглушается до 40%.
@@ -584,6 +679,80 @@ public sealed class QuietWindow : Window
         var busy = _monitor is not null && UserState.CoversMonitor(_monitor);
         if (busy && !_paused) { _kenBurns.Pause(); _effects.Pause(true); _video?.Pause(); _paused = true; }
         else if (!busy && _paused) { _kenBurns.Resume(); _effects.Pause(false); _video?.Resume(); _paused = false; }
+    }
+
+    // ---------- встроенный плеер: системный MediaPlayer с аппаратным декодированием, на весь «Тихий» экран ----------
+
+    private (Film Film, global::Windows.Media.Playback.MediaPlayer Player, Grid View)? _film;
+
+    /// <summary>Открыть фильм прямо здесь. start — с какой секунды (продолжить просмотр).</summary>
+    public void PlayFilm(Film film, double start)
+    {
+        if (_film is not null) CloseFilm();
+        ClosePanel();
+        var player = new global::Windows.Media.Playback.MediaPlayer { AutoPlay = true };
+        var element = new MediaPlayerElement { AreTransportControlsEnabled = true, Stretch = Stretch.Uniform };
+        element.SetMediaPlayer(player);
+        element.TransportControls.IsZoomButtonVisible = false;
+        element.TransportControls.IsSeekBarVisible = true;
+        element.TransportControls.IsSeekEnabled = true;
+
+        var view = new Grid { Background = Brush("#FF000000") };
+        view.Children.Add(element);
+        var bar = new Grid { VerticalAlignment = VerticalAlignment.Top, Padding = new Thickness(28, 18, 28, 18), Background = Brush("#80000000") };
+        bar.ColumnDefinitions.Add(new ColumnDefinition());
+        bar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var title = Text(film.Name, 15, Hex("#E6FFFFFF"));
+        title.VerticalAlignment = VerticalAlignment.Center;
+        bar.Children.Add(title);
+        var close = QuietButton("Закрыть · Esc", 13);
+        close.Click += (_, _) => CloseFilm();
+        Grid.SetColumn(close, 1);
+        bar.Children.Add(close);
+        view.Children.Add(bar);
+        // Полоса с названием прячется, когда мышь не двигается.
+        var lastMove = DateTime.Now;
+        view.PointerMoved += (_, _) => { lastMove = DateTime.Now; bar.Opacity = 1; };
+        var hide = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        hide.Tick += (_, _) => { if (_film?.View != view) { hide.Stop(); return; } bar.Opacity = DateTime.Now - lastMove > TimeSpan.FromSeconds(3) ? 0 : 1; };
+        hide.Start();
+
+        player.MediaOpened += (s, _) => DispatcherQueue.TryEnqueue(() =>
+        {
+            if (start > 0) s.PlaybackSession.Position = TimeSpan.FromSeconds(start);
+        });
+        player.MediaFailed += (_, args) => DispatcherQueue.TryEnqueue(() =>
+        {
+            GigaRest.Core.Logging.Log.Warn($"Встроенный плеер: {args.Error} {args.ErrorMessage}");
+            if (_film?.Film != film) return;
+            CloseFilm(notify: false);
+            FilmFailed?.Invoke(film);
+        });
+        player.MediaEnded += (_, _) => DispatcherQueue.TryEnqueue(() => { if (_film?.Film == film) CloseFilm(); });
+        player.Source = global::Windows.Media.Core.MediaSource.CreateFromUri(new Uri(film.Path));
+
+        _film = (film, player, view);
+        _root.Children.Add(view);
+        _overlay.Visibility = Visibility.Collapsed;
+        // Сцена за фильмом не видна — останавливаем её, видеокарта занята фильмом.
+        _kenBurns.Pause(); _effects.Pause(true); _video?.Pause();
+        element.Focus(FocusState.Programmatic);
+    }
+
+    private void CloseFilm(bool notify = true)
+    {
+        if (_film is not { } f) return;
+        _film = null;
+        var position = f.Player.PlaybackSession.Position.TotalSeconds;
+        var duration = f.Player.PlaybackSession.NaturalDuration.TotalSeconds;
+        f.Player.Pause();
+        if (f.View.Children.FirstOrDefault() is MediaPlayerElement e) e.SetMediaPlayer(null);
+        f.Player.Dispose();
+        _root.Children.Remove(f.View);
+        _overlay.Visibility = Visibility.Visible;
+        if (!_paused) { _kenBurns.Resume(); _effects.Pause(false); _video?.Resume(); }
+        Wake();
+        if (notify) FilmClosed?.Invoke(f.Film, position, duration);
     }
 
     /// <summary>Итог перехода поверх сцены. С проблемами — висит, пока не закроют; без — исчезает через 8 с.</summary>
@@ -638,6 +807,7 @@ public sealed class QuietWindow : Window
 
     public void CloseForGood()
     {
+        CloseFilm(); // где остановились — запомнится
         _closing = true;
         _tick.Stop();
         _kenBurns.Stop();
