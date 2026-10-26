@@ -232,7 +232,7 @@ public sealed class SwitcherWindow : Window
         _goText.Text = "Перейти в отдых";
         SetGo(enabled: true, dark: false);
         _notice.Text = notice ?? "";
-        ShowPanel("Что будет с программами", "щёлкните, чтобы поменять", progress: false);
+        ShowPanel("Что будет с программами", "выберите для каждой, что сделать при переходе в отдых", progress: false);
         RenderPlanList();
         RefreshForecast();
     }
@@ -532,7 +532,7 @@ public sealed class SwitcherWindow : Window
     {
         if (_mode != Mode.Plan) return;
         var close = Programs.Where(p => p.Action == ProgramAction.Close && !p.IsElevated).ToList();
-        _ramTitle.Text = "Оперативная память";
+        _ramTitle.Text = "Освободится памяти";
         _ramValue.Text = close.Count > 0 ? "≈" + Sizes.Format(close.Sum(p => p.PrivateBytes)) : "—";
         ToolTipService.SetToolTip(_ramValue, "Примерно освободится. Точную цифру покажем после перехода.");
 
