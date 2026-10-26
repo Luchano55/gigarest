@@ -2,7 +2,7 @@ namespace GigaRest.Core.Games;
 
 /// <summary>
 /// Установленная игра из библиотеки. Запуск — через сам магазин (ссылка steam://, com.epicgames.launcher://)
-/// или напрямую exe (GOG).
+/// или напрямую exe (GOG, Battle.net).
 /// </summary>
 public sealed record Game
 {
@@ -15,4 +15,6 @@ public sealed record Game
     public string? LaunchUri { get; init; }
     public string? ExePath { get; init; }
     public string? WorkingDirectory { get; init; }
+    /// <summary>Аргументы для ExePath (Battle.net: «--exec=launch Fen»).</summary>
+    public IReadOnlyList<string> LaunchArgs { get; init; } = [];
 }

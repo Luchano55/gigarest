@@ -7,8 +7,7 @@ using Microsoft.Win32;
 namespace GigaRest.Windows;
 
 /// <summary>
-/// Где на этом компьютере лежат библиотеки игр (Steam, Epic, GOG) и как запустить игру. Только чтение, без прав администратора.
-/// Battle.net свои игры в понятном виде не хранит — пока без него.
+/// Где на этом компьютере лежат библиотеки игр (Steam, Epic, GOG, Battle.net) и как запустить игру. Только чтение, без прав администратора.
 /// </summary>
 public static class GameSources
 {
@@ -28,7 +27,13 @@ public static class GameSources
         catch (Exception ex) { Log.Warn("Epic: " + ex.Message); }
         try { games.AddRange(Gog()); }
         catch (Exception ex) { Log.Warn("GOG: " + ex.Message); }
-        Log.Info($"Игры: Steam {games.Count(g => g.Store == "Steam")}, Epic {games.Count(g => g.Store == "Epic")}, GOG {games.Count(g => g.Store == "GOG")}");
+        try
+        {
+            var exe = BattleNetExe();
+            if (exe is not null) games.AddRange(BattleNet.FromUninstall(UninstallEntries(), exe));
+        }
+        catch (Exception ex) { Log.Warn("Battle.net: " + ex.Message); }
+        Log.Info($"Игры: Steam {games.Count(g => g.Store == "Steam")}, Epic {games.Count(g => g.Store == "Epic")}, GOG {games.Count(g => g.Store == "GOG")}, Battle.net {games.Count(g => g.Store == "Battle.net")}");
         return games;
     }
 
@@ -53,6 +58,41 @@ public static class GameSources
         }
     }
 
+    private static readonly string[] UninstallKeys =
+    [
+        @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
+        @"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall",
+    ];
+
+    // «Установка и удаление программ»: и для всех пользователей, и для текущего.
+    private static List<UninstallEntry> UninstallEntries()
+    {
+        var list = new List<UninstallEntry>();
+        foreach (var hive in new[] { Registry.LocalMachine, Registry.CurrentUser })
+        foreach (var path in UninstallKeys)
+        {
+            using var root = hive.OpenSubKey(path);
+            if (root is null) continue;
+            foreach (var name in root.GetSubKeyNames())
+            {
+                using var key = root.OpenSubKey(name);
+                if (key is null) continue;
+                list.Add(new UninstallEntry(key.GetValue("DisplayName") as string, key.GetValue("Publisher") as string, key.GetValue("UninstallString") as string));
+            }
+        }
+        return list;
+    }
+
+    private static string? BattleNetExe()
+    {
+        var candidates = new[]
+        {
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Battle.net", "Battle.net.exe"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Battle.net", "Battle.net.exe"),
+        };
+        return candidates.FirstOrDefault(File.Exists);
+    }
+
     /// <summary>Запустить игру. null — получилось, иначе — что не так.</summary>
     public static string? Launch(Game game)
     {
@@ -66,6 +106,7 @@ public static class GameSources
             else if (game.ExePath is { } exe && File.Exists(exe))
             {
                 psi = new ProcessStartInfo(exe) { UseShellExecute = false };
+                foreach (var a in game.LaunchArgs) psi.ArgumentList.Add(a);
                 if (game.WorkingDirectory is { } dir && Directory.Exists(dir)) psi.WorkingDirectory = dir;
             }
             else return "не найден файл игры";

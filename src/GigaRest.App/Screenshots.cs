@@ -134,11 +134,24 @@ internal static class Screenshots
             new() { Id = "gog:4", Name = "Старый маяк", Store = "GOG", LastPlayedUtc = now.AddDays(-16) },
             new() { Id = "steam:5", Name = "Звёздная ферма", Store = "Steam" },
         ], new Dictionary<string, DateTime>()));
+        var films = new List<GigaRest.Core.Media.Film>
+        {
+            new(@"C:\Users\Роман\Videos\Мой отпуск 2026.mp4", "Мой отпуск 2026", now.AddDays(-2), 2L << 30),
+            new(@"C:\Users\Роман\Videos\Горы, таймлапс.mp4", "Горы, таймлапс", now.AddDays(-9), 1L << 30),
+            new(@"C:\Users\Роман\Videos\Новый год.mkv", "Новый год", now.AddDays(-40), 3L << 30),
+        };
+        quiet.SetFilms(films, films[0]);
+        quiet.SetDnd(true);
+        quiet.Media = () => Task.FromResult<NowPlaying.Current?>(new("Земфира — Небо Лондона", "Яндекс Музыка", true));
         await Task.Delay(2500);
         quiet.OpenWordForCapture("Играть");
         await Capture(quiet.Root, Path.Combine(dir, "17-igrat.png"));
         quiet.OpenWordForCapture("Продолжить");
         await Capture(quiet.Root, Path.Combine(dir, "18-prodolzhit.png"));
+        quiet.OpenWordForCapture("Слушать");
+        await Capture(quiet.Root, Path.Combine(dir, "19-slushat.png"));
+        quiet.OpenWordForCapture("Смотреть");
+        await Capture(quiet.Root, Path.Combine(dir, "20-smotret.png"));
 
         // Плитки на втором мониторе (на сервере сборки живых копий нет — заглушки).
         var tilesWindow = new TilesWindow();

@@ -1,4 +1,5 @@
 using GigaRest.Core.Games;
+using GigaRest.Core.Media;
 using GigaRest.Core.Tiles;
 using Xunit;
 
@@ -36,6 +37,14 @@ public class TileCaptionsTests
         Assert.Null(TileCaptions.For("claude.exe", "Claude", "Claude", null));
         Assert.Null(TileCaptions.For("claude.exe", "Claude", "", null));
     }
+
+    [Theory]
+    [InlineData("ru.yandex.desktop.music", "Яндекс Музыка")]
+    [InlineData("Яндекс Музыка.exe", "Яндекс Музыка")]
+    [InlineData("chrome.exe", "Chrome")]
+    [InlineData("foobar2000.exe", "Foobar2000")]
+    [InlineData(null, "")]
+    public void MediaSourceName_Friendly(string? aumid, string expected) => Assert.Equal(expected, TileCaptions.MediaSourceName(aumid));
 
     [Theory]
     [InlineData("Яндекс Музыка.exe", "яндекс музыка.exe", @"C:\Users\Роман\AppData\Local\Programs\YandexMusic\Яндекс Музыка.exe", true)]
@@ -155,5 +164,70 @@ public class GameLibrariesTests : IDisposable
         var n = VdfNode.Parse("// комментарий\n\"a\" { \"path\" \"C:\\\\Games\\\\Steam\" \"q\" \"он сказал \\\"да\\\"\" }");
         Assert.Equal(@"C:\Games\Steam", n.Child("A")!["PATH"]);
         Assert.Equal("он сказал \"да\"", n.Child("a")!["q"]);
+    }
+}
+
+public class FilmLibraryTests : IDisposable
+{
+    private readonly string _dir = Path.Combine(Path.GetTempPath(), "gigarest фильмы " + Guid.NewGuid().ToString("N"));
+
+    public FilmLibraryTests() => Directory.CreateDirectory(_dir);
+    public void Dispose() => Directory.Delete(_dir, recursive: true);
+
+    private void Make(string relative, long sizeMb, DateTime modified)
+    {
+        var path = Path.Combine(_dir, relative);
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        using (var f = File.Create(path)) f.SetLength(sizeMb << 20);
+        File.SetLastWriteTimeUtc(path, modified);
+    }
+
+    [Fact]
+    public void Scan_NewestFirst_SkipsSamplesSmallAndOther()
+    {
+        Make("Брат 2 (2000).mkv", 10, new DateTime(2026, 10, 1));
+        Make(Path.Combine("Сериалы", "Сезон 1", "Серия 1.mp4"), 10, new DateTime(2026, 10, 20));
+        Make(Path.Combine("Сериалы", "Сезон 1", "Глубоко", "Серия 2.mp4"), 10, new DateTime(2026, 10, 21)); // глубже двух уровней
+        Make("Movie.2019.1080p-sample.mkv", 10, new DateTime(2026, 10, 25));
+        Make("клип.mp4", 1, new DateTime(2026, 10, 25));
+        Make("обложка.jpg", 10, new DateTime(2026, 10, 25));
+
+        var films = FilmLibrary.Scan(_dir);
+
+        Assert.Equal(["Серия 1", "Брат 2 (2000)"], films.Select(f => f.Name));
+    }
+
+    [Theory]
+    [InlineData("Brat.2.2000.1080p.BluRay.x264", "Brat 2 (2000)")]
+    [InlineData("Мой_отпуск", "Мой отпуск")]
+    [InlineData("Интерстеллар (2014) 2160p", "Интерстеллар (2014)")]
+    [InlineData("Show S01E02 1080p WEB-DL", "Show S01E02")]
+    public void Title_Cleaned(string stem, string expected) => Assert.Equal(expected, FilmLibrary.Title(stem));
+
+    [Fact]
+    public void Scan_NoFolder_Empty() => Assert.Empty(FilmLibrary.Scan(Path.Combine(_dir, "нет")));
+}
+
+public class BattleNetTests
+{
+    [Fact]
+    public void FromUninstall_KnownAndUnknownGames()
+    {
+        const string un = @"""C:\ProgramData\Battle.net\Agent\Blizzard Uninstaller.exe"" --lang=ruRU";
+        var games = BattleNet.FromUninstall(
+        [
+            new("Diablo IV", "Blizzard Entertainment", un + @" --uid=fenris --displayname=""Diablo IV"""),
+            new("Новая игра", "Blizzard Entertainment", un + " --uid=newgame"),
+            new("Battle.net", "Blizzard Entertainment", @"""C:\Program Files (x86)\Battle.net\Battle.net.exe"" --uid=battle.net"),
+            new("Notepad++", "Notepad++ Team", "uninst.exe"),
+            new("Diablo IV", "Blizzard Entertainment", un + " --uid=fenris"),
+        ], @"C:\Program Files (x86)\Battle.net\Battle.net.exe");
+
+        Assert.Equal(2, games.Count);
+        var d4 = games[0];
+        Assert.Equal("bnet:fenris", d4.Id);
+        Assert.Equal(["--exec=launch Fen"], d4.LaunchArgs);
+        Assert.Equal(@"C:\Program Files (x86)\Battle.net\Battle.net.exe", d4.ExePath);
+        Assert.Empty(games[1].LaunchArgs); // неизвестная — просто открыть Battle.net
     }
 }

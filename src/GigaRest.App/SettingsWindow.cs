@@ -12,7 +12,7 @@ using static GigaRest.App.Ui;
 
 namespace GigaRest.App;
 
-public sealed record SettingsResult(DaySchedule Schedule, DaySchedule RestOffer, string Hotkey, string TilesHotkey, bool ConfirmBeforeRest, bool Autostart);
+public sealed record SettingsResult(DaySchedule Schedule, DaySchedule RestOffer, string Hotkey, string TilesHotkey, bool ConfirmBeforeRest, bool Autostart, bool DoNotDisturb, string FilmsFolder);
 
 /// <summary>Настройки: расписание возврата, горячая клавиша, окно перехода, автозапуск.</summary>
 public sealed class SettingsWindow : Window
@@ -20,7 +20,8 @@ public sealed class SettingsWindow : Window
     public const double DesignWidth = 720, DesignHeight = 1180;
 
     private readonly Grid _root;
-    private readonly ToggleSwitch _confirm, _autostart;
+    private readonly ToggleSwitch _confirm, _autostart, _dnd;
+    private readonly TextBox _films;
     private readonly ScheduleEditor _return, _rest;
     private readonly TextBox _hotkey, _tilesHotkey;
     private readonly TextBlock _hotkeyHint;
@@ -71,8 +72,15 @@ public sealed class SettingsWindow : Window
         other.Children.Add(Text("Разное", 18, Ink, FontWeights.Bold));
         _confirm = new ToggleSwitch { OnContent = "Перед отдыхом показывать окно перехода", OffContent = "Переходить сразу, без вопросов" };
         _autostart = new ToggleSwitch { OnContent = "Запускать вместе с Windows (в трее)", OffContent = "Не запускать вместе с Windows" };
+        _dnd = new ToggleSwitch { OnContent = "В отдыхе — «Не беспокоить» (только приоритетные уведомления)", OffContent = "Уведомления в отдыхе не трогать" };
         other.Children.Add(_confirm);
+        other.Children.Add(_dnd);
         other.Children.Add(_autostart);
+        var filmsLabel = Text("Папка с фильмами (для «Смотреть»)", 14, Ink, FontWeights.SemiBold);
+        filmsLabel.Margin = new Thickness(0, 10, 0, 0);
+        other.Children.Add(filmsLabel);
+        _films = new TextBox { PlaceholderText = GigaRest.Core.Media.FilmLibrary.DefaultFolder(), Width = 460, HorizontalAlignment = HorizontalAlignment.Left };
+        other.Children.Add(_films);
         body.Children.Add(CardBorder(other, radius: 18, padding: 22));
 
         var scroll = new ScrollViewer { Content = body, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Padding = new Thickness(0, 0, 12, 0) };
@@ -105,6 +113,8 @@ public sealed class SettingsWindow : Window
         _tilesHotkey.Text = settings.TilesHotkey;
         _confirm.IsOn = settings.ConfirmBeforeRest;
         _autostart.IsOn = autostart;
+        _dnd.IsOn = settings.DoNotDisturb;
+        _films.Text = settings.FilmsFolder ?? "";
         UpdateHotkeyHint(hotkeyProblem);
     }
 
@@ -123,7 +133,7 @@ public sealed class SettingsWindow : Window
             return;
         }
         var tiles = Hotkey.TryParse(_tilesHotkey.Text, out var t) && t != hotkey ? t.ToString() : "Ctrl+Alt+End";
-        Saved?.Invoke(new SettingsResult(_return.Current(), _rest.Current(), hotkey.ToString(), tiles, _confirm.IsOn, _autostart.IsOn));
+        Saved?.Invoke(new SettingsResult(_return.Current(), _rest.Current(), hotkey.ToString(), tiles, _confirm.IsOn, _autostart.IsOn, _dnd.IsOn, _films.Text));
         AppWindow.Hide();
     }
 

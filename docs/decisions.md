@@ -141,7 +141,7 @@
 - Steam: папка из `HKCU\Software\Valve\Steam\SteamPath`, список библиотек — `steamapps\libraryfolders.vdf`, игры — `appmanifest_*.acf` (`appid`, `name`, `StateFlags` с битом 4 «установлена», `LastPlayed` — время Unix). Запуск — `steam://rungameid/<appid>`. Служебные пакеты (Steamworks Redistributables, Proton, Steam Linux Runtime) не показываем.
 - Epic: `%ProgramData%\Epic\EpicGamesLauncher\Data\Manifests\*.item` (JSON: `DisplayName`, `AppName`, `CatalogNamespace`, `CatalogItemId`, `AppCategories`, `bIsIncompleteInstall`). Запуск — `com.epicgames.launcher://apps/<ns>%3A<item>%3A<app>?action=launch&silent=true`. Время последней игры Epic не хранит — берём из своих запусков (`GamesPlayed` в настройках).
 - GOG: `HKLM\SOFTWARE\WOW6432Node\GOG.com\Games\<id>` (`gameName`, `exe`, `workingDir`; `dependsOn` — дополнение, пропускаем). Чтение HKLM не требует прав администратора. Запуск — exe напрямую.
-- Battle.net хранит установленное в `product.db` (protobuf) — отложено.
+- Battle.net: список в `product.db` закрытый (protobuf), поэтому берём «Установка и удаление программ» (Uninstall в HKLM/HKCU): `Publisher` = Blizzard Entertainment, код продукта из `--uid=` в `UninstallString`. Запуск — `Battle.net.exe --exec="launch <код>"` по таблице кодов (`BattleNet.cs`); код неизвестен — просто открываем Battle.net (ТЗ, раздел 8).
 
 ## D-CAPTIONS. Подписи под плитками (26.10.2026)
 - Что играет — `Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager` (системные медиа-сеансы, только чтение). Источник сопоставляется с программой плитки по коду приложения (AUMID) или имени exe без регистра и знаков.
@@ -151,3 +151,14 @@
 ## D-MINIMIZE. «Свернуть» у окна с плитки (26.10.2026)
 - По событию сворачивания экран плиток сразу становится «поверх всех» (системная анимация сворачивания уходит под него), копия окна, которая всё время открытия стоит на весь экран под окном, уменьшается в плитку; через 300 мс окно тихо разворачивается под плитками, и экран плиток снова обычный.
 - Дополнительно пробуем выключить системную анимацию у окон плиток (`DWMWA_TRANSITIONS_FORCEDISABLED`); Windows может не разрешить это для чужого окна — тогда код ошибки в журнале, наша анимация всё равно поверх. При возврате к работе включаем обратно.
+
+## D-DND, реализация (27.10.2026)
+- Стратегия 1 — системное состояние оболочки «тихие часы» (WNF `WNF_SHEL_QUIETHOURS_ACTIVE_PROFILE_CHANGED`, `ntdll!NtUpdateWnfStateData`): профиль 1 «только приоритетные». Без прав администратора. Проверка — чтение состояния обратно (`NtQueryWnfStateData`) через 300 мс; итог пишется в журнал.
+- Почему не перезапуск `WpnUserService_*`: для остановки службы обычно нужны права администратора, а их не просим.
+- Стратегия 2 — если Windows режим не приняла: надпись «включить „Не беспокоить“» на «Тихом» экране открывает `ms-settings:notifications`, плюс одно уведомление у значка.
+- Прежнее значение — в `%AppData%\GigaRest\dnd-before.txt`; возвращаем при выходе из отдыха (и при выходе из программы), файл удаляем.
+- Не подтверждено на Windows 11 24H2 — проверить у Романа (docs/manual-tests.md).
+
+## D-WATCH и D-LISTEN (27.10.2026)
+- «Слушать» — `GlobalSystemMediaTransportControlsSessionManager.GetCurrentSession()`, кнопки — `TrySkipPreviousAsync`, `TryTogglePlayPauseAsync`, `TrySkipNextAsync` (как медиаклавиши).
+- «Смотреть» — файлы видео в папке с фильмами (по умолчанию «Видео»), до двух уровней вложенности, без скрытых и системных, без «sample» и файлов меньше 5 МБ. Открытие — `UseShellExecute`, то есть плеером по умолчанию. «Смотреть позже» — ссылка `youtube.com/playlist?list=WL` в браузере по умолчанию: GigaRest сам в сеть не ходит.

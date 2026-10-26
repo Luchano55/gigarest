@@ -239,7 +239,20 @@ public sealed partial class App : Application, IXamlMetadataProvider
             };
             _quiet.ReturnRequested += () => _ = ReturnToWorkAsync();
             _quiet.PlayRequested += PlayGame;
+            _quiet.DndClicked += DoNotDisturb.OpenSettings;
+            TurnOnDoNotDisturb(_quiet);
             LoadGames(_quiet);
+            LoadFilms(_quiet);
+            _quiet.FilmRequested += OpenFilm;
+            _quiet.WatchLaterRequested += () => OpenShell("https://www.youtube.com/playlist?list=WL");
+            _quiet.OpenFilmsFolderRequested += () =>
+            {
+                var folder = FilmsFolder;
+                try { Directory.CreateDirectory(folder); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { Log.Warn("Папка с фильмами: " + ex.Message); }
+                var psi = new System.Diagnostics.ProcessStartInfo("explorer.exe") { UseShellExecute = false };
+                psi.ArgumentList.Add(folder);
+                System.Diagnostics.Process.Start(psi)?.Dispose();
+            };
             _quiet.DetailsRequested += () => { _quiet?.HideSummary(); _window?.Present(); };
             _quiet.ShowOn(primary);
             _window?.AppWindow.Hide();
@@ -316,6 +329,7 @@ public sealed partial class App : Application, IXamlMetadataProvider
     private void ExitRestScreens()
     {
         _tray?.UnregisterHotkey(HotkeyTiles);
+        new DoNotDisturb(_paths.Root).Restore();
         if (_windowEvents is not null)
         {
             _windowEvents.Minimized -= OnTileMinimized;
@@ -381,6 +395,76 @@ public sealed partial class App : Application, IXamlMetadataProvider
             try { games = GigaRest.Core.Games.GameLibraries.Merge(GameSources.FindInstalled(), played); }
             catch (Exception ex) { Log.Error("Игры", ex); games = []; }
             _queue.TryEnqueue(() => { if (_quiet == quiet) quiet.SetGames(games); });
+        });
+    }
+
+    private string FilmsFolder => string.IsNullOrWhiteSpace(_settings.FilmsFolder) ? GigaRest.Core.Media.FilmLibrary.DefaultFolder() : _settings.FilmsFolder!;
+
+    // Папка с фильмами читается в фоне, как и игры.
+    private void LoadFilms(QuietWindow quiet)
+    {
+        var folder = FilmsFolder;
+        var opened = new Dictionary<string, DateTime>(_settings.FilmsOpened);
+        _ = Task.Run(() =>
+        {
+            List<GigaRest.Core.Media.Film> films;
+            try { films = GigaRest.Core.Media.FilmLibrary.Scan(folder); }
+            catch (Exception ex) { Log.Error("Фильмы", ex); films = []; }
+            GigaRest.Core.Media.Film? last = null;
+            foreach (var (path, _) in opened.OrderByDescending(p => p.Value))
+            {
+                if (!File.Exists(path)) continue;
+                var info = new FileInfo(path);
+                last = new GigaRest.Core.Media.Film(path, GigaRest.Core.Media.FilmLibrary.Title(Path.GetFileNameWithoutExtension(path)), info.LastWriteTimeUtc, info.Length);
+                break;
+            }
+            Log.Info($"Фильмы: {films.Count}");
+            _queue.TryEnqueue(() => { if (_quiet == quiet) quiet.SetFilms(films, last); });
+        });
+    }
+
+    private void OpenFilm(GigaRest.Core.Media.Film film)
+    {
+        if (OpenShell(film.Path) is { } error)
+        {
+            _quiet?.ShowSummary($"«{film.Name}» не открылся: {error}", hasProblems: true);
+            return;
+        }
+        _settings.FilmsOpened[film.Path] = DateTime.UtcNow;
+        // Помним только последние 20.
+        foreach (var old in _settings.FilmsOpened.OrderByDescending(p => p.Value).Skip(20).Select(p => p.Key).ToList()) _settings.FilmsOpened.Remove(old);
+        SaveSettings();
+    }
+
+    /// <summary>Открыть файл или ссылку так, как открыла бы сама Windows (плеер, браузер по умолчанию).</summary>
+    private static string? OpenShell(string target)
+    {
+        try
+        {
+            using var _ = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(target) { UseShellExecute = true });
+            return null;
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException or FileNotFoundException)
+        {
+            Log.Warn("Открыть: " + ex.Message);
+            return ex.Message;
+        }
+    }
+
+    // «Не беспокоить» — в фоне: Windows подтверждает режим не сразу.
+    private void TurnOnDoNotDisturb(QuietWindow quiet)
+    {
+        if (!_settings.DoNotDisturb) { quiet.SetDnd(null); return; }
+        var dnd = new DoNotDisturb(_paths.Root);
+        _ = Task.Run(() =>
+        {
+            var on = dnd.TurnOn();
+            _queue.TryEnqueue(() =>
+            {
+                if (_quiet != quiet) return;
+                quiet.SetDnd(on);
+                if (!on) _tray?.ShowBalloon("Не беспокоить", "Windows не дала включить режим сама. Щёлкните «включить „Не беспокоить“» вверху экрана.");
+            });
         });
     }
 
@@ -563,6 +647,8 @@ public sealed partial class App : Application, IXamlMetadataProvider
                 _settings.ReturnSchedule = r.Schedule;
                 _settings.RestOffer = r.RestOffer;
                 _settings.ConfirmBeforeRest = r.ConfirmBeforeRest;
+                _settings.DoNotDisturb = r.DoNotDisturb;
+                _settings.FilmsFolder = string.IsNullOrWhiteSpace(r.FilmsFolder) ? null : r.FilmsFolder.Trim();
                 var hotkeyChanged = r.Hotkey != _settings.Hotkey;
                 _settings.Hotkey = r.Hotkey;
                 _settings.TilesHotkey = r.TilesHotkey;

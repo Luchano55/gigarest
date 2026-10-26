@@ -45,6 +45,12 @@ public sealed class AppSettings
     public string? MyScenesFolder { get; set; }
     /// <summary>Когда игру запускали из «Играть» (код игры → время, UTC): Epic и GOG сами этого не хранят.</summary>
     public Dictionary<string, DateTime> GamesPlayed { get; set; } = [];
+    /// <summary>Папка с фильмами для «Смотреть»; пусто — «Видео» пользователя.</summary>
+    public string? FilmsFolder { get; set; }
+    /// <summary>Какие фильмы открывали из «Смотреть» (путь → время, UTC) — для «Продолжить».</summary>
+    public Dictionary<string, DateTime> FilmsOpened { get; set; } = [];
+    /// <summary>На время отдыха включать «Не беспокоить» (только приоритетные уведомления).</summary>
+    public bool DoNotDisturb { get; set; } = true;
     /// <summary>Показывать окно «Переход в отдых». false — переходить сразу, без вопросов.</summary>
     public bool ConfirmBeforeRest { get; set; } = true;
     /// <summary>Сколько ждать, пока программа закроется (вопросы «Сохранить?» не считаются).</summary>

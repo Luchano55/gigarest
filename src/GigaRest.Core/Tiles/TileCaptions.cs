@@ -58,6 +58,25 @@ public static partial class TileCaptions
         return false;
     }
 
+    /// <summary>Понятное имя источника музыки: «ru.yandex.desktop.music» → «Яндекс Музыка», «chrome.exe» → «Chrome».</summary>
+    public static string MediaSourceName(string? aumid)
+    {
+        if (string.IsNullOrWhiteSpace(aumid)) return "";
+        var s = Squash(aumid);
+        if ((s.Contains("yandex") && s.Contains("music")) || s.Contains("яндексмузык")) return "Яндекс Музыка";
+        if (s.Contains("chrome")) return "Chrome";
+        if (s.Contains("zen")) return "Zen";
+        if (s.Contains("firefox")) return "Firefox";
+        if (s.Contains("msedge")) return "Edge";
+        if (s.Contains("telegram")) return "Telegram";
+        if (s.Contains("spotify")) return "Spotify";
+        var name = aumid.Split('!')[0].Split('\\').Last();
+        name = StripExe(name);
+        var dot = name.LastIndexOf('.');
+        if (dot >= 0 && dot < name.Length - 1 && !name.Contains(' ')) name = name[(dot + 1)..];
+        return name.Length > 0 ? char.ToUpper(name[0]) + name[1..] : "";
+    }
+
     private static string StripExe(string id) => id.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ? id[..^4] : id;
 
     private static string Squash(string s) => new(s.ToLowerInvariant().Where(char.IsLetterOrDigit).ToArray());

@@ -19,9 +19,17 @@
 
 ![Тихий экран](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/claude-system-management-requirements-nobkxi/11-tihiy.png)
 
-«Играть» — установленные игры из Steam, Epic и GOG, недавние сверху; щелчок запускает игру. «Продолжить» — последняя игра.
+«Играть» — установленные игры из Steam, Epic, GOG и Battle.net, недавние сверху; щелчок запускает игру. «Продолжить» — последняя игра и последний фильм.
 
 ![Играть](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/claude-system-management-requirements-nobkxi/17-igrat.png)
+
+«Слушать» — что играет сейчас и кнопки «назад», «играть/пауза», «дальше». «Смотреть» — «Смотреть позже» на YouTube и видео из вашей папки с фильмами.
+
+![Слушать](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/claude-system-management-requirements-nobkxi/19-slushat.png)
+
+![Смотреть](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/claude-system-management-requirements-nobkxi/20-smotret.png)
+
+На время отдыха включается «Не беспокоить»: приходят только приоритетные уведомления. После отдыха — как было.
 
 ![Плитки на втором мониторе](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/claude-system-management-requirements-nobkxi/12-plitki.png)
 
