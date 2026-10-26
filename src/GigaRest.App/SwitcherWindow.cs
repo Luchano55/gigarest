@@ -63,6 +63,8 @@ public sealed class SwitcherWindow : Window
     public event Action<string, bool>? TerminateRequested;
 
     public IReadOnlyList<RunningProgram> Programs { get; private set; } = [];
+    /// <summary>Включено ли «Не беспокоить» на время отдыха (настройка) — для подписи.</summary>
+    public bool DoNotDisturb { get; set; } = true;
     /// <summary>Пробный режим: в списке только тестовые окна.</summary>
     public bool IsTest { get; private set; }
     public FrameworkElement Root => _root;
@@ -72,74 +74,76 @@ public sealed class SwitcherWindow : Window
         Title = "GigaRest";
         _root = new Grid
         {
-            Background = Brush(PageBg),
-            Padding = new Thickness(56, 44, 56, 44),
-            ColumnSpacing = 48,
+            Background = Brush("#F3F3F3"),
+            Padding = new Thickness(40, 32, 40, 32),
+            ColumnSpacing = 32,
             RequestedTheme = ElementTheme.Light,
         };
-        _root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.15, GridUnitType.Star) });
         _root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        _root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.1, GridUnitType.Star) });
 
         // ---------- левая колонка ----------
-        var left = new StackPanel { Spacing = 26 };
-        var head = new StackPanel { Spacing = 8 };
-        var kicker = _kicker = Text("ОДНА КНОПКА", 13, Muted, FontWeights.Bold);
-        kicker.CharacterSpacing = 120;
-        _headline = Text("Работа → Отдых", 40, Ink, FontWeights.ExtraBold, wrap: true);
-        _lead = Text("", 16, Lead, wrap: true);
-        _lead.MaxWidth = 600;
+        var left = new StackPanel { Spacing = 20 };
+        var head = new StackPanel { Spacing = 6 };
+        var kicker = _kicker = Text("ОДНА КНОПКА", 12, Muted, FontWeights.SemiBold);
+        kicker.CharacterSpacing = 80;
+        _headline = Text("Работа → Отдых", 28, Ink, FontWeights.SemiBold, wrap: true);
+        _lead = Text("", 14, Lead, wrap: true);
+        _lead.MaxWidth = 560;
         _lead.HorizontalAlignment = HorizontalAlignment.Left;
-        _lead.LineHeight = 24;
+        _lead.LineHeight = 20;
         head.Children.Add(kicker);
         head.Children.Add(_headline);
         head.Children.Add(_lead);
         left.Children.Add(head);
 
         // Мониторы
-        var monitors = new Grid { ColumnSpacing = 20 };
-        monitors.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.4, GridUnitType.Star) });
-        monitors.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        _mainLabel = Text("Рабочий стол", 18, Colors.White, FontWeights.Bold);
+        var monitors = new Grid { ColumnSpacing = 16 };
+        monitors.ColumnDefinitions.Add(new ColumnDefinition());
+        monitors.ColumnDefinitions.Add(new ColumnDefinition());
+        _mainLabel = Text("Рабочий стол", 14, Colors.White, FontWeights.SemiBold);
         _mainLabel.HorizontalAlignment = HorizontalAlignment.Center;
         _mainLabel.VerticalAlignment = VerticalAlignment.Center;
-        _mainScreen = Screen(_mainLabel, 230);
-        var mainFig = Figure(_mainScreen, Text("Основной монитор", 13, Muted));
+        _mainScreen = Screen(_mainLabel, 168);
+        var mainFig = Figure(_mainScreen, Text("Основной монитор", 12, Muted));
         _secondScreen = new Grid { RowSpacing = 6, ColumnSpacing = 6, Padding = new Thickness(6) };
         _secondScreen.RowDefinitions.Add(new RowDefinition());
         _secondScreen.RowDefinitions.Add(new RowDefinition());
         _secondScreen.ColumnDefinitions.Add(new ColumnDefinition());
         _secondScreen.ColumnDefinitions.Add(new ColumnDefinition());
-        var second = Screen(_secondScreen, 164);
-        second.Background = Brush("#E9EBF2");
-        _secondCaption = Text("Второй монитор", 13, Muted, wrap: true);
+        var second = Screen(_secondScreen, 168);
+        second.Background = Brush("#E4E6ED");
+        _secondCaption = Text("Второй монитор", 12, Muted, wrap: true);
         var secondFig = Figure(second, _secondCaption);
-        secondFig.VerticalAlignment = VerticalAlignment.Bottom;
         Grid.SetColumn(secondFig, 1);
         monitors.Children.Add(mainFig);
         monitors.Children.Add(secondFig);
         left.Children.Add(monitors);
 
         // Три карточки
-        var cards = new Grid { ColumnSpacing = 16 };
+        // Три цифры — одной карточкой, как в «Параметрах» Windows.
+        var cards = new Grid { ColumnSpacing = 1 };
         for (var i = 0; i < 3; i++) cards.ColumnDefinitions.Add(new ColumnDefinition());
-        (_ramTitle, _ramValue) = (Text("Оперативная память", 13, Muted, wrap: true), Text("", 26, Ink, FontWeights.ExtraBold, wrap: true));
-        _dndValue = Text("", 26, Ink, FontWeights.ExtraBold, wrap: true);
-        _secondValue = Text("", 26, Ink, FontWeights.ExtraBold, wrap: true);
+        (_ramTitle, _ramValue) = (Text("Освободится памяти", 12, Muted, wrap: true), Text("", 18, Ink, FontWeights.SemiBold, wrap: true));
+        _dndValue = Text("", 18, Ink, FontWeights.SemiBold, wrap: true);
+        _secondValue = Text("", 18, Ink, FontWeights.SemiBold, wrap: true);
         cards.Children.Add(StatCard(_ramTitle, _ramValue, 0));
-        cards.Children.Add(StatCard(Text("Уведомления", 13, Muted, wrap: true), _dndValue, 1));
-        cards.Children.Add(StatCard(Text("Второй монитор", 13, Muted, wrap: true), _secondValue, 2));
-        left.Children.Add(cards);
+        cards.Children.Add(StatCard(Text("Уведомления", 12, Muted, wrap: true), _dndValue, 1));
+        cards.Children.Add(StatCard(Text("Плитки на втором мониторе", 12, Muted, wrap: true), _secondValue, 2));
+        left.Children.Add(CardBorder(cards, radius: 8, padding: 0));
 
-        _goText = Text("Перейти в отдых", 17, Colors.White, FontWeights.Bold);
+        _goText = Text("Перейти в отдых", 15, Colors.White, FontWeights.SemiBold);
         _go = ColoredButton(_goText, Accent, AccentDark, Colors.White);
+        _go.Padding = new Thickness(20, 11, 20, 11);
+        _go.CornerRadius = new CornerRadius(8);
         _go.Click += (_, _) => OnGo();
         left.Children.Add(_go);
-        _snooze = new Button { Content = "Через 15 минут", HorizontalAlignment = HorizontalAlignment.Stretch, Padding = new Thickness(16, 12, 16, 12), CornerRadius = new CornerRadius(16), Visibility = Visibility.Collapsed };
+        _snooze = new Button { Content = "Через 15 минут", HorizontalAlignment = HorizontalAlignment.Stretch, Padding = new Thickness(16, 9, 16, 9), CornerRadius = new CornerRadius(8), Visibility = Visibility.Collapsed };
         _snooze.Click += (_, _) => { _snooze.Visibility = Visibility.Collapsed; SnoozeRequested?.Invoke(); AppWindow.Hide(); };
         left.Children.Add(_snooze);
 
-        _notice = Text("", 14, Lead, wrap: true);
-        _notice.LineHeight = 21;
+        _notice = Text("", 13, Lead, wrap: true);
+        _notice.LineHeight = 19;
         left.Children.Add(_notice);
         var version = typeof(SwitcherWindow).Assembly
             .GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
@@ -151,21 +155,21 @@ public sealed class SwitcherWindow : Window
         _root.Children.Add(leftScroll);
 
         // ---------- правая колонка ----------
-        var panel = new Grid { RowSpacing = 16 };
+        var panel = new Grid { RowSpacing = 12 };
         panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         panel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
         var header = new StackPanel { Spacing = 4 };
-        _panelTitle = Text("Что будет с программами", 20, Ink, FontWeights.ExtraBold, wrap: true);
-        _panelHint = Text("щёлкните, чтобы поменять", 13, Muted, wrap: true);
+        _panelTitle = Text("Что будет с программами", 20, Ink, FontWeights.SemiBold, wrap: true);
+        _panelHint = Text("щёлкните, чтобы поменять", 12, Muted, wrap: true);
         header.Children.Add(_panelTitle);
         header.Children.Add(_panelHint);
-        _choose = new HyperlinkButton { Content = "Выбрать рабочие программы, в том числе незапущенные…", Padding = new Thickness(0, 4, 0, 0), FontSize = 13 };
+        _choose = new HyperlinkButton { Content = "Выбрать рабочие программы, в том числе незапущенные…", Padding = new Thickness(0, 4, 0, 0), FontSize = 12 };
         _choose.Click += (_, _) => ProgramsRequested?.Invoke();
         header.Children.Add(_choose);
-        _test = new HyperlinkButton { Content = "Попробовать на тестовых окнах — ваши программы не тронем", Padding = new Thickness(0, 0, 0, 0), FontSize = 13 };
+        _test = new HyperlinkButton { Content = "Попробовать на тестовых окнах — ваши программы не тронем", Padding = new Thickness(0, 0, 0, 0), FontSize = 12 };
         _test.Click += (_, _) => TestRequested?.Invoke();
         header.Children.Add(_test);
         panel.Children.Add(header);
@@ -181,18 +185,18 @@ public sealed class SwitcherWindow : Window
         Grid.SetRow(_progressBox, 1);
         panel.Children.Add(_progressBox);
 
-        _list = new StackPanel { Spacing = 2 };
+        _list = new StackPanel { Spacing = 0 };
         var scroll = new ScrollViewer { Content = _list, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled };
         Grid.SetRow(scroll, 2);
         panel.Children.Add(scroll);
 
         _panelNote = Text("Закрываем вежливо, как крестиком: если где-то не сохранено — программа спросит сама. " +
-                          "Кнопка «Вернуться к работе» запустит закрытое обратно.", 13, Muted, wrap: true);
-        _panelNote.LineHeight = 20;
+                          "Кнопка «Вернуться к работе» запустит закрытое обратно.", 12, Muted, wrap: true);
+        _panelNote.LineHeight = 18;
         Grid.SetRow(_panelNote, 3);
         panel.Children.Add(_panelNote);
 
-        var panelCard = CardBorder(panel, radius: 24, padding: 28);
+        var panelCard = CardBorder(panel, radius: 8, padding: 20);
         Grid.SetColumn(panelCard, 1);
         _root.Children.Add(panelCard);
 
@@ -224,7 +228,7 @@ public sealed class SwitcherWindow : Window
             : "Нажмите кнопку — рабочие программы закроются и освободят память, " +
               "на втором мониторе останется только то, что вы разрешили.";
         SetMainScreen(rest: false);
-        _dndValue.Text = "Как сейчас";
+        _dndValue.Text = DoNotDisturb ? "Не беспокоить" : "Как сейчас";
         _goText.Text = "Перейти в отдых";
         SetGo(enabled: true, dark: false);
         _notice.Text = notice ?? "";
@@ -380,55 +384,74 @@ public sealed class SwitcherWindow : Window
             _list.Children.Add(Text("Открытых программ нет.", 14, Muted));
             return;
         }
-        foreach (var p in Programs)
-            _list.Children.Add(PlanRow(p));
+        for (var i = 0; i < Programs.Count; i++)
+        {
+            if (i > 0) _list.Children.Add(Divider());
+            _list.Children.Add(PlanRow(Programs[i]));
+        }
     }
 
+    private static Border Divider() => new() { Height = 1, Background = Brush("#ECECEF"), Margin = new Thickness(52, 0, 0, 0) };
+
+    private static readonly (ProgramAction Action, string Text)[] Choices =
+    [
+        (ProgramAction.Close, "Закрыть"),
+        (ProgramAction.SecondMonitor, "На второй монитор"),
+        (ProgramAction.Keep, "Не трогать"),
+    ];
+
+    /// <summary>Строка программы в стиле «Параметров» Windows: значок, имя, окна и память, выбор действия.</summary>
     private UIElement PlanRow(RunningProgram p)
     {
-        var box = new StackPanel();
-        var grid = new Grid { ColumnSpacing = 14 };
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(36) });
+        var box = new StackPanel { Padding = new Thickness(8, 6, 4, 6) };
+        var grid = new Grid { ColumnSpacing = 12, MinHeight = 40 };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(32) });
         grid.ColumnDefinitions.Add(new ColumnDefinition());
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
-        grid.Children.Add(Avatar(p.DisplayName, p.Id));
-        var names = new StackPanel { Spacing = 2, VerticalAlignment = VerticalAlignment.Center };
-        names.Children.Add(Text(p.DisplayName, 15, Ink, FontWeights.Bold, wrap: true));
-        names.Children.Add(Text(p.IsElevated ? "от администратора — закроете только вы" : p.Note, 12, Muted));
+        var icon = AppIcon(p.DisplayName, p.Id, p.ExePath, 28);
+        icon.VerticalAlignment = VerticalAlignment.Center;
+        grid.Children.Add(icon);
+        var names = new StackPanel { Spacing = 1, VerticalAlignment = VerticalAlignment.Center };
+        names.Children.Add(Text(p.DisplayName, 14, Ink));
+        var detail = p.IsElevated ? "от администратора — закроете только вы" : $"{p.Note} · {Sizes.Format(p.PrivateBytes)}";
+        names.Children.Add(Text(detail, 12, Muted));
         Grid.SetColumn(names, 1);
         grid.Children.Add(names);
-        var ram = Text(Sizes.Format(p.PrivateBytes), 12, Muted);
-        ram.VerticalAlignment = VerticalAlignment.Center;
-        Grid.SetColumn(ram, 2);
-        grid.Children.Add(ram);
-        var badge = Badge(p.Action);
-        Grid.SetColumn(badge, 3);
-        grid.Children.Add(badge);
 
-        var row = RowButton(grid);
-        row.Click += (_, _) =>
+        var choice = new ComboBox { Width = 190, VerticalAlignment = VerticalAlignment.Center, FontSize = 13 };
+        var choices = p.IsBackground
+            ? new[] { (ProgramAction.Close, "Завершить в отдыхе"), (ProgramAction.Keep, "Не трогать") }
+            : Choices;
+        foreach (var (action, text) in choices) choice.Items.Add(new ComboBoxItem { Content = text, Tag = action });
+        choice.SelectedItem = choice.Items.Cast<ComboBoxItem>().FirstOrDefault(i => (ProgramAction)i.Tag == p.Action) ?? choice.Items[^1];
+        choice.SelectionChanged += (_, _) =>
         {
-            p.Action = p.IsBackground
-                ? (p.Action == ProgramAction.Close ? ProgramAction.Keep : ProgramAction.Close)
-                : Next(p.Action);
-            ActionChanged?.Invoke(p);
+            if (choice.SelectedItem is not ComboBoxItem { Tag: ProgramAction action } || action == p.Action) return;
+            if (action == ProgramAction.SecondMonitor && TilePlan.Ordered(Programs).Count() >= TilePlan.Max)
+            {
+                _notice.Text = "На втором мониторе уже четыре плитки — сначала уберите одну (крестик на плитке).";
+                choice.SelectedItem = choice.Items.Cast<ComboBoxItem>().First(i => (ProgramAction)i.Tag == p.Action);
+                return;
+            }
+            SetAction(p, action);
             var index = _list.Children.IndexOf(box);
-            if (index >= 0) _list.Children[index] = PlanRow(p);
-            RefreshForecast();
+            if (index >= 0) _list.Children[index] = PlanRow(p); // галочка «завершить» появляется и пропадает
         };
-        box.Children.Add(row);
+        Grid.SetColumn(choice, 2);
+        grid.Children.Add(choice);
+        box.Children.Add(grid);
 
-        // Галочка «можно завершать» — для программ, которые прячутся в трей.
+        // Галочка «завершать» — для программ, которые на крестик уходят в значок у часов.
         if (p.Action == ProgramAction.Close && !p.IsBackground && (p.Known?.HidesToTray == true || p.Windows.Count == 0))
         {
             var check = new CheckBox
             {
-                Content = Text("если вместо закрытия уйдёт в значок у часов — завершить", 13, Lead, wrap: true),
+                Content = Text("если вместо закрытия уйдёт в значок у часов — завершить", 12, Lead, wrap: true),
                 IsChecked = p.AllowTerminate,
-                Margin = new Thickness(64, -4, 0, 4),
-                MinHeight = 28,
+                Margin = new Thickness(44, 2, 0, 0),
+                MinHeight = 24,
+                Padding = new Thickness(6, 0, 0, 0),
             };
             check.Checked += (_, _) => { p.AllowTerminate = true; ActionChanged?.Invoke(p); };
             check.Unchecked += (_, _) => { p.AllowTerminate = false; ActionChanged?.Invoke(p); };
@@ -439,44 +462,19 @@ public sealed class SwitcherWindow : Window
         return box;
     }
 
-    private static ProgramAction Next(ProgramAction a) => a switch
+    /// <summary>Новое действие программы; плитки второго монитора перенумеровываются, выбор запоминается.</summary>
+    private void SetAction(RunningProgram p, ProgramAction action)
     {
-        ProgramAction.Close => ProgramAction.SecondMonitor,
-        ProgramAction.SecondMonitor => ProgramAction.Keep,
-        _ => ProgramAction.Close,
-    };
-
-    private static Border Badge(ProgramAction a)
-    {
-        var (text, bg, fg) = a switch
-        {
-            ProgramAction.Close => ("Закрыть", "#FDE8E8", "#B42318"),
-            ProgramAction.SecondMonitor => ("Второй монитор", "#E6EDFF", "#2948B8"),
-            _ => ("Оставить", "#EAF5EE", "#1E7A44"),
-        };
-        return new Border
-        {
-            Background = Brush(bg),
-            CornerRadius = new CornerRadius(999),
-            Padding = new Thickness(12, 6, 12, 6),
-            VerticalAlignment = VerticalAlignment.Center,
-            Child = Text(text, 12, Hex(fg), FontWeights.Bold),
-        };
+        var tilesBefore = TilePlan.Ordered(Programs).ToList();
+        p.Action = action;
+        if (action == ProgramAction.SecondMonitor) { tilesBefore.Add(p); TilePlan.Renumber(tilesBefore); }
+        else { p.TileOrder = null; tilesBefore.Remove(p); TilePlan.Renumber(tilesBefore); }
+        foreach (var t in tilesBefore.Append(p).Distinct()) ActionChanged?.Invoke(t);
+        _notice.Text = "";
+        RefreshForecast();
     }
 
-    private static Border Avatar(string name, string id)
-    {
-        var letter = Text(name.Length > 0 ? char.ToUpper(name[0]).ToString() : "?", 16, Colors.White, FontWeights.Bold);
-        letter.HorizontalAlignment = HorizontalAlignment.Center;
-        letter.VerticalAlignment = VerticalAlignment.Center;
-        return new Border
-        {
-            Width = 36, Height = 36,
-            CornerRadius = new CornerRadius(10),
-            Background = Brush(ProgramColor(id)),
-            Child = letter,
-        };
-    }
+    private static Border Avatar(string name, string id) => AppIcon(name, id, null, 28);
 
     /// <summary>Программа спряталась в трей: «Завершить» — завершить сейчас и разрешить в следующий раз.</summary>
     private UIElement TrayRow(CloseResult r)
@@ -484,7 +482,7 @@ public sealed class SwitcherWindow : Window
         var box = new StackPanel();
         box.Children.Add(StatusRow(r.DisplayName, r.ProgramId, "в трее", Hex("#B26A00"),
             "Спряталась в трей и работает в фоне. «Завершить» — завершим сейчас и запомним, что её можно завершать."));
-        var button = new Button { Content = "Завершить", Margin = new Thickness(64, -4, 0, 8), Padding = new Thickness(16, 6, 16, 6), CornerRadius = new CornerRadius(999) };
+        var button = new Button { Content = "Завершить", Margin = new Thickness(52, 0, 0, 8), Padding = new Thickness(14, 5, 14, 5), CornerRadius = new CornerRadius(6) };
         button.Click += (_, _) =>
         {
             TerminateRequested?.Invoke(r.ProgramId, false);
@@ -500,7 +498,7 @@ public sealed class SwitcherWindow : Window
     {
         var box = new StackPanel();
         box.Children.Add(StatusRow(r.DisplayName, r.ProgramId, "осталась", Hex("#B42318"), r.Message));
-        var button = new Button { Content = "Завершить принудительно — несохранённое пропадёт", Margin = new Thickness(64, -4, 0, 8), Padding = new Thickness(16, 6, 16, 6), CornerRadius = new CornerRadius(999) };
+        var button = new Button { Content = "Завершить принудительно — несохранённое пропадёт", Margin = new Thickness(52, 0, 0, 8), Padding = new Thickness(14, 5, 14, 5), CornerRadius = new CornerRadius(6) };
         button.Click += (_, _) =>
         {
             TerminateRequested?.Invoke(r.ProgramId, true);
@@ -513,13 +511,13 @@ public sealed class SwitcherWindow : Window
 
     private static UIElement StatusRow(string name, string id, string status, Color statusColor, string? detail = null)
     {
-        var grid = new Grid { ColumnSpacing = 14, Padding = new Thickness(14, 10, 14, 10) };
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(36) });
+        var grid = new Grid { ColumnSpacing = 12, Padding = new Thickness(8, 8, 8, 8) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(32) });
         grid.ColumnDefinitions.Add(new ColumnDefinition());
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.Children.Add(Avatar(name, id));
         var names = new StackPanel { Spacing = 2, VerticalAlignment = VerticalAlignment.Center };
-        names.Children.Add(Text(name, 15, Ink, FontWeights.Bold));
+        names.Children.Add(Text(name, 14, Ink));
         if (detail is not null) names.Children.Add(Text(detail, 12, Muted, wrap: true));
         Grid.SetColumn(names, 1);
         grid.Children.Add(names);
@@ -538,31 +536,117 @@ public sealed class SwitcherWindow : Window
         _ramValue.Text = close.Count > 0 ? "≈" + Sizes.Format(close.Sum(p => p.PrivateBytes)) : "—";
         ToolTipService.SetToolTip(_ramValue, "Примерно освободится. Точную цифру покажем после перехода.");
 
-        var tiles = Programs.Where(p => p.Action == ProgramAction.SecondMonitor).ToList();
-        _secondValue.Text = !_hasSecondMonitor ? "нет" : tiles.Count == 0 ? "пусто" : tiles.Count.ToString();
-        _secondScreen.Children.Clear();
-        var i = 0;
-        foreach (var t in tiles.Take(4))
-        {
-            var tile = new Border
-            {
-                CornerRadius = new CornerRadius(6),
-                Background = Brush(ProgramColor(t.Id)),
-                Padding = new Thickness(8),
-                Child = new TextBlock
-                {
-                    Text = t.DisplayName, FontSize = 12, FontWeight = FontWeights.Bold, Foreground = Brush(Colors.White),
-                    VerticalAlignment = VerticalAlignment.Bottom, TextTrimming = TextTrimming.CharacterEllipsis,
-                },
-            };
-            Grid.SetRow(tile, i / 2);
-            Grid.SetColumn(tile, i % 2);
-            _secondScreen.Children.Add(tile);
-            i++;
-        }
+        var tiles = TilePlan.Ordered(Programs).ToList();
+        _secondValue.Text = !_hasSecondMonitor ? "нет монитора" : tiles.Count == 0 ? "нет" : $"{tiles.Count} из {TilePlan.Max}";
+        RenderSecondScreen(tiles);
         _secondCaption.Text = !_hasSecondMonitor
             ? "Второй монитор не подключён — разрешённые программы останутся как есть"
-            : "Второй монитор — " + (tiles.Count == 0 ? "пусто" : string.Join(", ", tiles.Take(4).Select(t => t.DisplayName)));
+            : tiles.Count == 0
+                ? "Второй монитор — пусто. «+» — поставить программу"
+                : "Второй монитор — перетащите плитку или щёлкните две, чтобы поменять местами";
+    }
+
+    private int _picked = -1; // плитка, выбранная первым щелчком (для обмена местами)
+
+    /// <summary>
+    /// Предпросмотр второго монитора: 2×2 места. Плитки можно перетаскивать или менять двумя щелчками,
+    /// «×» — убрать с монитора, «+» на пустом месте — поставить программу.
+    /// </summary>
+    private void RenderSecondScreen(IReadOnlyList<RunningProgram> tiles)
+    {
+        _secondScreen.Children.Clear();
+        for (var slot = 0; slot < TilePlan.Max; slot++)
+        {
+            var cell = slot < tiles.Count ? TileCell(tiles[slot], slot) : EmptyCell(slot);
+            Grid.SetRow(cell, slot / 2);
+            Grid.SetColumn(cell, slot % 2);
+            _secondScreen.Children.Add(cell);
+        }
+    }
+
+    private FrameworkElement TileCell(RunningProgram p, int slot)
+    {
+        var picked = slot == _picked;
+        var content = new Grid { Padding = new Thickness(8, 6, 4, 6), ColumnSpacing = 6 };
+        content.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        content.ColumnDefinitions.Add(new ColumnDefinition());
+        content.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var icon = AppIcon(p.DisplayName, p.Id, p.ExePath, 20);
+        icon.VerticalAlignment = VerticalAlignment.Center;
+        content.Children.Add(icon);
+        var name = Text(p.DisplayName, 12, Ink, FontWeights.SemiBold);
+        name.VerticalAlignment = VerticalAlignment.Center;
+        Grid.SetColumn(name, 1);
+        content.Children.Add(name);
+        var remove = new Button
+        {
+            Content = new FontIcon { Glyph = "\uE711", FontSize = 9 }, Padding = new Thickness(5), MinWidth = 0, MinHeight = 0,
+            Background = Brush(Colors.Transparent), BorderThickness = new Thickness(0), VerticalAlignment = VerticalAlignment.Top,
+        };
+        ToolTipService.SetToolTip(remove, "Убрать со второго монитора");
+        remove.Click += (_, _) => { _picked = -1; SetAction(p, ProgramAction.Keep); RenderPlanList(); };
+        Grid.SetColumn(remove, 2);
+        content.Children.Add(remove);
+
+        var cell = new Border
+        {
+            CornerRadius = new CornerRadius(6), Background = Brush(Colors.White),
+            BorderBrush = Brush(picked ? Accent : Hex("#D9DBE3")), BorderThickness = new Thickness(picked ? 2 : 1),
+            Child = content, CanDrag = true, AllowDrop = true,
+        };
+        ToolTipService.SetToolTip(cell, p.DisplayName);
+        cell.Tapped += (_, e) =>
+        {
+            if (e.OriginalSource is FrameworkElement fe && IsInside(fe, remove)) return;
+            if (_picked < 0) _picked = slot;
+            else if (_picked == slot) _picked = -1;
+            else { Swap(_picked, slot); _picked = -1; }
+            RefreshForecast();
+        };
+        cell.DragStarting += (_, e) => { e.Data.SetText(slot.ToString()); e.Data.RequestedOperation = global::Windows.ApplicationModel.DataTransfer.DataPackageOperation.Move; };
+        cell.DragOver += (_, e) => { e.AcceptedOperation = global::Windows.ApplicationModel.DataTransfer.DataPackageOperation.Move; cell.BorderBrush = Brush(Accent); };
+        cell.DragLeave += (_, _) => cell.BorderBrush = Brush(Hex("#D9DBE3"));
+        cell.Drop += async (_, e) =>
+        {
+            if (!e.DataView.Contains(global::Windows.ApplicationModel.DataTransfer.StandardDataFormats.Text)) return;
+            if (int.TryParse(await e.DataView.GetTextAsync(), out var from)) { _picked = -1; Swap(from, slot); RefreshForecast(); }
+        };
+        return cell;
+    }
+
+    private static bool IsInside(FrameworkElement element, FrameworkElement container)
+    {
+        for (DependencyObject? d = element; d is not null; d = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetParent(d))
+            if (d == container) return true;
+        return false;
+    }
+
+    private FrameworkElement EmptyCell(int slot)
+    {
+        var candidates = Programs.Where(p => !p.IsBackground && p.Windows.Count > 0 && p.Action != ProgramAction.SecondMonitor).ToList();
+        var plus = new Button
+        {
+            Content = new FontIcon { Glyph = "\uE710", FontSize = 12, Foreground = Brush(Muted) },
+            HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Stretch,
+            Background = Brush("#80FFFFFF"), BorderBrush = Brush("#C9CCD8"), BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(6), IsEnabled = _hasSecondMonitor && candidates.Count > 0,
+        };
+        ToolTipService.SetToolTip(plus, "Поставить программу на это место");
+        var menu = new MenuFlyout();
+        foreach (var p in candidates)
+        {
+            var item = new MenuFlyoutItem { Text = p.DisplayName };
+            item.Click += (_, _) => { SetAction(p, ProgramAction.SecondMonitor); RenderPlanList(); };
+            menu.Items.Add(item);
+        }
+        plus.Flyout = menu;
+        return plus;
+    }
+
+    private void Swap(int a, int b)
+    {
+        TilePlan.Swap(Programs, a, b);
+        foreach (var t in TilePlan.Ordered(Programs)) ActionChanged?.Invoke(t);
     }
 
     // ---------- мелочи ----------
@@ -597,8 +681,7 @@ public sealed class SwitcherWindow : Window
             g.GradientStops.Add(new GradientStop { Color = Hex("#0F766E"), Offset = 1 });
             _mainScreen.Background = g;
             _mainLabel.Text = "Режим отдыха";
-            _dndValue.Text = "Позже";
-            ToolTipService.SetToolTip(_dndValue, "«Не беспокоить» появится на этапе 5");
+            _dndValue.Text = DoNotDisturb ? "Не беспокоить" : "Как сейчас";
         }
         else
         {
@@ -620,15 +703,15 @@ public sealed class SwitcherWindow : Window
     private static Border Screen(UIElement child, double height) => new()
     {
         Height = height,
-        CornerRadius = new CornerRadius(14),
-        BorderBrush = Brush(Ink),
-        BorderThickness = new Thickness(10),
+        CornerRadius = new CornerRadius(10),
+        BorderBrush = Brush("#2B2D36"),
+        BorderThickness = new Thickness(6),
         Child = child,
     };
 
     private static StackPanel Figure(UIElement screen, UIElement caption)
     {
-        var s = new StackPanel { Spacing = 10 };
+        var s = new StackPanel { Spacing = 8 };
         s.Children.Add(screen);
         s.Children.Add(caption);
         return s;
@@ -636,10 +719,14 @@ public sealed class SwitcherWindow : Window
 
     private static Border StatCard(TextBlock title, TextBlock value, int column)
     {
-        var s = new StackPanel { Spacing = 6 };
+        var s = new StackPanel { Spacing = 2 };
         s.Children.Add(title);
         s.Children.Add(value);
-        var card = CardBorder(s);
+        var card = new Border
+        {
+            Padding = new Thickness(16, 12, 16, 12), Child = s,
+            BorderBrush = Brush("#ECECEF"), BorderThickness = new Thickness(column > 0 ? 1 : 0, 0, 0, 0),
+        };
         Grid.SetColumn(card, column);
         return card;
     }

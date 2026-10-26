@@ -102,6 +102,46 @@ internal static class Ui
         return b;
     }
 
+    private static readonly Dictionary<string, Microsoft.UI.Xaml.Media.Imaging.BitmapImage?> Icons = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Квадратик программы: сразу — буква на её цвете, а когда Windows отдаст настоящий значок exe — значок.
+    /// </summary>
+    public static Border AppIcon(string name, string id, string? exePath, double size)
+    {
+        var letter = Text(name.Length > 0 ? char.ToUpper(name[0]).ToString() : "?", size * 0.45, Colors.White, FontWeights.SemiBold);
+        letter.HorizontalAlignment = HorizontalAlignment.Center;
+        letter.VerticalAlignment = VerticalAlignment.Center;
+        var box = new Border { Width = size, Height = size, CornerRadius = new CornerRadius(size / 4.5), Background = Brush(ProgramColor(id)), Child = letter };
+        if (!string.IsNullOrEmpty(exePath) && File.Exists(exePath)) _ = LoadIconAsync(box, exePath, size);
+        return box;
+    }
+
+    private static async Task LoadIconAsync(Border box, string path, double size)
+    {
+        try
+        {
+            if (!Icons.TryGetValue(path, out var bmp))
+            {
+                var file = await global::Windows.Storage.StorageFile.GetFileFromPathAsync(path);
+                using var thumb = await file.GetThumbnailAsync(global::Windows.Storage.FileProperties.ThumbnailMode.SingleItem, 64);
+                if (thumb is not null)
+                {
+                    bmp = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage();
+                    await bmp.SetSourceAsync(thumb);
+                }
+                Icons[path] = bmp;
+            }
+            if (bmp is null) return;
+            box.Background = Brush(Colors.Transparent);
+            box.Child = new Image { Source = bmp, Width = size, Height = size };
+        }
+        catch (Exception ex)
+        {
+            GigaRest.Core.Logging.Log.Warn("Значок программы: " + ex.Message);
+        }
+    }
+
     /// <summary>Цвет квадратика программы: свой для известных, для остальных — из палитры по имени.</summary>
     public static Color ProgramColor(string id)
     {

@@ -307,3 +307,30 @@ public class AppsTests
     [InlineData(600, 0, true)]
     public void WorthResuming(double pos, double duration, bool expected) => Assert.Equal(expected, Apps.WorthResuming(pos, duration));
 }
+
+public class TilePlanTests
+{
+    private static GigaRest.Core.Programs.RunningProgram P(string id, GigaRest.Core.Settings.ProgramAction a, int? order = null) => new()
+    {
+        Id = id, DisplayName = id, ExeName = id, Roots = [], Processes = [], Windows = [], Action = a, TileOrder = order,
+    };
+
+    [Fact]
+    public void OrderedBySavedPlaceThenList_AndSwap()
+    {
+        var list = new[]
+        {
+            P("claude", GigaRest.Core.Settings.ProgramAction.SecondMonitor),
+            P("chrome", GigaRest.Core.Settings.ProgramAction.Close),
+            P("telegram", GigaRest.Core.Settings.ProgramAction.SecondMonitor, 0),
+            P("zen", GigaRest.Core.Settings.ProgramAction.SecondMonitor),
+        };
+        Assert.Equal(["telegram", "claude", "zen"], GigaRest.Core.Programs.TilePlan.Ordered(list).Select(p => p.Id));
+
+        GigaRest.Core.Programs.TilePlan.Swap(list, 0, 2);
+
+        Assert.Equal(["zen", "claude", "telegram"], GigaRest.Core.Programs.TilePlan.Ordered(list).Select(p => p.Id));
+        Assert.Equal(0, list[3].TileOrder);
+        Assert.Null(list[1].TileOrder);
+    }
+}

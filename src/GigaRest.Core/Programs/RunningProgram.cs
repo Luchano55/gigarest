@@ -27,6 +27,10 @@ public sealed class RunningProgram
     public bool AllowTerminate { get; set; }
     /// <summary>Завершать принудительно, даже с открытыми окнами и вопросами (по галочке Романа).</summary>
     public bool ForceKill { get; set; }
+    /// <summary>Место плитки на втором мониторе (0–3); null — по порядку в списке.</summary>
+    public int? TileOrder { get; set; }
+    /// <summary>Путь к exe — для значка.</summary>
+    public string? ExePath => Roots.Select(r => r.ExePath).FirstOrDefault(p => !string.IsNullOrEmpty(p));
 
     /// <summary>Описание под названием: «2 окна», «в трее».</summary>
     public string Note => IsBackground ? "фоновый процесс" : Windows.Count == 0 ? "в трее" : Text.Sizes.Plural(Windows.Count, "окно", "окна", "окон");

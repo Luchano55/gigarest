@@ -789,6 +789,7 @@ public sealed partial class App : Application, IXamlMetadataProvider
                 _settings.RestOffer = r.RestOffer;
                 _settings.ConfirmBeforeRest = r.ConfirmBeforeRest;
                 _settings.DoNotDisturb = r.DoNotDisturb;
+                if (_window is not null) _window.DoNotDisturb = r.DoNotDisturb;
                 _settings.FilmsFolder = string.IsNullOrWhiteSpace(r.FilmsFolder) ? null : r.FilmsFolder.Trim();
                 _settings.UpdateChannel = r.UpdateChannel;
                 if (_updater is not null) _updater.Channel = GigaRest.Core.Updates.UpdateChannels.Resolve(r.UpdateChannel, GigaRest.Core.Updates.AppVersion.Display);
@@ -883,7 +884,7 @@ public sealed partial class App : Application, IXamlMetadataProvider
     {
         if (_window is null)
         {
-            _window = new SwitcherWindow();
+            _window = new SwitcherWindow { DoNotDisturb = _settings.DoNotDisturb };
             _window.ActionChanged += p =>
             {
                 ProgramScanner.Apply(_settings, p);

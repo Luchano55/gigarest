@@ -82,7 +82,7 @@ public sealed class RestSwitcher
         var session = _sessions.Load() ?? new RestSession { StartedUtc = _clock.UtcNow };
 
         var toClose = programs.Where(p => p.Action == ProgramAction.Close).ToList();
-        var toMove = programs.Where(p => p.Action == ProgramAction.SecondMonitor).ToList();
+        var toMove = TilePlan.Ordered(programs).ToList(); // в порядке плиток: первая — левая верхняя
 
         // 1. Запоминаем, как запустить обратно, — до закрытия. Файл переживёт сбой посередине.
         foreach (var p in toClose.Where(p => !p.IsElevated))
