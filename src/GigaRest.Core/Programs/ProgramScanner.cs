@@ -59,6 +59,7 @@ public static class ProgramScanner
                 AllowTerminate = setting?.AllowTerminate ?? false,
                 ForceKill = setting?.ForceKill ?? false,
                 TileOrder = setting?.TileOrder,
+                NoRelaunch = setting?.NoRelaunch ?? false,
             });
         }
 
@@ -130,5 +131,6 @@ public static class ProgramScanner
         s.AllowTerminate = program.AllowTerminate;
         s.ForceKill = program.ForceKill;
         s.TileOrder = program.Action == ProgramAction.SecondMonitor ? program.TileOrder : null;
+        s.NoRelaunch = program.Action == ProgramAction.Close && !program.IsBackground && program.NoRelaunch;
     }
 }

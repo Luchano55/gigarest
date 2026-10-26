@@ -29,6 +29,8 @@ public sealed class RunningProgram
     public bool ForceKill { get; set; }
     /// <summary>Место плитки на втором мониторе (0–3); null — по порядку в списке.</summary>
     public int? TileOrder { get; set; }
+    /// <summary>«Закрыть насовсем»: после отдыха не открывать.</summary>
+    public bool NoRelaunch { get; set; }
     /// <summary>Путь к exe — для значка.</summary>
     public string? ExePath => Roots.Select(r => r.ExePath).FirstOrDefault(p => !string.IsNullOrEmpty(p));
 

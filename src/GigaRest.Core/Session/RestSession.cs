@@ -28,6 +28,8 @@ public sealed class ClosedProgram
     public bool Gone { get; set; }
     /// <summary>Корневые процессы на момент закрытия. Если программа ушла в трей, а потом сама вышла, — тоже запускаем.</summary>
     public List<ProcessKey> Roots { get; set; } = [];
+    /// <summary>false — «закрыть насовсем»: при возврате к работе не открываем.</summary>
+    public bool Relaunch { get; set; } = true;
 }
 
 public sealed class MovedWindow

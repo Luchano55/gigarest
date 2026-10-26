@@ -229,6 +229,17 @@ public sealed class ProgramsWindow : Window
 
         if (r.Action == ProgramAction.Close && !r.IsBackground)
         {
+            var forever = new CheckBox
+            {
+                Content = Text("закрыть насовсем — не открывать снова после отдыха", 13, Lead, wrap: true),
+                IsChecked = r.NoRelaunch, Margin = new Thickness(64, -6, 0, 4), MinHeight = 28,
+            };
+            forever.Checked += (_, _) => r.NoRelaunch = true;
+            forever.Unchecked += (_, _) => r.NoRelaunch = false;
+            box.Children.Add(forever);
+        }
+        if (r.Action == ProgramAction.Close && !r.IsBackground)
+        {
             var force = new CheckBox
             {
                 Content = Text("завершать принудительно, даже если есть несохранённое — оно пропадёт", 13, Hex("#B42318"), wrap: true),

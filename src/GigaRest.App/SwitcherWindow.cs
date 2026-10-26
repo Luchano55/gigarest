@@ -393,11 +393,13 @@ public sealed class SwitcherWindow : Window
 
     private static Border Divider() => new() { Height = 1, Background = Brush("#ECECEF"), Margin = new Thickness(52, 0, 0, 0) };
 
-    private static readonly (ProgramAction Action, string Text)[] Choices =
+    // Действие и «насовсем» (не открывать после отдыха).
+    private static readonly (ProgramAction Action, bool Forever, string Text)[] Choices =
     [
-        (ProgramAction.Close, "Закрыть"),
-        (ProgramAction.SecondMonitor, "На второй монитор"),
-        (ProgramAction.Keep, "Не трогать"),
+        (ProgramAction.Close, false, "Закрыть на время отдыха"),
+        (ProgramAction.Close, true, "Закрыть насовсем"),
+        (ProgramAction.SecondMonitor, false, "На второй монитор"),
+        (ProgramAction.Keep, false, "Не трогать"),
     ];
 
     /// <summary>Строка программы в стиле «Параметров» Windows: значок, имя, окна и память, выбор действия.</summary>
@@ -419,21 +421,31 @@ public sealed class SwitcherWindow : Window
         Grid.SetColumn(names, 1);
         grid.Children.Add(names);
 
-        var choice = new ComboBox { Width = 190, VerticalAlignment = VerticalAlignment.Center, FontSize = 13 };
+        var choice = new ComboBox { Width = 214, VerticalAlignment = VerticalAlignment.Center, FontSize = 13 };
         var choices = p.IsBackground
-            ? new[] { (ProgramAction.Close, "Завершить в отдыхе"), (ProgramAction.Keep, "Не трогать") }
+            ? new[] { (ProgramAction.Close, false, "Завершить в отдыхе"), (ProgramAction.Keep, false, "Не трогать") }
             : Choices;
-        foreach (var (action, text) in choices) choice.Items.Add(new ComboBoxItem { Content = text, Tag = action });
-        choice.SelectedItem = choice.Items.Cast<ComboBoxItem>().FirstOrDefault(i => (ProgramAction)i.Tag == p.Action) ?? choice.Items[^1];
+        foreach (var (action, forever, text) in choices)
+        {
+            var item = new ComboBoxItem { Content = text, Tag = (action, forever) };
+            if (forever) ToolTipService.SetToolTip(item, "Закроем при переходе в отдых и не откроем при возврате к работе");
+            choice.Items.Add(item);
+        }
+        ComboBoxItem Current() => choice.Items.Cast<ComboBoxItem>().FirstOrDefault(i => i.Tag is (ProgramAction a, bool f) && a == p.Action && f == (p.Action == ProgramAction.Close && p.NoRelaunch))
+                                  ?? (ComboBoxItem)choice.Items[^1];
+        choice.SelectedItem = Current();
         choice.SelectionChanged += (_, _) =>
         {
-            if (choice.SelectedItem is not ComboBoxItem { Tag: ProgramAction action } || action == p.Action) return;
-            if (action == ProgramAction.SecondMonitor && TilePlan.Ordered(Programs).Count() >= TilePlan.Max)
+            if (choice.SelectedItem is not ComboBoxItem { Tag: (ProgramAction action, bool forever) }) return;
+            if (action == p.Action && forever == p.NoRelaunch) return;
+            if (action == ProgramAction.SecondMonitor && p.Action != ProgramAction.SecondMonitor && TilePlan.Ordered(Programs).Count() >= TilePlan.Max)
             {
                 _notice.Text = "На втором мониторе уже четыре плитки — сначала уберите одну (крестик на плитке).";
-                choice.SelectedItem = choice.Items.Cast<ComboBoxItem>().First(i => (ProgramAction)i.Tag == p.Action);
+                choice.SelectedItem = Current();
                 return;
             }
+            p.NoRelaunch = action == ProgramAction.Close && forever;
+            if (action == p.Action) { ActionChanged?.Invoke(p); return; }
             SetAction(p, action);
             var index = _list.Children.IndexOf(box);
             if (index >= 0) _list.Children[index] = PlanRow(p); // галочка «завершить» появляется и пропадает

@@ -92,7 +92,7 @@ public sealed class RestSwitcher
                 .OfType<LaunchSpec>()
                 .DistinctBy(l => l.Aumid ?? l.FileName + "\0" + string.Join("\0", l.Arguments))
                 .ToList();
-            if (launch.Count == 0)
+            if (launch.Count == 0 && !p.NoRelaunch)
                 problems.Add($"{p.DisplayName}: не удалось узнать, как её запустить обратно");
             session.Closed.RemoveAll(c => c.Id == p.Id);
             session.Closed.Add(new ClosedProgram
@@ -100,6 +100,7 @@ public sealed class RestSwitcher
                 Id = p.Id,
                 DisplayName = p.DisplayName,
                 Launch = launch,
+                Relaunch = !p.NoRelaunch,
                 Roots = p.Roots.Select(r => r.Key).ToList(),
                 Placements = p.Windows.Select(w => _desktop.GetPlacement(w.Handle)).OfType<WindowPlacementData>().ToList(),
             });
@@ -199,7 +200,7 @@ public sealed class RestSwitcher
         var launched = new List<string>();
         var failed = new List<string>();
         var toLaunch = session.Closed
-            .Where(c => c.Gone || c.Roots.Count > 0 && !c.Roots.Any(_desktop.IsAlive))
+            .Where(c => c.Relaunch && (c.Gone || c.Roots.Count > 0 && !c.Roots.Any(_desktop.IsAlive)))
             .ToList();
         var startedUtc = _clock.UtcNow;
         var index = 0;

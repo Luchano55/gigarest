@@ -38,6 +38,24 @@ public sealed class RestSwitcherTests : IDisposable
         _d.OnClose[window] = () => _d.Kill(pid);
 
     [Fact]
+    public async Task CloseForeverIsNotReopened()
+    {
+        _d.AddProcess("outlook.exe", 10, path: @"C:\Office\OUTLOOK.EXE");
+        ClosesPolitely(10, _d.AddWindow(10, "Входящие").Handle);
+        _d.AddProcess("chrome.exe", 11);
+        ClosesPolitely(11, _d.AddWindow(11, "Работа").Handle);
+        var programs = Scan();
+        foreach (var p in programs) p.Action = ProgramAction.Close;
+        programs.Single(p => p.Id == "outlook.exe").NoRelaunch = true;
+
+        await Switcher().GoToRestAsync(programs, null, default);
+        Switcher().ReturnToWork(null, default);
+
+        Assert.DoesNotContain(_d.Launched, l => l.FileName.EndsWith("OUTLOOK.EXE"));
+        Assert.Single(_d.Launched);
+    }
+
+    [Fact]
     public async Task FullCycleClosesMovesAndRestores()
     {
         AddSecondMonitor();

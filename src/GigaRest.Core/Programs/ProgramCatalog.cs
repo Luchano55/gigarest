@@ -17,6 +17,8 @@ public sealed class SelectorRow
     public bool AllowTerminate { get; set; }
     /// <summary>Завершать принудительно, даже если есть несохранённое.</summary>
     public bool ForceKill { get; set; }
+    /// <summary>«Закрыть насовсем»: после отдыха не открывать.</summary>
+    public bool NoRelaunch { get; set; }
     /// <summary>Фоновый процесс: варианты только «завершать в отдыхе» / «не трогать».</summary>
     public bool IsBackground { get; init; }
     public long PrivateBytes { get; init; }
@@ -63,7 +65,7 @@ public static class ProgramCatalog
             {
                 Id = p.Id, DisplayName = p.DisplayName, ExePath = p.Roots.FirstOrDefault()?.ExePath, IsRunning = true,
                 HidesToTray = p.Known?.HidesToTray == true || p.Windows.Count == 0,
-                Action = p.Action, AllowTerminate = p.AllowTerminate, ForceKill = p.ForceKill, IsBackground = p.IsBackground,
+                Action = p.Action, AllowTerminate = p.AllowTerminate, ForceKill = p.ForceKill, NoRelaunch = p.NoRelaunch, IsBackground = p.IsBackground,
                 PrivateBytes = p.PrivateBytes,
             };
         }
@@ -92,7 +94,7 @@ public static class ProgramCatalog
             rows[s.Id] = new SelectorRow
             {
                 Id = s.Id, DisplayName = s.DisplayName.Length > 0 ? s.DisplayName : known?.DisplayName ?? ProgramScanner.FriendlyName(s.Id),
-                HidesToTray = known?.HidesToTray == true, Action = s.Action, AllowTerminate = s.AllowTerminate, ForceKill = s.ForceKill,
+                HidesToTray = known?.HidesToTray == true, Action = s.Action, AllowTerminate = s.AllowTerminate, ForceKill = s.ForceKill, NoRelaunch = s.NoRelaunch,
             };
         }
 
@@ -141,6 +143,7 @@ public static class ProgramCatalog
             // Для фонового «завершать» и есть разрешение завершать.
             s.AllowTerminate = r.IsBackground ? r.Action == ProgramAction.Close : r.AllowTerminate || r.ForceKill;
             s.ForceKill = !r.IsBackground && r.Action == ProgramAction.Close && r.ForceKill;
+            s.NoRelaunch = !r.IsBackground && r.Action == ProgramAction.Close && r.NoRelaunch;
         }
     }
 
