@@ -117,7 +117,7 @@ internal static class Ui
         return box;
     }
 
-    private static async Task LoadIconAsync(Border box, string path, double size)
+    internal static async Task LoadIconAsync(Border box, string path, double size)
     {
         try
         {
