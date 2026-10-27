@@ -36,12 +36,12 @@ public sealed class SettingsWindow : Window
     public SettingsWindow()
     {
         Title = "GigaRest — настройки";
-        _root = new Grid { Background = Brush(PageBg), Padding = new Thickness(48, 40, 48, 32), RowSpacing = 20, RequestedTheme = ElementTheme.Light };
+        _root = new Grid { Padding = new Thickness(48, 40, 48, 32), RowSpacing = 20 };
         _root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         _root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         _root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-        _root.Children.Add(Text("Настройки", 32, Ink, FontWeights.ExtraBold));
+        _root.Children.Add(Text("Настройки", 32, Hex("#F6F2EA"), FontWeights.SemiBold));
 
         var body = new StackPanel { Spacing = 16 };
 
@@ -59,7 +59,7 @@ public sealed class SettingsWindow : Window
 
         // Горячая клавиша
         var keys = new StackPanel { Spacing = 10 };
-        keys.Children.Add(Text("Горячая клавиша «Работа ↔ Отдых»", 18, Ink, FontWeights.Bold));
+        keys.Children.Add(Text("Горячая клавиша «Работа ↔ Отдых»", 18, Ink, FontWeights.SemiBold));
         _hotkey = new TextBox { PlaceholderText = "Ctrl+Alt+Home", Width = 260, HorizontalAlignment = HorizontalAlignment.Left };
         _hotkey.TextChanged += (_, _) => UpdateHotkeyHint();
         keys.Children.Add(_hotkey);
@@ -72,7 +72,7 @@ public sealed class SettingsWindow : Window
 
         // Отдых: плитки и защита OLED
         var rest = new StackPanel { Spacing = 6 };
-        rest.Children.Add(Text("Отдых", 18, Ink, FontWeights.Bold));
+        rest.Children.Add(Text("Отдых", 18, Ink, FontWeights.SemiBold));
         _tiles = new ToggleSwitch { OnContent = "Плитки на втором мониторе", OffContent = "Без плиток — второй монитор не трогать" };
         rest.Children.Add(_tiles);
         _tilesCount = Choice("Сколько плиток", [(1, "1"), (2, "2"), (3, "3"), (4, "4")], rest);
@@ -83,7 +83,7 @@ public sealed class SettingsWindow : Window
 
         // Прочее
         var other = new StackPanel { Spacing = 6 };
-        other.Children.Add(Text("Разное", 18, Ink, FontWeights.Bold));
+        other.Children.Add(Text("Разное", 18, Ink, FontWeights.SemiBold));
         _confirm = new ToggleSwitch { OnContent = "Перед отдыхом показывать окно перехода", OffContent = "Переходить сразу, без вопросов" };
         _autostart = new ToggleSwitch { OnContent = "Запускать вместе с Windows (в трее)", OffContent = "Не запускать вместе с Windows" };
         _dnd = new ToggleSwitch { OnContent = "В отдыхе — «Не беспокоить» (только приоритетные уведомления)", OffContent = "Уведомления в отдыхе не трогать" };
@@ -109,14 +109,15 @@ public sealed class SettingsWindow : Window
         Grid.SetRow(scroll, 1);
         _root.Children.Add(scroll);
 
-        var save = ColoredButton(Text("Сохранить", 16, Colors.White, FontWeights.Bold), Accent, AccentDark, Colors.White);
+        var save = WarmButton("Сохранить", 16);
         save.HorizontalAlignment = HorizontalAlignment.Right;
-        save.Padding = new Thickness(36, 12, 36, 12);
+        save.Padding = new Thickness(40, 12, 40, 12);
         save.Click += (_, _) => OnSave();
         Grid.SetRow(save, 2);
         _root.Children.Add(save);
 
         Content = _root;
+        DarkWindow(AppWindow, _root);
         AppWindow.SetIcon(Path.Combine(AppContext.BaseDirectory, "Assets", "GigaRest.ico"));
         AppWindow.Closing += (sender, e) =>
         {

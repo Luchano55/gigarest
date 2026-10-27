@@ -21,23 +21,24 @@ public sealed class UpdateWindow : Window
     public UpdateWindow(string version)
     {
         Title = "Обновление GigaRest";
-        _root = new Grid { Background = Brush(PageBg), Padding = new Thickness(22, 18, 22, 18), RowSpacing = 10 };
+        _root = new Grid { Padding = new Thickness(22, 18, 22, 18), RowSpacing = 10 };
         for (var i = 0; i < 4; i++) _root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         _title = Text($"Обновление до {version}", 16, Ink, Microsoft.UI.Text.FontWeights.SemiBold);
         _root.Children.Add(_title);
-        _bar = new ProgressBar { Minimum = 0, Maximum = 100, IsIndeterminate = true, Height = 6 };
+        _bar = new ProgressBar { Minimum = 0, Maximum = 100, IsIndeterminate = true, Height = 6, Foreground = Brush(Warm) };
         Grid.SetRow(_bar, 1);
         _root.Children.Add(_bar);
         _status = Text("Готовимся…", 13, Lead, wrap: true);
         Grid.SetRow(_status, 2);
         _root.Children.Add(_status);
-        _close = ColoredButton("Закрыть", Hover, Hex("#E6E7EE"), Ink);
+        _close = ColoredButton("Закрыть", Hover, Hex("#2EFFFFFF"), Ink);
         _close.Visibility = Visibility.Collapsed;
         _close.HorizontalAlignment = HorizontalAlignment.Right;
         _close.Click += (_, _) => Close();
         Grid.SetRow(_close, 3);
         _root.Children.Add(_close);
         Content = _root;
+        DarkWindow(AppWindow, _root);
         AppWindow.SetIcon(Path.Combine(AppContext.BaseDirectory, "Assets", "GigaRest.ico"));
 
         if (AppWindow.Presenter is OverlappedPresenter p)

@@ -32,11 +32,8 @@ public sealed class SwitcherWindow : Window
     private static readonly Color TextSoft = Hex("#A9AEBB");
     private static readonly Color TextMuted = Hex("#8A909C");
     private static readonly Color TextDim = Hex("#7F8590");
-    private static readonly Color Warm = Hex("#EEB36C");
     private static readonly Color WarmText = Hex("#F8D3A0");
-    private static readonly Color Good = Hex("#93C9A4");
     private static readonly Color Amber = Hex("#F0B46C");
-    private static readonly Color Bad = Hex("#EE8E74");
     private static readonly Color Blue = Hex("#8FB4F0");
 
     private readonly Grid _root;
@@ -307,7 +304,7 @@ public sealed class SwitcherWindow : Window
         Content = _root;
 
         AppWindow.SetIcon(System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "GigaRest.ico"));
-        DarkTitleBar();
+        DarkTitleBar(AppWindow);
         AppWindow.Closing += (sender, e) =>
         {
             if (_closingForGood) return;
@@ -1175,41 +1172,7 @@ public sealed class SwitcherWindow : Window
         return w.Length >= 2 ? $"{char.ToUpper(w[0])}{(char.IsLetter(w[1]) ? char.ToLower(w[1]) : w[1])}" : w.ToUpper();
     }
 
-    private static LinearGradientBrush Vertical(Color top, Color bottom)
-    {
-        var g = new LinearGradientBrush { StartPoint = new(0, 0), EndPoint = new(0, 1) };
-        g.GradientStops.Add(new GradientStop { Color = top, Offset = 0 });
-        g.GradientStops.Add(new GradientStop { Color = bottom, Offset = 1 });
-        return g;
-    }
-
     private static Brush WindowBackground() => Vertical(Hex("#1B1E28"), Hex("#101217"));
-
-    /// <summary>Мягкое пятно света в углу (cx, cy — центр в долях окна).</summary>
-    private static RadialGradientBrush Glow(double cx, double cy, double rx, double ry, Color color)
-    {
-        var g = new RadialGradientBrush { Center = new(cx, cy), GradientOrigin = new(cx, cy), RadiusX = rx, RadiusY = ry };
-        g.GradientStops.Add(new GradientStop { Color = color, Offset = 0 });
-        g.GradientStops.Add(new GradientStop { Color = Color.FromArgb(0, color.R, color.G, color.B), Offset = 1 });
-        return g;
-    }
-
-    /// <summary>Заголовок окна — в тон тёмному окну.</summary>
-    private void DarkTitleBar()
-    {
-        try
-        {
-            var bar = AppWindow.TitleBar;
-            bar.BackgroundColor = bar.InactiveBackgroundColor = Hex("#1B1E28");
-            bar.ButtonBackgroundColor = bar.ButtonInactiveBackgroundColor = Hex("#1B1E28");
-            bar.ForegroundColor = bar.ButtonForegroundColor = Hex("#C9C5BE");
-            bar.InactiveForegroundColor = bar.ButtonInactiveForegroundColor = Hex("#6E727C");
-            bar.ButtonHoverBackgroundColor = Hex("#2A2D38");
-            bar.ButtonHoverForegroundColor = Hex("#F6F2EA");
-            bar.ButtonPressedBackgroundColor = Hex("#343846");
-        }
-        catch (Exception ex) when (ex is COMException or InvalidOperationException) { }
-    }
 
     /// <summary>Размер по макету (1440×900 при 100%), с учётом масштаба монитора, по центру.</summary>
     public void SizeToDesign(bool fitScreen = true)

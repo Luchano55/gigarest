@@ -8,17 +8,94 @@ using Windows.UI.Text;
 
 namespace GigaRest.App;
 
-/// <summary>Цвета и заготовки элементов по макету «Переключатель».</summary>
+/// <summary>
+/// Цвета и заготовки элементов по макету Романа («премиум-отделка»): тёмные окна с тёплым и холодным светом,
+/// стеклянные карточки, тёплый акцент. Общие для окон перехода, настроек, «Рабочих программ» и обновления.
+/// </summary>
 internal static class Ui
 {
-    public static readonly Color PageBg = Hex("#F7F7FA");
-    public static readonly Color Ink = Hex("#16171D");
-    public static readonly Color Muted = Hex("#6A6D7C");
-    public static readonly Color Lead = Hex("#4A4D5C");
-    public static readonly Color Card = Hex("#FFFFFF");
-    public static readonly Color Accent = Hex("#3B5BDB");
-    public static readonly Color AccentDark = Hex("#2F4BC0");
-    public static readonly Color Hover = Hex("#F1F2F6");
+    public static readonly Color PageBg = Hex("#14161D");
+    public static readonly Color Ink = Hex("#F4F0E9");
+    public static readonly Color Muted = Hex("#8A909C");
+    public static readonly Color Lead = Hex("#AEB3BF");
+    public static readonly Color Card = Hex("#1C1F27");
+    public static readonly Color Accent = Hex("#E8A05B");
+    public static readonly Color AccentDark = Hex("#D9914A");
+    public static readonly Color AccentText = Hex("#24170C");
+    public static readonly Color Warm = Hex("#EEB36C");
+    public static readonly Color Good = Hex("#93C9A4");
+    public static readonly Color Bad = Hex("#EE8E74");
+    public static readonly Color Hover = Color.FromArgb(18, 255, 255, 255);
+
+    public static LinearGradientBrush Vertical(Color top, Color bottom)
+    {
+        var g = new LinearGradientBrush { StartPoint = new(0, 0), EndPoint = new(0, 1) };
+        g.GradientStops.Add(new GradientStop { Color = top, Offset = 0 });
+        g.GradientStops.Add(new GradientStop { Color = bottom, Offset = 1 });
+        return g;
+    }
+
+    /// <summary>Мягкое пятно света (cx, cy — центр в долях окна).</summary>
+    public static RadialGradientBrush Glow(double cx, double cy, double rx, double ry, Color color)
+    {
+        var g = new RadialGradientBrush { Center = new(cx, cy), GradientOrigin = new(cx, cy), RadiusX = rx, RadiusY = ry };
+        g.GradientStops.Add(new GradientStop { Color = color, Offset = 0 });
+        g.GradientStops.Add(new GradientStop { Color = Color.FromArgb(0, color.R, color.G, color.B), Offset = 1 });
+        return g;
+    }
+
+    /// <summary>
+    /// Тёмное окно по макету: фон с тёплым светом снизу слева и холодным сверху справа, тёмный заголовок,
+    /// тёплые галочки и переключатели. root — корневая сетка окна.
+    /// </summary>
+    public static void DarkWindow(Microsoft.UI.Windowing.AppWindow window, Grid root)
+    {
+        root.RequestedTheme = ElementTheme.Dark;
+        root.Background = Vertical(Hex("#1B1E28"), Hex("#101217"));
+        var warm = new Border { Background = Glow(0, 1, 0.65, 0.55, Color.FromArgb(56, 224, 152, 108)), IsHitTestVisible = false };
+        var cool = new Border { Background = Glow(1, 0, 0.55, 0.45, Color.FromArgb(33, 110, 132, 210)), IsHitTestVisible = false };
+        foreach (var glow in new[] { cool, warm })
+        {
+            Grid.SetRowSpan(glow, Math.Max(1, root.RowDefinitions.Count));
+            Grid.SetColumnSpan(glow, Math.Max(1, root.ColumnDefinitions.Count));
+            glow.Margin = new Thickness(-root.Padding.Left, -root.Padding.Top, -root.Padding.Right, -root.Padding.Bottom);
+            root.Children.Insert(0, glow);
+        }
+        var accent = Brush(Accent);
+        var dark = Brush(AccentText);
+        foreach (var key in new[]
+        {
+            "CheckBoxCheckBackgroundFillChecked", "CheckBoxCheckBackgroundFillCheckedPointerOver", "CheckBoxCheckBackgroundFillCheckedPressed",
+            "ToggleSwitchFillOn", "ToggleSwitchFillOnPointerOver", "ToggleSwitchFillOnPressed",
+            "ToggleButtonBackgroundChecked", "ToggleButtonBackgroundCheckedPointerOver", "ToggleButtonBackgroundCheckedPressed",
+        }) root.Resources[key] = accent;
+        foreach (var key in new[]
+        {
+            "CheckBoxCheckGlyphForegroundChecked", "CheckBoxCheckGlyphForegroundCheckedPointerOver", "CheckBoxCheckGlyphForegroundCheckedPressed",
+            "ToggleSwitchKnobFillOn", "ToggleSwitchKnobFillOnPointerOver", "ToggleSwitchKnobFillOnPressed",
+            "ToggleButtonForegroundChecked", "ToggleButtonForegroundCheckedPointerOver", "ToggleButtonForegroundCheckedPressed",
+        }) root.Resources[key] = dark;
+        root.Resources["HyperlinkButtonForeground"] = Brush(Warm);
+        root.Resources["HyperlinkButtonForegroundPointerOver"] = Brush(Hex("#F6C88A"));
+        DarkTitleBar(window);
+    }
+
+    /// <summary>Заголовок окна — в тон тёмному окну.</summary>
+    public static void DarkTitleBar(Microsoft.UI.Windowing.AppWindow window)
+    {
+        try
+        {
+            var bar = window.TitleBar;
+            bar.BackgroundColor = bar.InactiveBackgroundColor = Hex("#1B1E28");
+            bar.ButtonBackgroundColor = bar.ButtonInactiveBackgroundColor = Hex("#1B1E28");
+            bar.ForegroundColor = bar.ButtonForegroundColor = Hex("#C9C5BE");
+            bar.InactiveForegroundColor = bar.ButtonInactiveForegroundColor = Hex("#6E727C");
+            bar.ButtonHoverBackgroundColor = Hex("#2A2D38");
+            bar.ButtonHoverForegroundColor = Hex("#F6F2EA");
+            bar.ButtonPressedBackgroundColor = Hex("#343846");
+        }
+        catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or InvalidOperationException) { }
+    }
 
     public static Color Hex(string hex)
     {
@@ -42,15 +119,34 @@ internal static class Ui
         TextTrimming = wrap ? TextTrimming.None : TextTrimming.CharacterEllipsis,
     };
 
+    /// <summary>Стеклянная карточка: лёгкий светлый градиент и подсвеченная кромка.</summary>
     public static Border CardBorder(UIElement child, double radius = 16, double padding = 18) => new()
     {
-        Background = Brush(Card),
+        Background = Vertical(Color.FromArgb(20, 255, 255, 255), Color.FromArgb(6, 255, 255, 255)),
         CornerRadius = new CornerRadius(radius),
         Padding = new Thickness(padding),
-        BorderBrush = Brush("#E6E7EE"),
+        BorderBrush = Vertical(Color.FromArgb(41, 255, 255, 255), Color.FromArgb(10, 255, 255, 255)),
         BorderThickness = new Thickness(1),
         Child = child,
     };
+
+    /// <summary>Главная тёплая кнопка (как «Перейти в отдых»).</summary>
+    public static Button WarmButton(string text, double size = 15)
+    {
+        var fill = Vertical(Hex("#F7CA8C"), Hex("#E8A05B"));
+        var b = new Button
+        {
+            Content = Text(text, size, AccentText, FontWeights.SemiBold), Padding = new Thickness(28, 11, 28, 11), CornerRadius = new CornerRadius(12),
+            Background = fill, BorderBrush = Brush(Color.FromArgb(153, 120, 70, 30)), BorderThickness = new Thickness(1),
+        };
+        b.Resources["ButtonBackground"] = fill;
+        b.Resources["ButtonBackgroundPointerOver"] = Vertical(Hex("#F9D39C"), Hex("#EDAA68"));
+        b.Resources["ButtonBackgroundPressed"] = Vertical(Hex("#EDB878"), Hex("#DC944F"));
+        b.Resources["ButtonBackgroundDisabled"] = Vertical(Color.FromArgb(20, 255, 255, 255), Color.FromArgb(8, 255, 255, 255));
+        b.Resources["ButtonBorderBrushPointerOver"] = Brush(Color.FromArgb(153, 120, 70, 30));
+        b.Resources["ButtonBorderBrushPressed"] = Brush(Color.FromArgb(153, 120, 70, 30));
+        return b;
+    }
 
     /// <summary>Кнопка со своими цветами во всех состояниях (лёгкая стилизация через ресурсы).</summary>
     public static Button ColoredButton(object content, Color background, Color hover, Color foreground)
@@ -96,7 +192,7 @@ internal static class Ui
         };
         b.Resources["ButtonBackground"] = Brush(Colors.Transparent);
         b.Resources["ButtonBackgroundPointerOver"] = Brush(Hover);
-        b.Resources["ButtonBackgroundPressed"] = Brush(Hex("#E6E8EF"));
+        b.Resources["ButtonBackgroundPressed"] = Brush(Hex("#26FFFFFF"));
         b.Resources["ButtonBorderBrushPointerOver"] = Brush(Colors.Transparent);
         b.Resources["ButtonBorderBrushPressed"] = Brush(Colors.Transparent);
         return b;

@@ -55,7 +55,6 @@ public sealed class QuietWindow : Window
     private bool _cursorHidden, _screenOff;
     private Border _offCard = null!;
     private TextBlock _offText = null!;
-    private GamepadInput? _pad;
     private static readonly string[] WordList = ["Продолжить", "Играть", "Смотреть", "Слушать", "Сцены"];
     private int _wordIndex = -1;
 
@@ -781,14 +780,16 @@ public sealed class QuietWindow : Window
         switch (e.Key)
         {
             case global::Windows.System.VirtualKey.Escape: if (_openWord is not null) { ClosePanel(); e.Handled = true; } break;
-            case global::Windows.System.VirtualKey.Left: Navigate(PadButton.Left); e.Handled = true; break;
-            case global::Windows.System.VirtualKey.Right: Navigate(PadButton.Right); e.Handled = true; break;
-            case global::Windows.System.VirtualKey.Up: Navigate(PadButton.Up); e.Handled = true; break;
-            case global::Windows.System.VirtualKey.Down: Navigate(PadButton.Down); e.Handled = true; break;
+            case global::Windows.System.VirtualKey.Left: Navigate(Dir.Left); e.Handled = true; break;
+            case global::Windows.System.VirtualKey.Right: Navigate(Dir.Right); e.Handled = true; break;
+            case global::Windows.System.VirtualKey.Up: Navigate(Dir.Up); e.Handled = true; break;
+            case global::Windows.System.VirtualKey.Down: Navigate(Dir.Down); e.Handled = true; break;
         }
     }
 
-    // ---------- клавиатура и геймпад: стрелки/крестовина — по разделам и спискам, Enter/A — выбрать, Esc/B — назад ----------
+    // ---------- клавиатура: стрелки — по разделам и спискам, Enter — выбрать, Esc — назад ----------
+
+    private enum Dir { Left, Right, Up, Down }
 
     private void StepWord(int delta)
     {
@@ -814,59 +815,33 @@ public sealed class QuietWindow : Window
         return false;
     }
 
-    private void Navigate(PadButton direction)
+    private void Navigate(Dir direction)
     {
         Wake();
-        if (_openWord is null)
+        try
         {
-            if (direction is PadButton.Left) StepWord(-1);
-            else StepWord(direction is PadButton.Up ? 0 : 1);
-            return;
+            if (_openWord is null)
+            {
+                StepWord(direction == Dir.Left ? -1 : direction == Dir.Right ? 1 : 0);
+                return;
+            }
+            if (!FocusInPanel()) { FocusPanel(); return; }
+            // Только направленный переход внутри панели (Next/Previous с границей поиска Windows не поддерживает — от этого и были вылеты).
+            var options = new FindNextElementOptions { SearchRoot = _panel };
+            var moved = FocusManager.TryMoveFocus(direction switch
+            {
+                Dir.Up => FocusNavigationDirection.Up,
+                Dir.Down => FocusNavigationDirection.Down,
+                Dir.Left => FocusNavigationDirection.Left,
+                _ => FocusNavigationDirection.Right,
+            }, options);
+            // Влево-вправо дальше некуда — соседний раздел.
+            if (!moved && direction is Dir.Left or Dir.Right) StepWord(direction == Dir.Left ? -1 : 1);
         }
-        if (!FocusInPanel()) { FocusPanel(); return; }
-        var options = new FindNextElementOptions { SearchRoot = _panel };
-        var moved = direction switch
+        catch (Exception ex)
         {
-            PadButton.Up => FocusManager.TryMoveFocus(FocusNavigationDirection.Up, options) || FocusManager.TryMoveFocus(FocusNavigationDirection.Previous, options),
-            PadButton.Down => FocusManager.TryMoveFocus(FocusNavigationDirection.Down, options) || FocusManager.TryMoveFocus(FocusNavigationDirection.Next, options),
-            PadButton.Left => FocusManager.TryMoveFocus(FocusNavigationDirection.Left, options),
-            _ => FocusManager.TryMoveFocus(FocusNavigationDirection.Right, options),
-        };
-        // Влево-вправо дальше некуда — соседний раздел.
-        if (!moved && direction is PadButton.Left or PadButton.Right) StepWord(direction == PadButton.Left ? -1 : 1);
-    }
-
-    /// <summary>Кнопка геймпада (только когда окно «Тихого» экрана активно).</summary>
-    private void OnPad(PadButton button)
-    {
-        Wake();
-        switch (button)
-        {
-            case PadButton.A:
-                if (_openWord is null) { StepWord(0); return; }
-                var focused = FocusManager.GetFocusedElement(_root.XamlRoot);
-                if (focused is HyperlinkButton link) new Microsoft.UI.Xaml.Automation.Peers.HyperlinkButtonAutomationPeer(link).Invoke();
-                else if (focused is Button b) new Microsoft.UI.Xaml.Automation.Peers.ButtonAutomationPeer(b).Invoke();
-                break;
-            case PadButton.B:
-                if (_film is not null) CloseFilm();
-                else if (_web.FirstOrDefault(w => !w.Value.Mini) is { Value: not null } open) Minimize(open.Key);
-                else if (_openWord is not null) ClosePanel();
-                break;
-            case PadButton.Y:
-                SetScene(_sceneIndex + 1);
-                SceneChanged?.Invoke(_scenes[_sceneIndex], _effect);
-                break;
-            case PadButton.LeftShoulder: StepWord(-1); break;
-            case PadButton.RightShoulder: StepWord(1); break;
-            default: if (_film is null && !WebVisible) Navigate(button); break;
+            GigaRest.Core.Logging.Log.Warn("Клавиатура на «Тихом» экране: " + ex.Message);
         }
-    }
-
-    private bool IsForeground()
-    {
-        try { return WindowTools.Foreground() == (long)RestScreens.Hwnd(this); }
-        catch (Exception) { return false; }
     }
 
     // ---------- курсор и выключение экрана ----------
@@ -1264,8 +1239,6 @@ public sealed class QuietWindow : Window
     public void ShowOn(MonitorInfo? monitor)
     {
         _monitor = monitor;
-        _pad ??= new GamepadInput(DispatcherQueue, () => IsForeground() && !_paused);
-        _pad.Pressed += OnPad;
         RestScreens.FullScreenOn(this, monitor);
         RestScreens.BringToFront(this);
         _tick.Start();
@@ -1285,7 +1258,6 @@ public sealed class QuietWindow : Window
 
     public void CloseForGood()
     {
-        if (_pad is not null) { _pad.Pressed -= OnPad; _pad.Dispose(); _pad = null; }
         SetCursorHidden(false);
         CloseFilm(); // где остановились — запомнится
         foreach (var key in _web.Keys.ToList()) CloseWeb(key);

@@ -35,7 +35,7 @@ public sealed class ProgramsWindow : Window
     public ProgramsWindow()
     {
         Title = "GigaRest — рабочие программы";
-        _root = new Grid { Background = Brush(PageBg), Padding = new Thickness(48, 40, 48, 32), RowSpacing = 18, RequestedTheme = ElementTheme.Light };
+        _root = new Grid { Padding = new Thickness(48, 40, 48, 32), RowSpacing = 18 };
         _root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         _root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         _root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
@@ -80,10 +80,10 @@ public sealed class ProgramsWindow : Window
         _summary = Text("", 14, Muted, wrap: true);
         _summary.VerticalAlignment = VerticalAlignment.Center;
         footer.Children.Add(_summary);
-        _doneText = Text("Готово", 16, Colors.White, FontWeights.Bold);
-        _done = ColoredButton(_doneText, Accent, AccentDark, Colors.White);
+        _done = WarmButton("Готово", 16);
+        _doneText = (TextBlock)_done.Content;
         _done.HorizontalAlignment = HorizontalAlignment.Right;
-        _done.Padding = new Thickness(36, 12, 36, 12);
+        _done.Padding = new Thickness(40, 12, 40, 12);
         _done.Click += (_, _) => { Saved?.Invoke(_rows); AppWindow.Hide(); };
         Grid.SetColumn(_done, 1);
         footer.Children.Add(_done);
@@ -91,6 +91,7 @@ public sealed class ProgramsWindow : Window
         _root.Children.Add(footer);
 
         Content = _root;
+        DarkWindow(AppWindow, _root);
         AppWindow.SetIcon(Path.Combine(AppContext.BaseDirectory, "Assets", "GigaRest.ico"));
         AppWindow.Closing += (sender, e) =>
         {
@@ -188,21 +189,12 @@ public sealed class ProgramsWindow : Window
         grid.ColumnDefinitions.Add(new ColumnDefinition());
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
-        var avatar = new Border
-        {
-            Width = 36, Height = 36, CornerRadius = new CornerRadius(10), Background = Brush(ProgramColor(r.Id)),
-            VerticalAlignment = VerticalAlignment.Center,
-            Child = new TextBlock
-            {
-                Text = r.DisplayName.Length > 0 ? char.ToUpper(r.DisplayName[0]).ToString() : "?", FontSize = 16,
-                FontWeight = FontWeights.Bold, Foreground = Brush(Colors.White),
-                HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
-            },
-        };
+        var avatar = AppIcon(r.DisplayName, r.Id, r.ExePath, 32);
+        avatar.VerticalAlignment = VerticalAlignment.Center;
         grid.Children.Add(avatar);
 
         var names = new StackPanel { Spacing = 2, VerticalAlignment = VerticalAlignment.Center };
-        names.Children.Add(Text(r.DisplayName, 15, Ink, FontWeights.Bold, wrap: true));
+        names.Children.Add(Text(r.DisplayName, 14.5, Ink, FontWeights.SemiBold, wrap: true));
         if (r.IsBackground)
         {
             var info = $"≈{GigaRest.Core.Text.Sizes.Format(r.PrivateBytes)}" + (r.Hint is null ? "" : " · " + r.Hint) + $" · запустим обратно: {r.RelaunchInfo}";
@@ -212,19 +204,26 @@ public sealed class ProgramsWindow : Window
         {
             var status = r.IsRunning ? "запущена" : "сейчас не запущена";
             if (r.Hint is not null) status += " · " + r.Hint;
-            names.Children.Add(Text(status, 12, r.IsRunning ? Hex("#1E7A44") : Muted, wrap: true));
+            names.Children.Add(Text(status, 12, r.IsRunning ? Good : Muted, wrap: true));
         }
         Grid.SetColumn(names, 1);
         grid.Children.Add(names);
 
-        var seg = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, VerticalAlignment = VerticalAlignment.Center };
+        var seg = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
         var choices = r.IsBackground
             ? new[] { (ProgramAction.Close, "Завершать в отдыхе"), (ProgramAction.Keep, "Не трогать") }
             : new[] { (ProgramAction.Close, "Закрыть"), (ProgramAction.SecondMonitor, "Второй монитор"), (ProgramAction.Keep, "Оставить") };
         foreach (var (action, label) in choices)
             seg.Children.Add(Segment(r, action, label, box));
-        Grid.SetColumn(seg, 2);
-        grid.Children.Add(seg);
+        // Тёмная дорожка, выбранное — подсвечено (как в окне перехода).
+        var track = new Border
+        {
+            Child = seg, Padding = new Thickness(3), CornerRadius = new CornerRadius(10), VerticalAlignment = VerticalAlignment.Center,
+            Background = Vertical(global::Windows.UI.Color.FromArgb(107, 0, 0, 0), global::Windows.UI.Color.FromArgb(71, 0, 0, 0)),
+            BorderBrush = Brush(global::Windows.UI.Color.FromArgb(14, 255, 255, 255)), BorderThickness = new Thickness(1),
+        };
+        Grid.SetColumn(track, 2);
+        grid.Children.Add(track);
         box.Children.Add(grid);
 
         if (r.Action == ProgramAction.Close && !r.IsBackground)
@@ -242,7 +241,7 @@ public sealed class ProgramsWindow : Window
         {
             var force = new CheckBox
             {
-                Content = Text("завершать принудительно, даже если есть несохранённое — оно пропадёт", 13, Hex("#B42318"), wrap: true),
+                Content = Text("завершать принудительно, даже если есть несохранённое — оно пропадёт", 13, Bad, wrap: true),
                 IsChecked = r.ForceKill, Margin = new Thickness(64, -6, 0, 4), MinHeight = 28,
             };
             ToolTipService.SetToolTip(force, "Для программ вроде ShareX: сначала попросим закрыться, через 5 секунд завершим. Вопрос «Сохранить?» ждать не будем.");
@@ -267,23 +266,29 @@ public sealed class ProgramsWindow : Window
     private Button Segment(SelectorRow r, ProgramAction action, string label, StackPanel box)
     {
         var selected = r.Action == action;
-        var (bg, fg) = !selected ? ("#F1F2F6", "#4A4D5C") : action switch
+        var (top, bottom, edge, fg) = !selected ? ("#00000000", "#00000000", "#00000000", "#9AA0AC") : action switch
         {
-            ProgramAction.Close => ("#FDE8E8", "#B42318"),
-            ProgramAction.SecondMonitor => ("#E6EDFF", "#2948B8"),
-            _ => ("#EAF5EE", "#1E7A44"),
+            ProgramAction.Close => ("#52F6C787", "#29EAA560", "#61EEB36C", "#F8D3A0"),
+            ProgramAction.SecondMonitor => ("#6E627CB2", "#46465C8C", "#6E8FB4F0", "#DCE7FF"),
+            _ => ("#2EFFFFFF", "#1AFFFFFF", "#28FFFFFF", "#F1EEE8"),
         };
-        var b = ColoredButton(Text(label, 12, Hex(fg), selected ? FontWeights.Bold : FontWeights.Normal), Hex(bg), Hex(selected ? bg : "#E6E8EF"), Hex(fg));
-        b.HorizontalAlignment = HorizontalAlignment.Left;
-        b.Padding = new Thickness(12, 6, 12, 6);
-        b.CornerRadius = new CornerRadius(999);
-        b.FontSize = 12;
+        var fill = Vertical(Hex(top), Hex(bottom));
+        var b = new Button
+        {
+            Content = Text(label, 12.5, Hex(fg), selected ? FontWeights.SemiBold : FontWeights.Medium),
+            Height = 30, Padding = new Thickness(12, 0, 12, 0), CornerRadius = new CornerRadius(7),
+            Background = fill, BorderBrush = Brush(Hex(edge)), BorderThickness = new Thickness(selected ? 1 : 0),
+        };
+        b.Resources["ButtonBackgroundPointerOver"] = selected ? fill : Brush(global::Windows.UI.Color.FromArgb(18, 255, 255, 255));
+        b.Resources["ButtonBackgroundPressed"] = selected ? fill : Brush(global::Windows.UI.Color.FromArgb(26, 255, 255, 255));
+        b.Resources["ButtonBorderBrushPointerOver"] = Brush(Hex(edge));
+        b.Resources["ButtonBorderBrushPressed"] = Brush(Hex(edge));
         b.Click += (_, _) =>
         {
             if (r.Action == action) return;
             r.Action = action;
             // Строка остаётся на месте, пока окно открыто: перерисовываем только её.
-            var parent = (StackPanel)box.Parent;
+            var parent = (Panel)box.Parent;
             var index = parent.Children.IndexOf(box);
             if (index >= 0) parent.Children[index] = Row(r);
             UpdateSummary();
