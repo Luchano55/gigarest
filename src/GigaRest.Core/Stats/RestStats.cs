@@ -78,7 +78,7 @@ public sealed class RestStats
     {
         if (t.TotalMinutes < 1) return "—";
         var h = (int)t.TotalHours;
-        return h > 0 ? $"{h} ч {t.Minutes} мин" : $"{t.Minutes} мин";
+        return h > 0 ? (t.Minutes > 0 ? $"{h} ч {t.Minutes} мин" : $"{h} ч") : $"{t.Minutes} мин";
     }
 }
 

@@ -67,7 +67,7 @@ public sealed class StatsWindow : Window
             col.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             col.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
             col.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            var value = Text(minutes >= 1 ? RestStats.Format(TimeSpan.FromMinutes(minutes)).Replace(" мин", "м").Replace(" ч ", "ч ") : "", 11, Muted);
+            var value = Text(minutes >= 1 ? RestStats.Format(TimeSpan.FromMinutes(minutes)) : "", 11, Muted);
             value.HorizontalAlignment = HorizontalAlignment.Center;
             col.Children.Add(value);
             var bar = new Border
