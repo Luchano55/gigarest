@@ -395,3 +395,45 @@ public class LibraryFilterTests
         finally { Directory.Delete(dir, true); }
     }
 }
+
+public class LocalGamesTests
+{
+    [Fact]
+    public void CoversFromFolderOverrideStore()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "gigarest обложки " + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "Diablo IV.jpg"), "");
+            File.WriteAllText(Path.Combine(dir, "diablo iv шапка.png"), "");
+            File.WriteAllText(Path.Combine(dir, "Ёлка.webp"), "");
+            File.WriteAllText(Path.Combine(dir, "заметка.txt"), "");
+            var games = LocalGames.ApplyCovers(
+            [
+                new Game { Id = "bnet:fenris", Name = "Diablo IV", Store = "Battle.net" },
+                new Game { Id = "steam:1", Name = "Елка", Store = "Steam", CoverPath = "steam.jpg" },
+                new Game { Id = "steam:2", Name = "Другая", Store = "Steam", CoverPath = "steam2.jpg" },
+            ], dir);
+            Assert.EndsWith("Diablo IV.jpg", games[0].CoverPath);
+            Assert.EndsWith("diablo iv шапка.png", games[0].HeroPath);
+            Assert.EndsWith("Ёлка.webp", games[1].CoverPath); // своя главнее, «ё» = «е»
+            Assert.Equal("steam2.jpg", games[2].CoverPath);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Theory]
+    [InlineData(@"C:\Games\Hollow Knight\hollow_knight.exe", "Hollow Knight")]
+    [InlineData(@"D:\Игры\Сталкер\bin\xrEngine.exe", "xrEngine")]
+    public void NameFromExe(string path, string expected) => Assert.Equal(expected, LocalGames.NameFromExe(path.Replace('\\', Path.DirectorySeparatorChar)));
+
+    [Fact]
+    public void CustomGameIsLaunchable()
+    {
+        var g = LocalGames.FromCustom(new CustomGame { Name = "Hollow Knight", Path = @"C:\Games\HK\hk.exe" });
+        Assert.Equal("Свои", g.Store);
+        Assert.Equal(@"C:\Games\HK\hk.exe", g.ExePath);
+        Assert.StartsWith("custom:", g.Id);
+    }
+}

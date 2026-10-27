@@ -139,9 +139,14 @@ public sealed class QuietWindow : Window
     }
 
     /// <summary>Установленные игры: сначала недавние. Вызывать из потока окна.</summary>
+    public event Action? AddGameRequested;
+    public event Action<Game>? RemoveGameRequested;
+    public event Action? OpenCoversRequested;
+
     public void SetGames(IReadOnlyList<Game> games)
     {
         _games = games;
+        if (_library is not null) ShowLibrary(); // библиотека открыта — обновить (добавили или убрали игру)
         if (_openWord is "Играть" or "Продолжить") { var w = _openWord; _openWord = null; OnWord(w); }
     }
     public FrameworkElement Root => _root;
@@ -436,6 +441,12 @@ public sealed class QuietWindow : Window
                 var note = Text(_games is null ? "Ищем игры…" : "Игр не нашлось. GigaRest смотрит в Steam, Epic, GOG и Battle.net.", 13, Hex("#99FFFFFF"), wrap: true);
                 note.Margin = new Thickness(0, 6, 0, 4);
                 _panelContent.Children.Add(note);
+                if (_games is not null)
+                {
+                    var open = QuietButton("Открыть библиотеку и добавить игру без магазина →", 13);
+                    open.Click += (_, _) => ShowLibrary();
+                    _panelContent.Children.Add(open);
+                }
             }
             else
             {
@@ -973,10 +984,20 @@ public sealed class QuietWindow : Window
         count.Margin = new Thickness(0, 0, 0, 5);
         Grid.SetColumn(count, 1);
         head.Children.Add(count);
+        var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 18 };
+        var add = QuietButton("+ Добавить игру…", 13);
+        ToolTipService.SetToolTip(add, "Игра без магазина: выберите её файл запуска (.exe)");
+        add.Click += (_, _) => AddGameRequested?.Invoke();
+        actions.Children.Add(add);
+        var covers = QuietButton("Папка обложек", 13);
+        ToolTipService.SetToolTip(covers, "Положите картинку с названием игры («Diablo IV.jpg») — она станет обложкой. «Diablo IV шапка.jpg» — широкая картинка для «Продолжить».");
+        covers.Click += (_, _) => OpenCoversRequested?.Invoke();
+        actions.Children.Add(covers);
         var close = QuietButton("Закрыть · Esc", 13);
         close.Click += (_, _) => CloseLibrary();
-        Grid.SetColumn(close, 2);
-        head.Children.Add(close);
+        actions.Children.Add(close);
+        Grid.SetColumn(actions, 2);
+        head.Children.Add(actions);
         host.Children.Add(head);
 
         // Последняя игра — широкой картинкой (у Steam — своя шапка игры).
@@ -1013,7 +1034,7 @@ public sealed class QuietWindow : Window
             var shown = GameLibraries.Filter(games, _libraryStore, _libraryQuery, _libraryByName);
             foreach (var game in shown) grid.Children.Add(LibraryCard(game));
             if (shown.Count == 0)
-                grid.Children.Add(Text(games.Count == 0 ? "Игр не нашлось. GigaRest смотрит в Steam, Epic, GOG и Battle.net." : "Ничего не нашлось.", 14, Hex("#8A909C")));
+                grid.Children.Add(Text(games.Count == 0 ? "Игр не нашлось. GigaRest смотрит в Steam, Epic, GOG и Battle.net; игру без магазина — «+ Добавить игру…»." : "Ничего не нашлось.", 14, Hex("#8A909C")));
             // Фильтры — подсвечиваем выбранное.
             stores.Children.Clear();
             stores.Children.Add(Chip($"Все · {games.Count}", _libraryStore is null, () => { _libraryStore = null; Fill(); }));
@@ -1081,6 +1102,15 @@ public sealed class QuietWindow : Window
         b.Resources["ButtonBackgroundPointerOver"] = Brush("#14FFFFFF");
         b.Resources["ButtonBackgroundPressed"] = Brush("#24FFFFFF");
         b.Click += (_, _) => { CloseLibrary(); PlayRequested?.Invoke(game); };
+        if (game.Store == "Свои")
+        {
+            var menu = new MenuFlyout();
+            var remove = new MenuFlyoutItem { Text = "Убрать из библиотеки" };
+            remove.Click += (_, _) => RemoveGameRequested?.Invoke(game);
+            menu.Items.Add(remove);
+            b.ContextFlyout = menu;
+            ToolTipService.SetToolTip(b, "Правый щелчок — убрать из библиотеки");
+        }
         return b;
     }
 

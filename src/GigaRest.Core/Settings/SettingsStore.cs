@@ -25,6 +25,8 @@ public sealed class SettingsStore
         s.Programs ??= [];
         s.GamesPlayed ??= [];
         s.FilmsOpened ??= [];
+        s.CustomGames ??= [];
+        s.CustomGames.RemoveAll(g => string.IsNullOrWhiteSpace(g.Path));
         s.FilmsPosition ??= [];
         s.TilesCount = Math.Clamp(s.TilesCount, 1, 4);
         s.DimMinutes = Math.Clamp(s.DimMinutes, 1, 240);

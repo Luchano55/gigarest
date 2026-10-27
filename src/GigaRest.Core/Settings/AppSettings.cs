@@ -49,6 +49,8 @@ public sealed class AppSettings
     public string? MyScenesFolder { get; set; }
     /// <summary>Когда игру запускали из «Играть» (код игры → время, UTC): Epic и GOG сами этого не хранят.</summary>
     public Dictionary<string, DateTime> GamesPlayed { get; set; } = [];
+    /// <summary>Игры без магазина, добавленные вручную.</summary>
+    public List<Games.CustomGame> CustomGames { get; set; } = [];
     /// <summary>Папка с фильмами для «Смотреть»; пусто — «Видео» пользователя.</summary>
     public string? FilmsFolder { get; set; }
     /// <summary>Какие фильмы открывали из «Смотреть» (путь → время, UTC) — для «Продолжить».</summary>

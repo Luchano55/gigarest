@@ -242,6 +242,21 @@ public sealed partial class App : Application, IXamlMetadataProvider
             };
             _quiet.ReturnRequested += () => _ = ReturnToWorkAsync();
             _quiet.PlayRequested += PlayGame;
+            _quiet.AddGameRequested += () => _ = AddGameAsync();
+            _quiet.RemoveGameRequested += game =>
+            {
+                _settings.CustomGames.RemoveAll(c => GigaRest.Core.Games.LocalGames.FromCustom(c).Id == game.Id);
+                SaveSettings();
+                if (_quiet is { } q) LoadGames(q);
+            };
+            _quiet.OpenCoversRequested += () =>
+            {
+                var folder = GigaRest.Core.Games.LocalGames.DefaultCoversFolder();
+                try { Directory.CreateDirectory(folder); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { Log.Warn("Папка обложек: " + ex.Message); }
+                var psi = new System.Diagnostics.ProcessStartInfo("explorer.exe") { UseShellExecute = false };
+                psi.ArgumentList.Add(folder);
+                System.Diagnostics.Process.Start(psi)?.Dispose();
+            };
             _quiet.DndClicked += DoNotDisturb.OpenSettings;
             TurnOnDoNotDisturb(_quiet);
             LoadGames(_quiet);
@@ -399,10 +414,16 @@ public sealed partial class App : Application, IXamlMetadataProvider
     private void LoadGames(QuietWindow quiet)
     {
         var played = new Dictionary<string, DateTime>(_settings.GamesPlayed);
+        var custom = _settings.CustomGames.Where(c => File.Exists(c.Path)).Select(GigaRest.Core.Games.LocalGames.FromCustom).ToList();
         _ = Task.Run(() =>
         {
             List<GigaRest.Core.Games.Game> games;
-            try { games = GigaRest.Core.Games.GameLibraries.Merge(GameSources.FindInstalled(), played); }
+            try
+            {
+                var all = GameSources.FindInstalled().Concat(custom);
+                all = GigaRest.Core.Games.LocalGames.ApplyCovers(all, GigaRest.Core.Games.LocalGames.DefaultCoversFolder());
+                games = GigaRest.Core.Games.GameLibraries.Merge(all, played);
+            }
             catch (Exception ex) { Log.Error("Игры", ex); games = []; }
             _queue.TryEnqueue(() => { if (_quiet == quiet) quiet.SetGames(games); });
         });
@@ -604,6 +625,21 @@ public sealed partial class App : Application, IXamlMetadataProvider
                 if (!on) _tray?.ShowBalloon("Не беспокоить", "Windows не дала включить режим сама. Щёлкните «включить „Не беспокоить“» вверху экрана.");
             });
         });
+    }
+
+    // Игра без магазина: выбрать её exe; название — по папке игры.
+    private async Task AddGameAsync()
+    {
+        try
+        {
+            if (await PickExeAsync() is not { } path) return;
+            if (_settings.CustomGames.Any(c => string.Equals(c.Path, path, StringComparison.OrdinalIgnoreCase))) return;
+            _settings.CustomGames.Add(new GigaRest.Core.Games.CustomGame { Name = GigaRest.Core.Games.LocalGames.NameFromExe(path), Path = path });
+            SaveSettings();
+            Log.Info("Своя игра добавлена");
+            if (_quiet is { } q) LoadGames(q);
+        }
+        catch (Exception ex) { Log.Error("Добавить игру", ex); }
     }
 
     private void PlayGame(GigaRest.Core.Games.Game game)
