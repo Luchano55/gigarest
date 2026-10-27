@@ -34,16 +34,35 @@ public sealed class TilesWindow : Window
     private int _ticks;
 
     public event Action<TileInfo>? OpenRequested;
+    private readonly Image _background;
+
+    /// <summary>
+    /// Фон — та же сцена, что на «Тихом» экране, приглушённая (ТЗ, раздел 6). Видео-сцена — встроенный лес:
+    /// второй видеопоток только ради фона под плитками не нужен.
+    /// </summary>
+    public void SetBackground(string? imagePath)
+    {
+        try
+        {
+            var uri = imagePath is not null && File.Exists(imagePath) ? new Uri(imagePath) : RestScreens.SceneUri("forest.jpg");
+            _background.Source = new BitmapImage(uri) { DecodePixelWidth = 2560 };
+        }
+        catch (Exception ex) when (ex is UriFormatException or ArgumentException)
+        {
+            GigaRest.Core.Logging.Log.Warn("Фон плиток: " + ex.Message);
+        }
+    }
     public FrameworkElement Root => _root;
 
     public TilesWindow()
     {
         Title = "GigaRest — второй монитор";
         _root = new Grid { Background = Brush("#05060A"), RequestedTheme = ElementTheme.Dark };
-        _root.Children.Add(new Image
+        _background = new Image
         {
             Source = new BitmapImage(RestScreens.SceneUri("forest.jpg")), Stretch = Stretch.UniformToFill, Opacity = 0.85,
-        });
+        };
+        _root.Children.Add(_background);
         _root.Children.Add(new Border { Background = Brush("#73040509") });
 
         var layout = new Grid { Padding = new Thickness(40, 28, 40, 40), RowSpacing = 20 };

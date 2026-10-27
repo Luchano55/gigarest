@@ -12,7 +12,8 @@ using static GigaRest.App.Ui;
 
 namespace GigaRest.App;
 
-public sealed record SettingsResult(DaySchedule Schedule, DaySchedule RestOffer, string Hotkey, string TilesHotkey, bool ConfirmBeforeRest, bool Autostart, bool DoNotDisturb, string FilmsFolder, string UpdateChannel);
+public sealed record SettingsResult(DaySchedule Schedule, DaySchedule RestOffer, string Hotkey, string TilesHotkey, bool ConfirmBeforeRest, bool Autostart, bool DoNotDisturb, string FilmsFolder, string UpdateChannel,
+    bool TilesEnabled, int TilesCount, int DimMinutes, int ScreenOffMinutes);
 
 /// <summary>Настройки: расписание возврата, горячая клавиша, окно перехода, автозапуск.</summary>
 public sealed class SettingsWindow : Window
@@ -22,7 +23,8 @@ public sealed class SettingsWindow : Window
     private readonly Grid _root;
     private readonly ToggleSwitch _confirm, _autostart, _dnd;
     private readonly TextBox _films;
-    private readonly ComboBox _channel;
+    private readonly ComboBox _channel, _tilesCount, _dim, _screenOff;
+    private readonly ToggleSwitch _tiles;
     private readonly ScheduleEditor _return, _rest;
     private readonly TextBox _hotkey, _tilesHotkey;
     private readonly TextBlock _hotkeyHint;
@@ -67,6 +69,17 @@ public sealed class SettingsWindow : Window
         _tilesHotkey = new TextBox { PlaceholderText = "Ctrl+Alt+End", Width = 260, HorizontalAlignment = HorizontalAlignment.Left };
         keys.Children.Add(_tilesHotkey);
         body.Children.Add(CardBorder(keys, radius: 18, padding: 22));
+
+        // Отдых: плитки и защита OLED
+        var rest = new StackPanel { Spacing = 6 };
+        rest.Children.Add(Text("Отдых", 18, Ink, FontWeights.Bold));
+        _tiles = new ToggleSwitch { OnContent = "Плитки на втором мониторе", OffContent = "Без плиток — второй монитор не трогать" };
+        rest.Children.Add(_tiles);
+        _tilesCount = Choice("Сколько плиток", [(1, "1"), (2, "2"), (3, "3"), (4, "4")], rest);
+        _dim = Choice("Затемнять «Тихий» экран без дела через", [(5, "5 минут"), (10, "10 минут"), (15, "15 минут"), (30, "30 минут"), (60, "1 час")], rest);
+        _screenOff = Choice("Выключать экран без дела через", [(30, "30 минут"), (60, "1 час"), (90, "1,5 часа"), (120, "2 часа"), (0, "Не выключать")], rest);
+        _tiles.Toggled += (_, _) => _tilesCount.IsEnabled = _tiles.IsOn;
+        body.Children.Add(CardBorder(rest, radius: 18, padding: 22));
 
         // Прочее
         var other = new StackPanel { Spacing = 6 };
@@ -124,6 +137,11 @@ public sealed class SettingsWindow : Window
         _autostart.IsOn = autostart;
         _dnd.IsOn = settings.DoNotDisturb;
         _films.Text = settings.FilmsFolder ?? "";
+        _tiles.IsOn = settings.TilesEnabled;
+        _tilesCount.IsEnabled = settings.TilesEnabled;
+        Select(_tilesCount, settings.TilesCount);
+        Select(_dim, settings.DimMinutes);
+        Select(_screenOff, settings.ScreenOffMinutes);
         _channel.SelectedItem = _channel.Items.Cast<ComboBoxItem>().FirstOrDefault(i => (string)i.Tag == settings.UpdateChannel) ?? _channel.Items[0];
         UpdateHotkeyHint(hotkeyProblem);
     }
@@ -135,6 +153,23 @@ public sealed class SettingsWindow : Window
             : "Так не получится: нужен хотя бы один из Ctrl, Alt, Shift, Win и клавиша — например, Ctrl+Alt+Home.");
     }
 
+    private static ComboBox Choice(string label, (int Value, string Text)[] options, StackPanel into)
+    {
+        var title = Text(label, 14, Ink, FontWeights.SemiBold);
+        title.Margin = new Thickness(0, 8, 0, 0);
+        into.Children.Add(title);
+        var box = new ComboBox { Width = 260, HorizontalAlignment = HorizontalAlignment.Left };
+        foreach (var (value, text) in options) box.Items.Add(new ComboBoxItem { Content = text, Tag = value });
+        into.Children.Add(box);
+        return box;
+    }
+
+    private static void Select(ComboBox box, int value) =>
+        box.SelectedItem = box.Items.Cast<ComboBoxItem>().FirstOrDefault(i => (int)i.Tag == value)
+                           ?? box.Items.Cast<ComboBoxItem>().OrderBy(i => Math.Abs((int)i.Tag - value)).First();
+
+    private static int Picked(ComboBox box, int fallback) => box.SelectedItem is ComboBoxItem { Tag: int v } ? v : fallback;
+
     private void OnSave()
     {
         if (!Hotkey.TryParse(_hotkey.Text, out var hotkey))
@@ -143,7 +178,8 @@ public sealed class SettingsWindow : Window
             return;
         }
         var tiles = Hotkey.TryParse(_tilesHotkey.Text, out var t) && t != hotkey ? t.ToString() : "Ctrl+Alt+End";
-        Saved?.Invoke(new SettingsResult(_return.Current(), _rest.Current(), hotkey.ToString(), tiles, _confirm.IsOn, _autostart.IsOn, _dnd.IsOn, _films.Text, (_channel.SelectedItem as ComboBoxItem)?.Tag as string ?? GigaRest.Core.Updates.UpdateChannels.Auto));
+        Saved?.Invoke(new SettingsResult(_return.Current(), _rest.Current(), hotkey.ToString(), tiles, _confirm.IsOn, _autostart.IsOn, _dnd.IsOn, _films.Text, (_channel.SelectedItem as ComboBoxItem)?.Tag as string ?? GigaRest.Core.Updates.UpdateChannels.Auto,
+            _tiles.IsOn, Picked(_tilesCount, 4), Picked(_dim, 15), Picked(_screenOff, 60)));
         AppWindow.Hide();
     }
 

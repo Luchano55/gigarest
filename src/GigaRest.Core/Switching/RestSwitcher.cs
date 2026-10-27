@@ -56,6 +56,9 @@ public sealed class RestSwitcher
     public bool IsResting => _sessions.Exists;
 
     /// <summary>Второй монитор: не основной, лучше — справа от основного.</summary>
+    /// <summary>Сколько окон переносить на второй монитор (настройка «Плитки»: 0 — выключены, 1–4).</summary>
+    public int MaxTiles { get; set; } = TilePlan.Max;
+
     public static MonitorInfo? PickSecondMonitor(IReadOnlyList<MonitorInfo> monitors)
     {
         var primary = monitors.FirstOrDefault(m => m.IsPrimary);
@@ -82,7 +85,7 @@ public sealed class RestSwitcher
         var session = _sessions.Load() ?? new RestSession { StartedUtc = _clock.UtcNow };
 
         var toClose = programs.Where(p => p.Action == ProgramAction.Close).ToList();
-        var toMove = TilePlan.Ordered(programs).ToList(); // в порядке плиток: первая — левая верхняя
+        var toMove = TilePlan.Ordered(programs).Take(MaxTiles).ToList(); // в порядке плиток: первая — левая верхняя
 
         // 1. Запоминаем, как запустить обратно, — до закрытия. Файл переживёт сбой посередине.
         foreach (var p in toClose.Where(p => !p.IsElevated))

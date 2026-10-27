@@ -49,6 +49,16 @@ public sealed class QuietWindow : Window
     private readonly Button _toastDetails;
     private readonly DispatcherTimer _tick = new() { Interval = TimeSpan.FromSeconds(1) };
     private DateTime _lastInput = DateTime.Now;
+
+    /// <summary>Таймеры простоя (затемнение, выключение экрана) — из настроек.</summary>
+    public QuietTimers Timers { get; set; } = new();
+    private bool _cursorHidden, _screenOff;
+    private Border _offCard = null!;
+    private TextBlock _offText = null!;
+    private GamepadInput? _pad;
+    private static readonly string[] WordList = ["Продолжить", "Играть", "Смотреть", "Слушать", "Сцены"];
+    private int _wordIndex = -1;
+
     private DateTime _lastShift = DateTime.Now;
     private string? _openWord;
     private int _sceneIndex;
@@ -222,9 +232,26 @@ public sealed class QuietWindow : Window
         _overlay.Children.Add(_toast);
         _root.Children.Add(_overlay);
 
+        // «Экран выключится через 60 с» — после долгого простоя (защита OLED).
+        _offText = Text("", 15, TextColor, wrap: true);
+        var offNow = QuietButton("Выключить сейчас", 13);
+        offNow.Click += (_, _) => TurnScreenOff();
+        var offBox = new StackPanel { Spacing = 6 };
+        offBox.Children.Add(_offText);
+        offBox.Children.Add(Text("Пошевелите мышью или нажмите любую клавишу — экран останется включённым.", 12, Hex("#99FFFFFF"), wrap: true));
+        offBox.Children.Add(offNow);
+        _offCard = new Border
+        {
+            Background = Brush("#CC0C0D12"), BorderBrush = Brush("#14FFFFFF"), BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(16), Padding = new Thickness(22, 16, 22, 14), MaxWidth = 440,
+            HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+            Visibility = Visibility.Collapsed, Child = offBox,
+        };
+
         // Затемнение после 15 минут без действий (сцена — до 10%).
         _dim = new Border { Background = Brush(Colors.Black), Opacity = 0, IsHitTestVisible = false };
         _root.Children.Add(_dim);
+        _root.Children.Add(_offCard); // над затемнением — его видно
 
         Content = _root;
         _root.PointerMoved += (_, _) => Wake();
@@ -750,7 +777,128 @@ public sealed class QuietWindow : Window
             }
             return;
         }
-        if (e.Key == global::Windows.System.VirtualKey.Escape && _openWord is not null) { ClosePanel(); e.Handled = true; }
+        if (WebVisible) return; // клавиши — сайту
+        switch (e.Key)
+        {
+            case global::Windows.System.VirtualKey.Escape: if (_openWord is not null) { ClosePanel(); e.Handled = true; } break;
+            case global::Windows.System.VirtualKey.Left: Navigate(PadButton.Left); e.Handled = true; break;
+            case global::Windows.System.VirtualKey.Right: Navigate(PadButton.Right); e.Handled = true; break;
+            case global::Windows.System.VirtualKey.Up: Navigate(PadButton.Up); e.Handled = true; break;
+            case global::Windows.System.VirtualKey.Down: Navigate(PadButton.Down); e.Handled = true; break;
+        }
+    }
+
+    // ---------- клавиатура и геймпад: стрелки/крестовина — по разделам и спискам, Enter/A — выбрать, Esc/B — назад ----------
+
+    private void StepWord(int delta)
+    {
+        var current = _openWord is not null ? Array.IndexOf(WordList, _openWord) : _wordIndex;
+        _wordIndex = current < 0 ? (delta >= 0 ? 0 : WordList.Length - 1) : (current + delta + WordList.Length) % WordList.Length;
+        _openWord = null;
+        OnWord(WordList[_wordIndex]);
+        FocusPanel();
+    }
+
+    private void FocusPanel()
+    {
+        if (FocusManager.FindFirstFocusableElement(_panelContent) is Control first) first.Focus(FocusState.Keyboard);
+    }
+
+    private bool FocusInPanel() =>
+        FocusManager.GetFocusedElement(_root.XamlRoot) is DependencyObject d && IsInside(d, _panel);
+
+    private static bool IsInside(DependencyObject element, DependencyObject container)
+    {
+        for (var d = element; d is not null; d = VisualTreeHelper.GetParent(d))
+            if (d == container) return true;
+        return false;
+    }
+
+    private void Navigate(PadButton direction)
+    {
+        Wake();
+        if (_openWord is null)
+        {
+            if (direction is PadButton.Left) StepWord(-1);
+            else StepWord(direction is PadButton.Up ? 0 : 1);
+            return;
+        }
+        if (!FocusInPanel()) { FocusPanel(); return; }
+        var options = new FindNextElementOptions { SearchRoot = _panel };
+        var moved = direction switch
+        {
+            PadButton.Up => FocusManager.TryMoveFocus(FocusNavigationDirection.Up, options) || FocusManager.TryMoveFocus(FocusNavigationDirection.Previous, options),
+            PadButton.Down => FocusManager.TryMoveFocus(FocusNavigationDirection.Down, options) || FocusManager.TryMoveFocus(FocusNavigationDirection.Next, options),
+            PadButton.Left => FocusManager.TryMoveFocus(FocusNavigationDirection.Left, options),
+            _ => FocusManager.TryMoveFocus(FocusNavigationDirection.Right, options),
+        };
+        // Влево-вправо дальше некуда — соседний раздел.
+        if (!moved && direction is PadButton.Left or PadButton.Right) StepWord(direction == PadButton.Left ? -1 : 1);
+    }
+
+    /// <summary>Кнопка геймпада (только когда окно «Тихого» экрана активно).</summary>
+    private void OnPad(PadButton button)
+    {
+        Wake();
+        switch (button)
+        {
+            case PadButton.A:
+                if (_openWord is null) { StepWord(0); return; }
+                var focused = FocusManager.GetFocusedElement(_root.XamlRoot);
+                if (focused is HyperlinkButton link) new Microsoft.UI.Xaml.Automation.Peers.HyperlinkButtonAutomationPeer(link).Invoke();
+                else if (focused is Button b) new Microsoft.UI.Xaml.Automation.Peers.ButtonAutomationPeer(b).Invoke();
+                break;
+            case PadButton.B:
+                if (_film is not null) CloseFilm();
+                else if (_web.FirstOrDefault(w => !w.Value.Mini) is { Value: not null } open) Minimize(open.Key);
+                else if (_openWord is not null) ClosePanel();
+                break;
+            case PadButton.Y:
+                SetScene(_sceneIndex + 1);
+                SceneChanged?.Invoke(_scenes[_sceneIndex], _effect);
+                break;
+            case PadButton.LeftShoulder: StepWord(-1); break;
+            case PadButton.RightShoulder: StepWord(1); break;
+            default: if (_film is null && !WebVisible) Navigate(button); break;
+        }
+    }
+
+    private bool IsForeground()
+    {
+        try { return WindowTools.Foreground() == (long)RestScreens.Hwnd(this); }
+        catch (Exception) { return false; }
+    }
+
+    // ---------- курсор и выключение экрана ----------
+
+    private void SetCursorHidden(bool hide)
+    {
+        if (hide == _cursorHidden) return;
+        _cursorHidden = hide;
+        ShowCursor(!hide);
+    }
+
+    private void TurnScreenOff()
+    {
+        _screenOff = true;
+        _offCard.Visibility = Visibility.Collapsed;
+        // Выключить монитор (как по таймеру Windows); любое движение мыши или клавиша включат его.
+        SendMessageW(RestScreens.Hwnd(this), 0x0112 /* WM_SYSCOMMAND */, 0xF170 /* SC_MONITORPOWER */, 2);
+    }
+
+    [DllImport("user32.dll")] private static extern int ShowCursor(bool show);
+    [DllImport("user32.dll")] private static extern nint SendMessageW(nint hwnd, uint msg, nint wParam, nint lParam);
+    [DllImport("user32.dll")] private static extern bool GetLastInputInfo(ref LASTINPUTINFO info);
+    [StructLayout(LayoutKind.Sequential)] private struct LASTINPUTINFO { public uint cbSize; public uint dwTime; }
+
+    private static TimeSpan Min(TimeSpan a, TimeSpan b) => a < b ? a : b;
+
+    /// <summary>Сколько компьютер без ввода вообще — мышь и клавиатура на любом мониторе.</summary>
+    private static TimeSpan SystemIdle()
+    {
+        var info = new LASTINPUTINFO { cbSize = (uint)Marshal.SizeOf<LASTINPUTINFO>() };
+        if (!GetLastInputInfo(ref info)) return TimeSpan.Zero;
+        return TimeSpan.FromMilliseconds(unchecked((uint)Environment.TickCount - info.dwTime));
     }
 
     private void Wake()
@@ -758,6 +906,9 @@ public sealed class QuietWindow : Window
         _lastInput = DateTime.Now;
         _words.Opacity = 1;
         _dim.Opacity = 0;
+        _offCard.Visibility = Visibility.Collapsed;
+        _screenOff = false;
+        SetCursorHidden(false);
     }
 
     private void OnTick()
@@ -765,17 +916,26 @@ public sealed class QuietWindow : Window
         var now = DateTime.Now;
         _clock.Text = now.ToString("HH:mm", Ru);
         _date.Text = now.ToString("dddd, d MMMM", Ru);
-        if (_film is not null || WebVisible) _lastInput = now; // смотрят или выбирают музыку — не гасим экран
-        var idle = now - _lastInput;
-
-        // 20 секунд без действий — список закрывается, строка приглушается до 40%.
-        if (idle > TimeSpan.FromSeconds(20))
+        // Простой «Тихого» экрана — по вводу в нём; затемнение и выключение — по вводу вообще
+        // (работаете на втором мониторе — экран не гаснет). Смотрят фильм или сайт — не гасим.
+        var watching = _film is not null || WebVisible || _paused;
+        if (WebVisible || _paused) _lastInput = now;
+        var own = Timers.At(now - _lastInput);
+        SetCursorHidden(own.HideCursor && !WebVisible);
+        if (own.CloseList && _film is null)
         {
             if (_openWord is not null) ClosePanel();
             _words.Opacity = 0.4;
         }
-        // 15 минут — сцена плавно темнеет до 10%.
-        _dim.Opacity = idle > TimeSpan.FromMinutes(15) ? 0.9 : 0;
+        var system = Timers.At(watching ? TimeSpan.Zero : Min(now - _lastInput, SystemIdle()));
+        _dim.Opacity = system.DimScene ? 0.9 : 0;
+        if (system.ScreenOffInSeconds is int left && !_screenOff)
+        {
+            _offText.Text = $"Экран выключится через {GigaRest.Core.Text.Sizes.Plural(left, "секунду", "секунды", "секунд")}";
+            _offCard.Visibility = Visibility.Visible;
+        }
+        else _offCard.Visibility = Visibility.Collapsed;
+        if (system.ScreenOffNow && !_screenOff) TurnScreenOff();
 
         // Ничего не стоит на месте дольше 2 минут: сдвигаем весь слой на 10–30 px.
         if (now - _lastShift > TimeSpan.FromMinutes(2))
@@ -1104,6 +1264,8 @@ public sealed class QuietWindow : Window
     public void ShowOn(MonitorInfo? monitor)
     {
         _monitor = monitor;
+        _pad ??= new GamepadInput(DispatcherQueue, () => IsForeground() && !_paused);
+        _pad.Pressed += OnPad;
         RestScreens.FullScreenOn(this, monitor);
         RestScreens.BringToFront(this);
         _tick.Start();
@@ -1123,6 +1285,8 @@ public sealed class QuietWindow : Window
 
     public void CloseForGood()
     {
+        if (_pad is not null) { _pad.Pressed -= OnPad; _pad.Dispose(); _pad = null; }
+        SetCursorHidden(false);
         CloseFilm(); // где остановились — запомнится
         foreach (var key in _web.Keys.ToList()) CloseWeb(key);
         _closing = true;

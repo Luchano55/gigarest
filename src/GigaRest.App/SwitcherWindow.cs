@@ -64,6 +64,10 @@ public sealed class SwitcherWindow : Window
     private Mode _mode;
     private bool _closingForGood;
     private bool _hasSecondMonitor = true;
+
+    /// <summary>Сколько плиток разрешено настройками: 0 — плитки выключены, 1–4.</summary>
+    public int MaxTiles { get; set; } = TilePlan.Max;
+    private bool TilesAvailable => _hasSecondMonitor && MaxTiles > 0;
     private readonly List<(RunningProgram P, Grid Status)> _progressRows = [];
 
     private enum Mode { Plan, Progress, Rest, Returning, Work, Error }
@@ -404,7 +408,7 @@ public sealed class SwitcherWindow : Window
         var tiles = TilePlan.Ordered(Programs).ToList();
         _secondHint.Text = tiles.Count > 0 ? "Сейчас на втором мониторе только эти окна" : "";
         RenderSecondScreen(tiles, interactive: false);
-        _tilesValue.Text = tiles.Count > 0 ? $"{tiles.Count} из {TilePlan.Max}" : "—";
+        _tilesValue.Text = tiles.Count > 0 ? $"{Math.Min(tiles.Count, Math.Max(1, MaxTiles))} из {Math.Max(1, MaxTiles)}" : "—";
 
         _list.Children.Clear();
         var closed = report.Results.Count(r => r.IsGone);
@@ -584,13 +588,13 @@ public sealed class SwitcherWindow : Window
         }
         else
         {
-            var tilesFull = p.Action != ProgramAction.SecondMonitor && TilePlan.Ordered(Programs).Count() >= TilePlan.Max;
+            var tilesFull = p.Action != ProgramAction.SecondMonitor && TilePlan.Ordered(Programs).Count() >= MaxTiles;
             var options = p.IsBackground
                 ? new[] { (ProgramAction.Close, "Завершить в отдыхе", true), (ProgramAction.Keep, "Не трогать", true) }
                 : new[]
                 {
                     (ProgramAction.Close, "Закрыть", true),
-                    (ProgramAction.SecondMonitor, "На второй монитор", _hasSecondMonitor && !tilesFull),
+                    (ProgramAction.SecondMonitor, "На второй монитор", TilesAvailable && !tilesFull),
                     (ProgramAction.Keep, "Не трогать", true),
                 };
             right = Segmented(p, options);
@@ -649,7 +653,9 @@ public sealed class SwitcherWindow : Window
             b.Resources["ButtonBorderBrushPressed"] = selected ? Brush(SelectedEdge(action)) : Brush(Colors.Transparent);
             b.Resources["ButtonBorderBrushDisabled"] = Brush(Colors.Transparent);
             if (!enabled && action == ProgramAction.SecondMonitor)
-                ToolTipService.SetToolTip(b, _hasSecondMonitor ? "На втором мониторе уже четыре плитки — уберите одну" : "Второй монитор не подключён");
+                ToolTipService.SetToolTip(b, !_hasSecondMonitor ? "Второй монитор не подключён"
+                    : MaxTiles == 0 ? "Плитки выключены в настройках"
+                    : $"На втором мониторе уже {Sizes.Plural(MaxTiles, "плитка", "плитки", "плиток")} — уберите одну или разрешите больше в настройках");
             b.Click += (_, _) =>
             {
                 if (selected) return;
@@ -794,19 +800,20 @@ public sealed class SwitcherWindow : Window
         _tilesTitle.Text = "Плитки";
 
         var tiles = TilePlan.Ordered(Programs).ToList();
-        _tilesValue.Text = !_hasSecondMonitor ? "нет монитора" : $"{tiles.Count} из {TilePlan.Max}";
+        _tilesValue.Text = !_hasSecondMonitor ? "нет монитора" : MaxTiles == 0 ? "выключены" : $"{Math.Min(tiles.Count, MaxTiles)} из {MaxTiles}";
         var second = Programs.Count(p => p.Action == ProgramAction.SecondMonitor);
         var keep = Programs.Count(p => p.Action == ProgramAction.Keep || p.IsElevated);
         _panelSummary.Text = $"закроются {close.Count} · на второй монитор {second} · не трогаем {keep}";
 
         _secondCaption.Inlines.Clear();
         AddCaption(_secondCaption, "Второй", "Живые плитки");
-        if (!_hasSecondMonitor)
+        if (!TilesAvailable)
         {
             _secondScreen.Children.Clear();
             var box = new StackPanel { Spacing = 6, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(14) };
-            box.Children.Add(Text("Второй монитор не подключён", 13, TextMain, FontWeights.SemiBold));
-            box.Children.Add(Text("Отдых работает и без него. Плитки появятся, когда подключите.", 11.5, TextMuted, wrap: true));
+            box.Children.Add(Text(_hasSecondMonitor ? "Плитки выключены" : "Второй монитор не подключён", 13, TextMain, FontWeights.SemiBold));
+            box.Children.Add(Text(_hasSecondMonitor ? "Включить можно в настройках. Окна на втором мониторе останутся как есть."
+                : "Отдых работает и без него. Плитки появятся, когда подключите.", 11.5, TextMuted, wrap: true));
             Grid.SetRowSpan(box, 2);
             Grid.SetColumnSpan(box, 2);
             _secondScreen.Children.Add(box);
@@ -825,7 +832,10 @@ public sealed class SwitcherWindow : Window
         _secondScreen.Children.Clear();
         for (var slot = 0; slot < TilePlan.Max; slot++)
         {
-            FrameworkElement cell = slot < tiles.Count ? TileCell(tiles[slot], slot, interactive) : EmptyCell(interactive);
+            // Места сверх разрешённого настройками — пустые и неактивные.
+            FrameworkElement cell = slot >= MaxTiles ? EmptyCell(false)
+                : slot < tiles.Count ? TileCell(tiles[slot], slot, interactive) : EmptyCell(interactive);
+            if (slot >= MaxTiles) cell.Opacity = 0.35;
             Grid.SetRow(cell, slot / 2);
             Grid.SetColumn(cell, slot % 2);
             _secondScreen.Children.Add(cell);

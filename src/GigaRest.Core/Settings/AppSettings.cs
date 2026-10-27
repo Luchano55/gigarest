@@ -63,6 +63,13 @@ public sealed class AppSettings
     public string UpdateChannel { get; set; } = Updates.UpdateChannels.Auto;
     /// <summary>Один раз перевели Яндекс Музыку со второго монитора в «Оставить» (ей управляет «Слушать», просьба Романа).</summary>
     public bool MusicOnMainScreen { get; set; }
+    /// <summary>Защита OLED: через сколько минут простоя «Тихий» экран темнеет.</summary>
+    public int DimMinutes { get; set; } = 15;
+    /// <summary>Через сколько минут простоя выключать экран (с отсчётом 60 с); 0 — не выключать.</summary>
+    public int ScreenOffMinutes { get; set; } = 60;
+    /// <summary>Плитки на втором мониторе: включены ли и сколько (1–4).</summary>
+    public bool TilesEnabled { get; set; } = true;
+    public int TilesCount { get; set; } = 4;
     /// <summary>На время отдыха включать «Не беспокоить» (только приоритетные уведомления).</summary>
     public bool DoNotDisturb { get; set; } = true;
     /// <summary>Показывать окно «Переход в отдых». false — переходить сразу, без вопросов.</summary>

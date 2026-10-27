@@ -334,3 +334,29 @@ public class TilePlanTests
         Assert.Null(list[1].TileOrder);
     }
 }
+
+public class QuietTimersTests
+{
+    [Fact]
+    public void Stages()
+    {
+        var t = new GigaRest.Core.Scenes.QuietTimers { DimAfter = TimeSpan.FromMinutes(15), ScreenOffAfter = TimeSpan.FromMinutes(60) };
+        Assert.False(t.At(TimeSpan.FromSeconds(10)).HideCursor);
+        var q = t.At(TimeSpan.FromSeconds(25));
+        Assert.True(q.HideCursor && q.CloseList && q.DimWords);
+        Assert.False(q.DimScene);
+        Assert.True(t.At(TimeSpan.FromMinutes(16)).DimScene);
+        Assert.Null(t.At(TimeSpan.FromMinutes(59)).ScreenOffInSeconds);
+        Assert.Equal(50, t.At(TimeSpan.FromMinutes(60) + TimeSpan.FromSeconds(10)).ScreenOffInSeconds);
+        Assert.True(t.At(TimeSpan.FromMinutes(61)).ScreenOffNow);
+    }
+
+    [Fact]
+    public void ScreenOffCanBeDisabled()
+    {
+        var t = GigaRest.Core.Scenes.QuietTimers.From(new GigaRest.Core.Settings.AppSettings { ScreenOffMinutes = 0, DimMinutes = 5 });
+        Assert.Null(t.ScreenOffAfter);
+        Assert.False(t.At(TimeSpan.FromHours(5)).ScreenOffNow);
+        Assert.True(t.At(TimeSpan.FromMinutes(6)).DimScene);
+    }
+}

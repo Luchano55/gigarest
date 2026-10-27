@@ -26,6 +26,9 @@ public sealed class SettingsStore
         s.GamesPlayed ??= [];
         s.FilmsOpened ??= [];
         s.FilmsPosition ??= [];
+        s.TilesCount = Math.Clamp(s.TilesCount, 1, 4);
+        s.DimMinutes = Math.Clamp(s.DimMinutes, 1, 240);
+        s.ScreenOffMinutes = Math.Clamp(s.ScreenOffMinutes, 0, 600);
         s.UpdateChannel = Updates.UpdateChannels.Normalize(s.UpdateChannel);
         s.ReturnSchedule ??= new DaySchedule();
         s.RestOffer ??= new DaySchedule { Time = "19:00" };

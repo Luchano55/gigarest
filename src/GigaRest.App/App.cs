@@ -225,9 +225,11 @@ public sealed partial class App : Application, IXamlMetadataProvider
             var myScenes = string.IsNullOrWhiteSpace(_settings.MyScenesFolder) ? SceneCatalog.DefaultMyScenesFolder() : _settings.MyScenesFolder!;
             try { Directory.CreateDirectory(myScenes); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { Log.Warn("Папка «Мои сцены»: " + ex.Message); }
             var scenes = SceneCatalog.Load(RestScreens.ScenesDir, myScenes);
-            _quiet = new QuietWindow(scenes, _settings.SceneId, _settings.SceneEffect);
+            _quiet = new QuietWindow(scenes, _settings.SceneId, _settings.SceneEffect) { Timers = GigaRest.Core.Scenes.QuietTimers.From(_settings) };
+            _tilesWindow?.SetBackground(scenes.FirstOrDefault(s => s.Id == _settings.SceneId) is { IsVideo: false } current ? current.Path : scenes.FirstOrDefault(s => !s.IsVideo)?.Path);
             _quiet.SceneChanged += (scene, effect) =>
             {
+                _tilesWindow?.SetBackground(scene.IsVideo ? null : scene.Path);
                 _settings.SceneId = scene.Id;
                 _settings.SceneEffect = effect;
                 SaveSettings();
@@ -792,6 +794,12 @@ public sealed partial class App : Application, IXamlMetadataProvider
                 if (_window is not null) _window.DoNotDisturb = r.DoNotDisturb;
                 _settings.FilmsFolder = string.IsNullOrWhiteSpace(r.FilmsFolder) ? null : r.FilmsFolder.Trim();
                 _settings.UpdateChannel = r.UpdateChannel;
+                _settings.TilesEnabled = r.TilesEnabled;
+                _settings.TilesCount = r.TilesCount;
+                _settings.DimMinutes = r.DimMinutes;
+                _settings.ScreenOffMinutes = r.ScreenOffMinutes;
+                if (_window is not null) _window.MaxTiles = r.TilesEnabled ? r.TilesCount : 0;
+                if (_quiet is not null) _quiet.Timers = GigaRest.Core.Scenes.QuietTimers.From(_settings);
                 if (_updater is not null) _updater.Channel = GigaRest.Core.Updates.UpdateChannels.Resolve(r.UpdateChannel, GigaRest.Core.Updates.AppVersion.Display);
                 var hotkeyChanged = r.Hotkey != _settings.Hotkey;
                 _settings.Hotkey = r.Hotkey;
@@ -884,7 +892,7 @@ public sealed partial class App : Application, IXamlMetadataProvider
     {
         if (_window is null)
         {
-            _window = new SwitcherWindow { DoNotDisturb = _settings.DoNotDisturb };
+            _window = new SwitcherWindow { DoNotDisturb = _settings.DoNotDisturb, MaxTiles = _settings.TilesEnabled ? _settings.TilesCount : 0 };
             _window.ActionChanged += p =>
             {
                 ProgramScanner.Apply(_settings, p);
@@ -1046,6 +1054,7 @@ public sealed partial class App : Application, IXamlMetadataProvider
             w.ShowProgress(programs);
             w.Present();
             var progress = new Progress<SwitchProgress>(w.UpdateProgress);
+            _switcher.MaxTiles = _settings.TilesEnabled ? _settings.TilesCount : 0;
             var report = await Task.Run(() => _switcher.GoToRestAsync(programs, progress, _cts.Token));
             w.ShowRest(report);
             _tray?.SetTip(TrayTip);
