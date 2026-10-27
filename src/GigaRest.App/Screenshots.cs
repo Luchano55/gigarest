@@ -155,6 +155,13 @@ internal static class Screenshots
         quiet.SetServices(services);
         quiet.SetBrowsers([new GigaRest.Core.Media.AppChoice("Chrome", @"C:\Program Files\Google\Chrome\Application\chrome.exe")]);
         quiet.SetLastYouTube("https://www.youtube.com/watch?v=demo", "Как варить глинтвейн дома", now.AddHours(-20));
+        quiet.AudioList = () =>
+        [
+            new GigaRest.Windows.AudioDevice("1", "Наушники (Игры)", false),
+            new GigaRest.Windows.AudioDevice("2", "Наушники (Музыка)", true),
+            new GigaRest.Windows.AudioDevice("3", "Монитор LG OLED", false),
+        ];
+        quiet.AudioSetDefault = _ => true;
         quiet.InitNature(GigaRest.Core.Sounds.NatureSound.Rain, 0.5);
         quiet.Media = () => Task.FromResult<NowPlaying.Current?>(new("Земфира — Небо Лондона", "Яндекс Музыка", true));
         await Task.Delay(2500);

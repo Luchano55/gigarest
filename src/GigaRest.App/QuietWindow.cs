@@ -753,7 +753,14 @@ public sealed class QuietWindow : Window
             {
                 box.Children.Add(Text(L.T("Сейчас ничего не играет, а программу для музыки GigaRest не нашёл.", "Nothing is playing, and GigaRest didn’t find a music app."), 13, Hex("#99FFFFFF"), wrap: true));
             }
-            box.Children.Add(MusicAppLink());
+            var line = new Grid();
+            line.ColumnDefinitions.Add(new ColumnDefinition());
+            line.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            line.Children.Add(MusicAppLink());
+            var output = AudioOutputButton();
+            Grid.SetColumn(output, 1);
+            line.Children.Add(output);
+            box.Children.Add(line);
             return;
         }
         var track = Text(current.Text, 19, Hex("#E6FFFFFF"), FontWeights.SemiBold, wrap: true);
@@ -778,8 +785,74 @@ public sealed class QuietWindow : Window
             };
             buttons.Children.Add(b);
         }
-        box.Children.Add(buttons);
+        var row = new Grid();
+        row.ColumnDefinitions.Add(new ColumnDefinition());
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        row.Children.Add(buttons);
+        var audio = AudioOutputButton();
+        audio.Margin = new Thickness(0, 4, 0, 0);
+        Grid.SetColumn(audio, 1);
+        row.Children.Add(audio);
+        box.Children.Add(row);
         box.Children.Add(MusicAppLink());
+    }
+
+    /// <summary>Устройства вывода звука — по умолчанию из Windows; для скриншотов подменяются.</summary>
+    internal Func<List<AudioDevice>> AudioList { get; set; } = AudioDevices.List;
+    internal Func<string, bool> AudioSetDefault { get; set; } = AudioDevices.SetDefault;
+
+    /// <summary>Значок наушников и куда сейчас идёт звук; щелчок — список устройств, как «Выбор устройства вывода» в Windows.</summary>
+    private Button AudioOutputButton()
+    {
+        var name = Text("", 12, Hex("#99FFFFFF"));
+        name.MaxWidth = 170;
+        name.TextTrimming = TextTrimming.CharacterEllipsis;
+        name.VerticalAlignment = VerticalAlignment.Center;
+        var content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+        content.Children.Add(new FontIcon { Glyph = "\uE7F6", FontSize = 16, FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"), Foreground = Brush("#D9FFFFFF"), VerticalAlignment = VerticalAlignment.Center });
+        content.Children.Add(name);
+        var b = new Button
+        {
+            Content = content, Height = 44, Padding = new Thickness(12, 0, 12, 0), VerticalAlignment = VerticalAlignment.Center,
+            Background = Brush(Colors.Transparent), BorderThickness = new Thickness(0), CornerRadius = new CornerRadius(12),
+        };
+        b.Resources["ButtonBackgroundPointerOver"] = Brush("#1AFFFFFF");
+        b.Resources["ButtonBackgroundPressed"] = Brush("#26FFFFFF");
+        b.Resources["ButtonBorderBrushPointerOver"] = Brush(Colors.Transparent);
+        b.Resources["ButtonBorderBrushPressed"] = Brush(Colors.Transparent);
+        ToolTipService.SetToolTip(b, L.T("Куда идёт звук", "Sound output"));
+
+        List<AudioDevice> devices = [];
+        async Task LoadAsync()
+        {
+            devices = await Task.Run(AudioList);
+            name.Text = devices.FirstOrDefault(d => d.IsDefault)?.Name ?? "";
+            name.Visibility = name.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+            b.Visibility = devices.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        }
+        _ = LoadAsync();
+        b.Click += async (_, _) =>
+        {
+            Wake();
+            await LoadAsync();
+            if (devices.Count == 0) return;
+            var menu = new MenuFlyout { Placement = Microsoft.UI.Xaml.Controls.Primitives.FlyoutPlacementMode.BottomEdgeAlignedRight };
+            foreach (var d in devices)
+            {
+                var device = d;
+                var item = new MenuFlyoutItem { Text = (device.IsDefault ? "✓  " : "     ") + device.Name };
+                item.Click += async (_, _) =>
+                {
+                    if (!device.IsDefault && !AudioSetDefault(device.Id))
+                        ShowSummary(L.T($"Не получилось переключить звук на «{device.Name}». Это можно сделать в Windows: значок звука у часов → выбор устройства.",
+                                        $"Couldn’t switch sound to “{device.Name}”. You can do it in Windows: sound icon by the clock → choose a device."), hasProblems: true);
+                    await LoadAsync();
+                };
+                menu.Items.Add(item);
+            }
+            menu.ShowAt(b);
+        };
+        return b;
     }
 
     private Button MusicAppLink()
