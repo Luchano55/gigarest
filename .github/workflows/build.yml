@@ -191,7 +191,7 @@ jobs:
             Push-Location $dir
             git checkout --orphan "screenshots-tmp$attempt" --quiet
             git rm -rf . --quiet 2>$null
-            if ($hasRemote) { git checkout FETCH_HEAD -- . 2>$null }
+            if ($hasRemote) { git checkout $base -- . 2>$null }  # FETCH_HEAD у каждого worktree свой — берём по хэшу
             if (Test-Path $branch) { Remove-Item $branch -Recurse -Force }
             New-Item -ItemType Directory $branch -Force | Out-Null
             Copy-Item "$shots\*.png" $branch -Force
