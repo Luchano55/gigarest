@@ -72,11 +72,15 @@ CloseApplicationsFilter=*.exe,*.dll
 RestartApplications=no
 
 [Languages]
+; Язык установщика — как у Windows: русский для русской Windows, иначе английский (первый в списке).
+Name: "en"; MessagesFile: "compiler:Default.isl"
 Name: "ru"; MessagesFile: "compiler:Languages\Russian.isl"
 
 [CustomMessages]
 ru.AutoStartTask=Запускать вместе с Windows (в трее)
 ru.OtherTasks=Прочее:
+en.AutoStartTask=Start with Windows (in the tray)
+en.OtherTasks=Other:
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
