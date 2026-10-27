@@ -360,3 +360,38 @@ public class QuietTimersTests
         Assert.True(t.At(TimeSpan.FromMinutes(6)).DimScene);
     }
 }
+
+public class LibraryFilterTests
+{
+    private static readonly Game[] Games =
+    [
+        new() { Id = "steam:1", Name = "Ёлка", Store = "Steam", LastPlayedUtc = new DateTime(2026, 10, 1) },
+        new() { Id = "steam:2", Name = "Альфа", Store = "Steam" },
+        new() { Id = "bnet:wow", Name = "World of Warcraft", Store = "Battle.net", LastPlayedUtc = new DateTime(2026, 10, 20) },
+        new() { Id = "epic:x", Name = "Бета", Store = "Epic" },
+    ];
+
+    [Fact]
+    public void StoreSearchAndOrder()
+    {
+        Assert.Equal(["World of Warcraft", "Ёлка", "Альфа", "Бета"], GameLibraries.Filter(Games, null, null, byName: false).Select(g => g.Name));
+        Assert.Equal(["Альфа", "Ёлка"], GameLibraries.Filter(Games, "Steam", null, byName: true).Select(g => g.Name).OrderBy(n => n));
+        Assert.Equal(["Ёлка"], GameLibraries.Filter(Games, null, "елк", byName: false).Select(g => g.Name));
+        Assert.Equal(["World of Warcraft"], GameLibraries.Filter(Games, null, "WAR", byName: false).Select(g => g.Name));
+    }
+
+    [Fact]
+    public void SteamHeroFromCache()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "gigarest hero " + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var folder = Path.Combine(dir, "appcache", "librarycache", "570", "abc");
+            Directory.CreateDirectory(folder);
+            File.WriteAllText(Path.Combine(folder, "library_hero.jpg"), "");
+            Assert.Equal(Path.Combine(folder, "library_hero.jpg"), GameLibraries.SteamCacheFile(dir, "570", "library_hero.jpg"));
+            Assert.Null(GameLibraries.SteamCacheFile(dir, "1", "library_hero.jpg"));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+}

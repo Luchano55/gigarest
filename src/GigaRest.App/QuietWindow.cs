@@ -452,9 +452,10 @@ public sealed class QuietWindow : Window
                     foreach (var game in _games.Skip(5)) list.Children.Add(GameListRow(game));
                     _panelContent.Children.Add(new ScrollViewer { Content = list, MaxHeight = 260, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
                 }
-                var count = Text(GigaRest.Core.Text.Sizes.Plural(_games.Count, "игра", "игры", "игр") + " · Steam, Epic, GOG, Battle.net", 12, Hex("#66FFFFFF"));
-                count.Margin = new Thickness(0, 8, 0, 0);
-                _panelContent.Children.Add(count);
+                var library = QuietButton($"Вся библиотека — {GigaRest.Core.Text.Sizes.Plural(_games.Count, "игра", "игры", "игр")} →", 13);
+                library.Margin = new Thickness(0, 8, 0, 0);
+                library.Click += (_, _) => ShowLibrary();
+                _panelContent.Children.Add(library);
             }
         }
         else if (word == "Продолжить" && (_games?.FirstOrDefault(g => g.LastPlayedUtc is not null) is not null || _lastFilm is not null))
@@ -777,6 +778,11 @@ public sealed class QuietWindow : Window
             return;
         }
         if (WebVisible) return; // клавиши — сайту
+        if (_library is not null)
+        {
+            if (e.Key == global::Windows.System.VirtualKey.Escape) { CloseLibrary(); e.Handled = true; }
+            return; // стрелки — поиску и сетке
+        }
         switch (e.Key)
         {
             case global::Windows.System.VirtualKey.Escape: if (_openWord is not null) { ClosePanel(); e.Handled = true; } break;
@@ -893,8 +899,8 @@ public sealed class QuietWindow : Window
         _date.Text = now.ToString("dddd, d MMMM", Ru);
         // Простой «Тихого» экрана — по вводу в нём; затемнение и выключение — по вводу вообще
         // (работаете на втором мониторе — экран не гаснет). Смотрят фильм или сайт — не гасим.
-        var watching = _film is not null || WebVisible || _paused;
-        if (WebVisible || _paused) _lastInput = now;
+        var watching = _film is not null || WebVisible || _paused || _library is not null;
+        if (WebVisible || _paused || _library is not null) _lastInput = now;
         var own = Timers.At(now - _lastInput);
         SetCursorHidden(own.HideCursor && !WebVisible);
         if (own.CloseList && _film is null)
@@ -926,6 +932,187 @@ public sealed class QuietWindow : Window
         var busy = _monitor is not null && UserState.CoversMonitor(_monitor);
         if (busy && !_paused) { _kenBurns.Pause(); _effects.Pause(true); _video?.Pause(); _paused = true; }
         else if (!busy && _paused) { _kenBurns.Resume(); _effects.Pause(false); _video?.Resume(); _paused = false; }
+    }
+
+    // ---------- библиотека игр: все установленные из всех магазинов, на весь «Тихий» экран ----------
+
+    private Grid? _library;
+    private string? _libraryStore;
+    private string _libraryQuery = "";
+    private bool _libraryByName;
+
+    /// <summary>
+    /// «Вся библиотека»: сверху — последняя игра крупно, ниже — поиск, магазины, порядок и сетка обложек.
+    /// Только установленные игры. Esc или «Закрыть» — обратно к сцене.
+    /// </summary>
+    public void ShowLibrary()
+    {
+        ClosePanel();
+        Wake();
+        if (_library is not null) _root.Children.Remove(_library);
+        var games = _games ?? [];
+        var host = new Grid
+        {
+            Margin = new Thickness(56, 40, 56, 40), CornerRadius = new CornerRadius(20), Padding = new Thickness(28, 22, 28, 0),
+            Background = Vertical(Hex("#F2191B22"), Hex("#F70F1116")), BorderBrush = Brush("#1FFFFFFF"), BorderThickness = new Thickness(1),
+            RowSpacing = 16,
+        };
+        host.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // заголовок
+        host.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // последняя игра
+        host.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // фильтры
+        host.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); // сетка
+
+        var head = new Grid { ColumnSpacing = 14 };
+        head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        head.ColumnDefinitions.Add(new ColumnDefinition());
+        head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var title = Text("Библиотека", 26, Hex("#F6F2EA"), FontWeights.SemiBold);
+        head.Children.Add(title);
+        var count = Text(GigaRest.Core.Text.Sizes.Plural(games.Count, "игра установлена", "игры установлено", "игр установлено"), 13, Hex("#8A909C"));
+        count.VerticalAlignment = VerticalAlignment.Bottom;
+        count.Margin = new Thickness(0, 0, 0, 5);
+        Grid.SetColumn(count, 1);
+        head.Children.Add(count);
+        var close = QuietButton("Закрыть · Esc", 13);
+        close.Click += (_, _) => CloseLibrary();
+        Grid.SetColumn(close, 2);
+        head.Children.Add(close);
+        host.Children.Add(head);
+
+        // Последняя игра — широкой картинкой (у Steam — своя шапка игры).
+        if (games.FirstOrDefault(g => g.LastPlayedUtc is not null) is { } last)
+        {
+            var hero = HeroCard(last);
+            Grid.SetRow(hero, 1);
+            host.Children.Add(hero);
+        }
+
+        var filters = new Grid { ColumnSpacing = 10 };
+        filters.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(280) });
+        filters.ColumnDefinitions.Add(new ColumnDefinition());
+        filters.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var search = new TextBox { PlaceholderText = "Найти игру…", Text = _libraryQuery, FontSize = 14 };
+        filters.Children.Add(search);
+        var stores = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
+        Grid.SetColumn(stores, 1);
+        filters.Children.Add(stores);
+        var order = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
+        Grid.SetColumn(order, 2);
+        filters.Children.Add(order);
+        Grid.SetRow(filters, 2);
+        host.Children.Add(filters);
+
+        var grid = new VariableSizedWrapGrid { Orientation = Orientation.Horizontal, ItemWidth = 172, ItemHeight = 300 };
+        var scroll = new ScrollViewer { Content = grid, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Padding = new Thickness(0, 0, 0, 24) };
+        Grid.SetRow(scroll, 3);
+        host.Children.Add(scroll);
+
+        void Fill()
+        {
+            grid.Children.Clear();
+            var shown = GameLibraries.Filter(games, _libraryStore, _libraryQuery, _libraryByName);
+            foreach (var game in shown) grid.Children.Add(LibraryCard(game));
+            if (shown.Count == 0)
+                grid.Children.Add(Text(games.Count == 0 ? "Игр не нашлось. GigaRest смотрит в Steam, Epic, GOG и Battle.net." : "Ничего не нашлось.", 14, Hex("#8A909C")));
+            // Фильтры — подсвечиваем выбранное.
+            stores.Children.Clear();
+            stores.Children.Add(Chip($"Все · {games.Count}", _libraryStore is null, () => { _libraryStore = null; Fill(); }));
+            foreach (var g in games.GroupBy(g => g.Store).OrderByDescending(g => g.Count()))
+            {
+                var store = g.Key;
+                stores.Children.Add(Chip($"{store} · {g.Count()}", _libraryStore == store, () => { _libraryStore = store; Fill(); }));
+            }
+            order.Children.Clear();
+            order.Children.Add(Chip("Недавние", !_libraryByName, () => { _libraryByName = false; Fill(); }));
+            order.Children.Add(Chip("А–Я", _libraryByName, () => { _libraryByName = true; Fill(); }));
+        }
+        search.TextChanged += (_, _) => { _libraryQuery = search.Text; Fill(); };
+        Fill();
+
+        _library = host;
+        _root.Children.Add(host);
+        _overlay.Visibility = Visibility.Collapsed;
+        search.Focus(FocusState.Programmatic);
+    }
+
+    /// <summary>Для скриншотов.</summary>
+    public void CloseLibraryForCapture() => CloseLibrary();
+
+    private void CloseLibrary()
+    {
+        if (_library is null) return;
+        _root.Children.Remove(_library);
+        _library = null;
+        if (!WebVisible) _overlay.Visibility = Visibility.Visible;
+        Wake();
+    }
+
+    /// <summary>Кнопка-«таблетка» фильтра.</summary>
+    private static Button Chip(string text, bool selected, Action click)
+    {
+        var b = new Button
+        {
+            Content = Text(text, 12.5, selected ? Hex("#24170C") : Hex("#C9CDD6"), selected ? FontWeights.SemiBold : FontWeights.Normal),
+            Padding = new Thickness(12, 5, 12, 5), CornerRadius = new CornerRadius(999),
+            Background = selected ? Vertical(Hex("#F7CA8C"), Hex("#E8A05B")) : Brush("#14FFFFFF"),
+            BorderBrush = Brush(selected ? "#99784620" : "#1FFFFFFF"), BorderThickness = new Thickness(1),
+        };
+        b.Resources["ButtonBackgroundPointerOver"] = selected ? Vertical(Hex("#F9D39C"), Hex("#EDAA68")) : Brush("#24FFFFFF");
+        b.Resources["ButtonBackgroundPressed"] = selected ? Vertical(Hex("#EDB878"), Hex("#DC944F")) : Brush("#33FFFFFF");
+        b.Click += (_, _) => click();
+        return b;
+    }
+
+    /// <summary>Карточка в сетке: обложка, название, магазин и «когда играли». Щелчок — играть.</summary>
+    private Button LibraryCard(Game game)
+    {
+        var box = new StackPanel { Spacing = 6, Width = 156 };
+        box.Children.Add(Cover(game, 156, 234));
+        var name = Text(game.Name, 13, Hex("#E6FFFFFF"), FontWeights.SemiBold, wrap: true);
+        name.MaxLines = 2;
+        name.TextTrimming = TextTrimming.CharacterEllipsis;
+        box.Children.Add(name);
+        box.Children.Add(Text(GameMeta(game), 11.5, Hex("#80FFFFFF")));
+        var b = new Button
+        {
+            Content = box, Padding = new Thickness(6), CornerRadius = new CornerRadius(14), VerticalAlignment = VerticalAlignment.Top,
+            Background = Brush(Colors.Transparent), BorderThickness = new Thickness(0),
+        };
+        b.Resources["ButtonBackgroundPointerOver"] = Brush("#14FFFFFF");
+        b.Resources["ButtonBackgroundPressed"] = Brush("#24FFFFFF");
+        b.Click += (_, _) => { CloseLibrary(); PlayRequested?.Invoke(game); };
+        return b;
+    }
+
+    /// <summary>Последняя игра — широкой картинкой с кнопкой «Играть».</summary>
+    private Border HeroCard(Game game)
+    {
+        var grid = new Grid { Height = 190 };
+        if (game.HeroPath is { } hero && File.Exists(hero))
+            grid.Children.Add(new Image { Source = new BitmapImage(new Uri(hero)) { DecodePixelWidth = 1920 }, Stretch = Stretch.UniformToFill, VerticalAlignment = VerticalAlignment.Center });
+        else
+            grid.Children.Add(new Border { Background = Vertical(ProgramColorDim(game.Name), Hex("#FF14151C")) });
+        var shade = new LinearGradientBrush { StartPoint = new(0, 0), EndPoint = new(1, 0) };
+        shade.GradientStops.Add(new GradientStop { Color = Hex("#E6101217"), Offset = 0 });
+        shade.GradientStops.Add(new GradientStop { Color = Hex("#00101217"), Offset = 0.75 });
+        grid.Children.Add(new Border { Background = shade });
+        var text = new StackPanel { Spacing = 6, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(28, 0, 0, 0) };
+        text.Children.Add(Text("Продолжить", 12, Hex("#B3FFFFFF"), FontWeights.SemiBold));
+        text.Children.Add(Text(game.Name, 28, Hex("#F6F2EA"), FontWeights.SemiBold));
+        text.Children.Add(Text(GameMeta(game), 13, Hex("#99FFFFFF")));
+        var play = WarmButton("▶  Играть", 15);
+        play.HorizontalAlignment = HorizontalAlignment.Left;
+        play.Margin = new Thickness(0, 6, 0, 0);
+        play.Click += (_, _) => { CloseLibrary(); PlayRequested?.Invoke(game); };
+        text.Children.Add(play);
+        grid.Children.Add(text);
+        return new Border { CornerRadius = new CornerRadius(16), Child = grid, BorderBrush = Brush("#1FFFFFFF"), BorderThickness = new Thickness(1) };
+    }
+
+    private static Color ProgramColorDim(string name)
+    {
+        var c = ProgramColor(name);
+        return Color.FromArgb(255, (byte)(c.R / 3), (byte)(c.G / 3), (byte)(c.B / 3));
     }
 
     // ---------- сайты внутри «Тихого» экрана (Яндекс Музыка, YouTube): WebView2, свой профиль — вход запоминается ----------
@@ -1261,6 +1448,7 @@ public sealed class QuietWindow : Window
         SetCursorHidden(false);
         CloseFilm(); // где остановились — запомнится
         foreach (var key in _web.Keys.ToList()) CloseWeb(key);
+        CloseLibrary();
         _closing = true;
         _tick.Stop();
         _kenBurns.Stop();

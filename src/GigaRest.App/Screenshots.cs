@@ -133,6 +133,11 @@ internal static class Screenshots
             new() { Id = "epic:3", Name = "Дом у озера", Store = "Epic" },
             new() { Id = "gog:4", Name = "Старый маяк", Store = "GOG", LastPlayedUtc = now.AddDays(-16) },
             new() { Id = "steam:5", Name = "Звёздная ферма", Store = "Steam" },
+            new() { Id = "bnet:wow", Name = "World of Warcraft", Store = "Battle.net", LastPlayedUtc = now.AddDays(-2) },
+            new() { Id = "bnet:fenris", Name = "Diablo IV", Store = "Battle.net" },
+            new() { Id = "steam:6", Name = "Полярное сияние", Store = "Steam", LastPlayedUtc = now.AddDays(-30) },
+            new() { Id = "epic:7", Name = "Город в облаках", Store = "Epic" },
+            new() { Id = "gog:8", Name = "Ветер странствий", Store = "GOG" },
         ], new Dictionary<string, DateTime>()));
         var films = new List<GigaRest.Core.Media.Film>
         {
@@ -150,6 +155,9 @@ internal static class Screenshots
         await Capture(quiet.Root, Path.Combine(dir, "17-igrat.png"));
         quiet.OpenWordForCapture("Продолжить");
         await Capture(quiet.Root, Path.Combine(dir, "18-prodolzhit.png"));
+        quiet.ShowLibrary();
+        await Capture(quiet.Root, Path.Combine(dir, "24-biblioteka.png"));
+        quiet.CloseLibraryForCapture();
         quiet.OpenWordForCapture("Слушать");
         await Capture(quiet.Root, Path.Combine(dir, "19-slushat.png"));
         quiet.OpenWordForCapture("Смотреть");

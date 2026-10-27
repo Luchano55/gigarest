@@ -55,6 +55,7 @@ public static class GameLibraries
                     {
                         Id = "steam:" + id, Name = name.Trim(), Store = "Steam", LastPlayedUtc = last, LaunchUri = "steam://rungameid/" + id,
                         CoverPath = SteamCover(steamRoot, id),
+                        HeroPath = SteamCacheFile(steamRoot, id, "library_hero.jpg"),
                     });
                 }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { Log.Warn($"Steam, {Path.GetFileName(file)}: {ex.Message}"); }
@@ -92,6 +93,35 @@ public static class GameLibraries
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
         return null;
+    }
+
+    /// <summary>Файл из кэша Steam по имени — в старом («570_имя») или новом («570\\…\\имя») виде.</summary>
+    public static string? SteamCacheFile(string steamRoot, string appId, string name)
+    {
+        var cache = Path.Combine(steamRoot, "appcache", "librarycache");
+        var flat = Path.Combine(cache, $"{appId}_{name}");
+        if (File.Exists(flat)) return flat;
+        var folder = Path.Combine(cache, appId);
+        if (!Directory.Exists(folder)) return null;
+        try
+        {
+            return Directory.GetFiles(folder, name, new EnumerationOptions { RecurseSubdirectories = true, MaxRecursionDepth = 2, IgnoreInaccessible = true }).FirstOrDefault();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return null; }
+    }
+
+    /// <summary>
+    /// Библиотека: магазин (null — все), поиск по названию (без регистра, «ё» = «е»), порядок — недавние или по алфавиту.
+    /// </summary>
+    public static List<Game> Filter(IEnumerable<Game> games, string? store, string? query, bool byName)
+    {
+        static string Norm(string s) => s.ToLowerInvariant().Replace('ё', 'е');
+        var q = string.IsNullOrWhiteSpace(query) ? null : Norm(query.Trim());
+        var list = games.Where(g => store is null || g.Store == store)
+            .Where(g => q is null || Norm(g.Name).Contains(q));
+        return (byName
+            ? list.OrderBy(g => g.Name, StringComparer.CurrentCultureIgnoreCase)
+            : list.OrderByDescending(g => g.LastPlayedUtc ?? DateTime.MinValue).ThenBy(g => g.Name, StringComparer.CurrentCultureIgnoreCase)).ToList();
     }
 
     /// <summary>Игры Epic. manifestsDir — %ProgramData%\Epic\EpicGamesLauncher\Data\Manifests.</summary>
