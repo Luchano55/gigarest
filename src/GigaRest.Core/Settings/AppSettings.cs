@@ -38,6 +38,8 @@ public sealed class AppSettings
     public int Version { get; set; } = 1;
     /// <summary>Первая настройка пройдена. Пока нет — при запуске открывается «Первая настройка».</summary>
     public bool SetupDone { get; set; }
+    /// <summary>Язык интерфейса: auto (как у Windows), ru, en. Меняется после перезапуска.</summary>
+    public string Language { get; set; } = Text.L.Auto;
     /// <summary>Горячая клавиша «Работа ↔ Отдых».</summary>
     public string Hotkey { get; set; } = "Ctrl+Alt+Home";
     /// <summary>Клавиша «обратно в плитки» во время отдыха. Ctrl+Alt+Пробел занят быстрым вызовом Claude.</summary>

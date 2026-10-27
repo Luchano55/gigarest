@@ -83,3 +83,18 @@ public class WebServicesTests
         Assert.Equal(["Chrome", "Яндекс Браузер"], browsers.Select(b => b.Name));
     }
 }
+
+public class LanguageTests
+{
+    [Theory]
+    [InlineData("auto", "ru-RU", "ru")]
+    [InlineData("auto", "uk-UA", "ru")]
+    [InlineData("auto", "en-US", "en")]
+    [InlineData("auto", "de-DE", "en")]
+    [InlineData(null, "en-GB", "en")]
+    [InlineData("ru", "en-US", "ru")]
+    [InlineData("EN", "ru-RU", "en")]
+    [InlineData("klingon", "ru-RU", "ru")]
+    public void Resolve(string? setting, string system, string expected) =>
+        Assert.Equal(expected, GigaRest.Core.Text.L.Resolve(setting, System.Globalization.CultureInfo.GetCultureInfo(system)));
+}

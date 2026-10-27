@@ -91,6 +91,7 @@ public sealed partial class App : Application, IXamlMetadataProvider
         Log.Info($"GigaRest {typeof(App).Assembly.GetName().Version} запущена");
         _settingsStore = new SettingsStore(_paths.SettingsFile);
         _settings = _settingsStore.Load();
+        GigaRest.Core.Text.L.Use(_settings.Language);
         _desktop = new WindowsDesktop();
         _switcher = new RestSwitcher(_desktop, SystemClock.Instance, new SessionStore(_paths.SessionFile))
         {

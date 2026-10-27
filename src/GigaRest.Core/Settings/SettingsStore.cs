@@ -23,6 +23,7 @@ public sealed class SettingsStore
     internal static void Normalize(AppSettings s)
     {
         s.Programs ??= [];
+        s.Language = Text.L.Normalize(s.Language);
         s.GamesPlayed ??= [];
         s.FilmsOpened ??= [];
         s.CustomGames ??= [];
