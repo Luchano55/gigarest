@@ -14,10 +14,10 @@ public static class NatureSounds
 
     public static string Name(NatureSound s) => s switch
     {
-        NatureSound.Rain => "Дождь",
-        NatureSound.Sea => "Море",
-        NatureSound.Fire => "Костёр",
-        _ => "Ветер",
+        NatureSound.Rain => Text.L.T("Дождь", "Rain"),
+        NatureSound.Sea => Text.L.T("Море", "Sea"),
+        NatureSound.Fire => Text.L.T("Костёр", "Campfire"),
+        _ => Text.L.T("Ветер", "Wind"),
     };
 
     /// <summary>Кольцо звука: чередующиеся отсчёты левый/правый.</summary>

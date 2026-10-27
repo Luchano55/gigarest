@@ -10,7 +10,10 @@ public static class Program
     {
         // Пробный режим: копия GigaRest.exe под другим именем рисует тестовое окно и больше ничего.
         if (args.Contains("--test-window"))
+        {
+            UseSavedLanguage();
             return GigaRest.Windows.TestWindow.Run(args);
+        }
 
         // Установщик и удаление: попросить запущенный GigaRest выйти. 2 — был запущен и вышел, 0 — не был, 1 — не вышел.
         if (args.Contains("--exit"))
@@ -34,6 +37,13 @@ public static class Program
         });
         single?.Dispose();
         return App.ExitCode;
+    }
+
+    /// <summary>Язык из настроек — для окон, которые появляются раньше самой программы.</summary>
+    internal static void UseSavedLanguage()
+    {
+        try { GigaRest.Core.Text.L.Use(new GigaRest.Core.Settings.SettingsStore(GigaRest.Core.AppPaths.Default().SettingsFile).Load().Language); }
+        catch (Exception) { GigaRest.Core.Text.L.Use(null); }
     }
 
     private static string? ScreenshotDir(string[] args)
@@ -95,9 +105,14 @@ public sealed class SingleInstance : IDisposable
                 // Старая версия не умеет выходить по просьбе — покажем её окно, а человеку подскажем.
                 show.Set();
                 show.Dispose(); quit.Dispose(); mutex.Dispose();
-                ShowMessage("Уже запущена другая версия GigaRest, и она не закрылась сама.\n\n" +
+                Program.UseSavedLanguage();
+                ShowMessage(GigaRest.Core.Text.L.T(
+                            "Уже запущена другая версия GigaRest, и она не закрылась сама.\n\n" +
                             "Закройте её: правый щелчок по значку-месяцу в трее → «Выход» " +
-                            "(или Диспетчер задач → GigaRest → «Снять задачу»), затем запустите эту версию снова.");
+                            "(или Диспетчер задач → GigaRest → «Снять задачу»), затем запустите эту версию снова.",
+                            "Another version of GigaRest is already running and didn't close by itself.\n\n" +
+                            "Close it: right-click the moon icon in the tray → Exit " +
+                            "(or Task Manager → GigaRest → End task), then start this version again."));
                 return null;
             }
         }

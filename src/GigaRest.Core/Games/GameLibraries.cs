@@ -1,5 +1,6 @@
 using System.Text.Json;
 using GigaRest.Core.Logging;
+using GigaRest.Core.Text;
 
 namespace GigaRest.Core.Games;
 
@@ -131,7 +132,9 @@ public static class GameLibraries
     }
 
     /// <summary>«12 ч в игре», «40 мин в игре».</summary>
-    public static string PlaytimeText(int minutes) => minutes >= 60 ? $"{minutes / 60} ч в игре" : $"{minutes} мин в игре";
+    public static string PlaytimeText(int minutes) => minutes >= 60
+        ? L.T($"{minutes / 60} ч в игре", $"{minutes / 60} h played")
+        : L.T($"{minutes} мин в игре", $"{minutes} min played");
 
     /// <summary>Файл из кэша Steam по имени — в старом («570_имя») или новом («570\\…\\имя») виде.</summary>
     public static string? SteamCacheFile(string steamRoot, string appId, string name)
@@ -220,12 +223,12 @@ public static class GameLibraries
         var days = (nowLocal.Date - lastUtc.Value.ToLocalTime().Date).Days;
         return days switch
         {
-            <= 0 => "сегодня",
-            1 => "вчера",
-            < 7 => Text.Sizes.Plural(days, "день", "дня", "дней") + " назад",
-            < 14 => "неделю назад",
-            < 31 => Text.Sizes.Plural(days / 7, "неделю", "недели", "недель") + " назад",
-            _ => lastUtc.Value.ToLocalTime().ToString(lastUtc.Value.Year == nowLocal.Year ? "d MMMM" : "d MMMM yyyy", System.Globalization.CultureInfo.GetCultureInfo("ru-RU")),
+            <= 0 => L.T("сегодня", "today"),
+            1 => L.T("вчера", "yesterday"),
+            < 7 => L.Plural(days, "день", "дня", "дней", "day", "days") + L.T(" назад", " ago"),
+            < 14 => L.T("неделю назад", "a week ago"),
+            < 31 => L.Plural(days / 7, "неделю", "недели", "недель", "week", "weeks") + L.T(" назад", " ago"),
+            _ => lastUtc.Value.ToLocalTime().ToString(lastUtc.Value.Year == nowLocal.Year ? L.T("d MMMM", "MMMM d") : L.T("d MMMM yyyy", "MMMM d, yyyy"), L.Culture),
         };
     }
 }

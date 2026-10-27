@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using GigaRest.Core.Games;
 using GigaRest.Core.Stats;
+using GigaRest.Core.Text;
 using Microsoft.UI.Text;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
@@ -25,11 +26,11 @@ public sealed class StatsWindow : Window
 
     public StatsWindow()
     {
-        Title = "GigaRest — статистика отдыха";
+        Title = L.T("GigaRest — статистика отдыха", "GigaRest — Rest statistics");
         _root = new Grid { Padding = new Thickness(44, 36, 44, 28), RowSpacing = 18 };
         _root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         _root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-        _root.Children.Add(Text("Статистика отдыха", 30, Hex("#F6F2EA"), FontWeights.SemiBold));
+        _root.Children.Add(Text(L.T("Статистика отдыха", "Rest statistics"), 30, Hex("#F6F2EA"), FontWeights.SemiBold));
         _body = new StackPanel { Spacing = 16 };
         var scroll = new ScrollViewer { Content = _body, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Padding = new Thickness(0, 0, 12, 0) };
         Grid.SetRow(scroll, 1);
@@ -48,17 +49,17 @@ public sealed class StatsWindow : Window
 
         var cards = new Grid { ColumnSpacing = 10 };
         for (var i = 0; i < 3; i++) cards.ColumnDefinitions.Add(new ColumnDefinition());
-        cards.Children.Add(Stat("Сегодня", RestStats.Format(s.Today), 0));
-        cards.Children.Add(Stat("За неделю", RestStats.Format(s.Week), 1));
-        cards.Children.Add(Stat("Вечеров отдыха", s.Evenings > 0 ? $"{s.Evenings} из 7" : "—", 2));
+        cards.Children.Add(Stat(L.T("Сегодня", "Today"), RestStats.Format(s.Today), 0));
+        cards.Children.Add(Stat(L.T("За неделю", "This week"), RestStats.Format(s.Week), 1));
+        cards.Children.Add(Stat(L.T("Вечеров отдыха", "Rest evenings"), s.Evenings > 0 ? L.T($"{s.Evenings} из 7", $"{s.Evenings} of 7") : "—", 2));
         _body.Children.Add(cards);
 
         // Столбики по дням.
         var chart = new StackPanel { Spacing = 10 };
-        chart.Children.Add(Text("По дням", 15, Ink, FontWeights.SemiBold));
+        chart.Children.Add(Text(L.T("По дням", "By day"), 15, Ink, FontWeights.SemiBold));
         var bars = new Grid { ColumnSpacing = 12, Height = 170 };
         var max = Math.Max(60, s.Days.Max(d => d.Minutes));
-        var ru = System.Globalization.CultureInfo.GetCultureInfo("ru-RU");
+        var culture = L.Culture;
         for (var i = 0; i < s.Days.Count; i++)
         {
             bars.ColumnDefinitions.Add(new ColumnDefinition());
@@ -77,7 +78,7 @@ public sealed class StatsWindow : Window
             };
             Grid.SetRow(bar, 1);
             col.Children.Add(bar);
-            var label = Text(day.ToString("ddd", ru), 12, i == s.Days.Count - 1 ? Ink : Muted);
+            var label = Text(day.ToString("ddd", culture), 12, i == s.Days.Count - 1 ? Ink : Muted);
             label.HorizontalAlignment = HorizontalAlignment.Center;
             Grid.SetRow(label, 2);
             col.Children.Add(label);
@@ -89,23 +90,24 @@ public sealed class StatsWindow : Window
 
         // Игры.
         var played = new StackPanel { Spacing = 8 };
-        played.Children.Add(Text("Во что играли за месяц", 15, Ink, FontWeights.SemiBold));
-        if (s.TopGames.Count == 0) played.Children.Add(Text("Пока ничего не запускали из «Играть».", 13, Muted));
+        played.Children.Add(Text(L.T("Во что играли за месяц", "Played this month"), 15, Ink, FontWeights.SemiBold));
+        if (s.TopGames.Count == 0) played.Children.Add(Text(L.T("Пока ничего не запускали из «Играть».", "Nothing launched from Play yet."), 13, Muted));
         foreach (var (name, launches) in s.TopGames)
-            played.Children.Add(Line(name, GigaRest.Core.Text.Sizes.Plural(launches, "запуск", "запуска", "запусков")));
+            played.Children.Add(Line(name, L.Plural(launches, "запуск", "запуска", "запусков", "launch", "launches")));
         _body.Children.Add(CardBorder(played, radius: 14, padding: 18));
 
         var steam = games.Where(g => g.PlayMinutes2Weeks is > 0).OrderByDescending(g => g.PlayMinutes2Weeks).Take(5).ToList();
         if (steam.Count > 0)
         {
             var box = new StackPanel { Spacing = 8 };
-            box.Children.Add(Text("Steam за две недели", 15, Ink, FontWeights.SemiBold));
+            box.Children.Add(Text(L.T("Steam за две недели", "Steam, last two weeks"), 15, Ink, FontWeights.SemiBold));
             foreach (var g in steam)
-                box.Children.Add(Line(g.Name, RestStats.Format(TimeSpan.FromMinutes(g.PlayMinutes2Weeks ?? 0)) + (g.PlayMinutes is { } all ? $" · всего {all / 60} ч" : "")));
+                box.Children.Add(Line(g.Name, RestStats.Format(TimeSpan.FromMinutes(g.PlayMinutes2Weeks ?? 0)) + (g.PlayMinutes is { } all ? L.T($" · всего {all / 60} ч", $" · {all / 60} h total") : "")));
             _body.Children.Add(CardBorder(box, radius: 14, padding: 18));
         }
 
-        _body.Children.Add(Text("Статистика хранится только на этом компьютере (%AppData%\\GigaRest\\stats.json) и никуда не отправляется.", 12, Muted, wrap: true));
+        _body.Children.Add(Text(L.T("Статистика хранится только на этом компьютере (%AppData%\\GigaRest\\stats.json) и никуда не отправляется.",
+            "Statistics are stored only on this computer (%AppData%\\GigaRest\\stats.json) and are never sent anywhere."), 12, Muted, wrap: true));
     }
 
     private static Border Stat(string title, string value, int column)

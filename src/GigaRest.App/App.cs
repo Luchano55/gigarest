@@ -8,6 +8,7 @@ using GigaRest.Core.Scenes;
 using GigaRest.Core.Session;
 using GigaRest.Core.Settings;
 using GigaRest.Core.Switching;
+using GigaRest.Core.Text;
 using GigaRest.Windows;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
@@ -91,7 +92,7 @@ public sealed partial class App : Application, IXamlMetadataProvider
         Log.Info($"GigaRest {typeof(App).Assembly.GetName().Version} запущена");
         _settingsStore = new SettingsStore(_paths.SettingsFile);
         _settings = _settingsStore.Load();
-        GigaRest.Core.Text.L.Use(_settings.Language);
+        L.Use(_settings.Language);
         _desktop = new WindowsDesktop();
         _switcher = new RestSwitcher(_desktop, SystemClock.Instance, new SessionStore(_paths.SessionFile))
         {
@@ -134,7 +135,7 @@ public sealed partial class App : Application, IXamlMetadataProvider
             if (await _updater.CheckAsync(manual: false) is { } m) OfferUpdate(m);
         };
         if (!_args.Contains("--selftest")) _updateTimer.Start();
-        if (_args.Contains("--after-update")) _tray.ShowBalloon("GigaRest обновлён", $"Версия {GigaRest.Core.Updates.AppVersion.Display}. Что нового — в docs/CHANGELOG.md.");
+        if (_args.Contains("--after-update")) _tray.ShowBalloon(L.T("GigaRest обновлён", "GigaRest updated"), L.T($"Версия {GigaRest.Core.Updates.AppVersion.Display}. Что нового — в docs/CHANGELOG.md.", $"Version {GigaRest.Core.Updates.AppVersion.Display}. What's new is in docs/CHANGELOG.md."));
 
         // Расписание возврата: проверяем раз в 30 секунд (и сразу после пробуждения ПК — по разнице времени).
         _scheduleTimer = queue.CreateTimer();
@@ -209,14 +210,14 @@ public sealed partial class App : Application, IXamlMetadataProvider
                 if (Hotkey.TryParse(_settings.TilesHotkey, out var tilesKey) && _tray?.RegisterHotkey(HotkeyTiles, tilesKey) is { } problem)
                 {
                     Log.Warn("Клавиша плиток: " + problem);
-                    _restScreensProblem = $"Клавиша «обратно в плитки» {problem}. Поменяйте её в настройках; пока — кнопка «Свернуть».";
+                    _restScreensProblem = L.T($"Клавиша «обратно в плитки» {problem}. Поменяйте её в настройках; пока — кнопка «Свернуть».", $"The \"back to tiles\" key {problem}. Change it in Settings; for now, use the Minimize button.");
                 }
             }
         }
         catch (Exception ex)
         {
             Log.Error("Плитки", ex);
-            _restScreensProblem = "Плитки не открылись: " + ex.Message;
+            _restScreensProblem = L.T("Плитки не открылись: ", "Tiles didn't open: ") + ex.Message;
             try { _tilesWindow?.CloseForGood(); } catch (Exception) { }
             _tilesWindow = null;
         }
@@ -295,7 +296,7 @@ public sealed partial class App : Application, IXamlMetadataProvider
             _quiet.DetailsRequested += () => { _quiet?.HideSummary(); _window?.Present(); };
             _quiet.ShowOn(primary);
             _window?.AppWindow.Hide();
-            var text = report?.Summary ?? "Отдых.";
+            var text = report?.Summary ?? L.T("Отдых.", "Resting.");
             var problems = (report?.Problems ?? []).ToList();
             if (_restScreensProblem is not null) problems.Add(_restScreensProblem);
             if (report is not null || problems.Count > 0)
@@ -306,10 +307,10 @@ public sealed partial class App : Application, IXamlMetadataProvider
         catch (Exception ex)
         {
             Log.Error("Тихий экран", ex);
-            _restScreensProblem = (_restScreensProblem is null ? "" : _restScreensProblem + "\n") + "«Тихий» экран не открылся: " + ex.Message;
+            _restScreensProblem = (_restScreensProblem is null ? "" : _restScreensProblem + "\n") + L.T("«Тихий» экран не открылся: ", "The calm screen didn't open: ") + ex.Message;
             try { _quiet?.CloseForGood(); } catch (Exception) { }
             _quiet = null;
-            _window?.SetNotice(_restScreensProblem + " Пришлите, пожалуйста, журнал (меню значка → «Открыть журнал»).");
+            _window?.SetNotice(_restScreensProblem + L.T(" Пришлите, пожалуйста, журнал (меню значка → «Открыть журнал»).", " Please send the log (tray icon menu → \"Open log\")."));
             _window?.Present();
         }
     }
@@ -393,13 +394,13 @@ public sealed partial class App : Application, IXamlMetadataProvider
             if (!_tilesHintShown)
             {
                 _tilesHintShown = true;
-                _tray?.ShowBalloon(tile.Name, $"«Свернуть» или {_settings.TilesHotkey} — обратно в плитки.");
+                _tray?.ShowBalloon(tile.Name, L.T($"«Свернуть» или {_settings.TilesHotkey} — обратно в плитки.", $"Minimize or {_settings.TilesHotkey} to go back to tiles."));
             }
         }
         else if (tile.ExePath is not null)
         {
             var error = _desktop.Launch(new LaunchSpec { FileName = tile.ExePath, WorkingDirectory = Path.GetDirectoryName(tile.ExePath) });
-            if (error is not null) _tray?.ShowBalloon(tile.Name, "Не открылась: " + error);
+            if (error is not null) _tray?.ShowBalloon(tile.Name, L.T("Не открылась: ", "Didn't open: ") + error);
         }
     }
 
@@ -507,7 +508,7 @@ public sealed partial class App : Application, IXamlMetadataProvider
             spec.Arguments.Add(film.Path);
             if (_desktop.Launch(spec) is { } error)
             {
-                _quiet?.ShowSummary($"Плеер не открылся: {error}", hasProblems: true);
+                _quiet?.ShowSummary(L.T($"Плеер не открылся: {error}", $"The player didn't open: {error}"), hasProblems: true);
                 return;
             }
         }
@@ -539,8 +540,8 @@ public sealed partial class App : Application, IXamlMetadataProvider
     {
         var error = OpenShell(film.Path);
         _quiet?.ShowSummary(error is null
-            ? $"«{film.Name}» встроенный плеер не открыл — открыли плеером Windows. Свой плеер можно выбрать в «Смотреть» → «Плеер»."
-            : $"«{film.Name}» не открылся: {error}", hasProblems: error is not null);
+            ? L.T($"«{film.Name}» встроенный плеер не открыл — открыли плеером Windows. Свой плеер можно выбрать в «Смотреть» → «Плеер».", $"The built-in player couldn't open \"{film.Name}\", so it opened in the Windows player. You can pick your own player in Watch → Player.")
+            : L.T($"«{film.Name}» не открылся: {error}", $"\"{film.Name}\" didn't open: {error}"), hasProblems: error is not null);
     }
 
     // Выбор папки и программ — системными окнами Windows поверх «Тихого» экрана.
@@ -608,7 +609,7 @@ public sealed partial class App : Application, IXamlMetadataProvider
     private void OpenMusicApp(AppChoice app)
     {
         if (_desktop.Launch(new LaunchSpec { FileName = app.Path, WorkingDirectory = Path.GetDirectoryName(app.Path) }) is { } error)
-            _quiet?.ShowSummary($"{app.Name} не открылась: {error}", hasProblems: true);
+            _quiet?.ShowSummary(L.T($"{app.Name} не открылась: {error}", $"{app.Name} didn't open: {error}"), hasProblems: true);
     }
 
     /// <summary>Сервис, который выбрано открывать в браузере: в указанном или в браузере Windows по умолчанию.</summary>
@@ -622,7 +623,7 @@ public sealed partial class App : Application, IXamlMetadataProvider
             error = _desktop.Launch(spec);
         }
         else error = OpenShell(url);
-        if (error is not null) _quiet?.ShowSummary($"{service.Name} не открылся: {error}", hasProblems: true);
+        if (error is not null) _quiet?.ShowSummary(L.T($"{service.Name} не открылся: {error}", $"{service.Name} didn't open: {error}"), hasProblems: true);
         else Log.Info($"Сервис {service.Name} открыт в браузере");
     }
 
@@ -653,7 +654,7 @@ public sealed partial class App : Application, IXamlMetadataProvider
             {
                 if (_quiet != quiet) return;
                 quiet.SetDnd(on);
-                if (!on) _tray?.ShowBalloon("Не беспокоить", "Windows не дала включить режим сама. Щёлкните «включить „Не беспокоить“» вверху экрана.");
+                if (!on) _tray?.ShowBalloon(L.T("Не беспокоить", "Do not disturb"), L.T("Windows не дала включить режим сама. Щёлкните «включить „Не беспокоить“» вверху экрана.", "Windows didn't let us turn it on automatically. Click \"Turn on do not disturb\" at the top of the screen."));
             });
         });
     }
@@ -710,7 +711,7 @@ public sealed partial class App : Application, IXamlMetadataProvider
         var error = GameSources.Launch(game);
         if (error is not null)
         {
-            _quiet?.ShowSummary($"«{game.Name}» не запустилась: {error}", hasProblems: true);
+            _quiet?.ShowSummary(L.T($"«{game.Name}» не запустилась: {error}", $"\"{game.Name}\" didn't start: {error}"), hasProblems: true);
             return;
         }
         _settings.GamesPlayed[game.Id] = DateTime.UtcNow;
@@ -770,7 +771,7 @@ public sealed partial class App : Application, IXamlMetadataProvider
         {
             if (!force && (program.Windows.Count > 0 || _desktop.GetWindows().Any(w => w.IsDialog && program.Processes.Any(p => p.Pid == w.Pid))))
             {
-                _tray?.ShowBalloon(program.DisplayName, "У программы снова открыто окно — закройте её сами.");
+                _tray?.ShowBalloon(program.DisplayName, L.T("У программы снова открыто окно — закройте её сами.", "This program has a window open again. Please close it yourself."));
                 return;
             }
             foreach (var p in program.Processes) _desktop.Terminate(p.Key);
@@ -787,7 +788,7 @@ public sealed partial class App : Application, IXamlMetadataProvider
     private void OfferUpdate(GigaRest.Core.Updates.UpdateManifest m)
     {
         _updateBalloon = true;
-        _tray?.ShowBalloon("Доступна новая версия", $"GigaRest {m.Version}. Щёлкните здесь, чтобы обновиться (около минуты).");
+        _tray?.ShowBalloon(L.T("Доступна новая версия", "A new version is available"), L.T($"GigaRest {m.Version}. Щёлкните здесь, чтобы обновиться (около минуты).", $"GigaRest {m.Version}. Click here to update (takes about a minute)."));
     }
 
     private async Task UpdateFromMenuAsync()
@@ -797,18 +798,18 @@ public sealed partial class App : Application, IXamlMetadataProvider
         try
         {
             var m = await _updater.CheckAsync(manual: true);
-            if (m is null) _tray?.ShowBalloon("Обновления", $"У вас последняя версия: {GigaRest.Core.Updates.AppVersion.Display}.");
+            if (m is null) _tray?.ShowBalloon(L.T("Обновления", "Updates"), L.T($"У вас последняя версия: {GigaRest.Core.Updates.AppVersion.Display}.", $"You have the latest version: {GigaRest.Core.Updates.AppVersion.Display}."));
             else OfferUpdate(m);
         }
         catch (Exception ex)
         {
-            _tray?.ShowBalloon("Обновления", "Не удалось проверить: " + ex.Message);
+            _tray?.ShowBalloon(L.T("Обновления", "Updates"), L.T("Не удалось проверить: ", "Couldn't check: ") + ex.Message);
         }
     }
 
     private async Task InstallUpdateAsync(GigaRest.Core.Updates.UpdateManifest m)
     {
-        if (_updater is null || _busy) { _tray?.ShowBalloon("Обновление", "Сейчас идёт переход — обновим чуть позже."); return; }
+        if (_updater is null || _busy) { _tray?.ShowBalloon(L.T("Обновление", "Update"), L.T("Сейчас идёт переход — обновим чуть позже.", "Switching right now. We'll update a bit later.")); return; }
         // Ход обновления — в окошке поверх всех в правом нижнем углу (и в подсказке значка).
         UpdateWindow? window = null;
         try { window = new UpdateWindow(m.Version); window.Activate(); }
@@ -829,7 +830,7 @@ public sealed partial class App : Application, IXamlMetadataProvider
             Log.Error("Обновление", ex);
             _tray?.SetTip(TrayTip);
             if (window is not null) window.Fail(ex.Message);
-            else _tray?.ShowBalloon("Обновление не получилось", ex.Message);
+            else _tray?.ShowBalloon(L.T("Обновление не получилось", "Update failed"), ex.Message);
         }
     }
 
@@ -862,7 +863,7 @@ public sealed partial class App : Application, IXamlMetadataProvider
             // Мягко: одно уведомление. Не щёлкнули — до следующего раза по расписанию больше не напоминаем.
             _restOfferUntil = now.AddMinutes(30);
             Log.Info("Расписание: мягко предлагаем отдых");
-            _tray?.ShowBalloon("Вечер", "Перейти в отдых? Щёлкните здесь — покажем, что закроется.");
+            _tray?.ShowBalloon(L.T("Вечер", "Evening"), L.T("Перейти в отдых? Щёлкните здесь — покажем, что закроется.", "Time to rest? Click here to see what will close."));
         }
     }
 
@@ -903,25 +904,26 @@ public sealed partial class App : Application, IXamlMetadataProvider
                 var hotkeyChanged = r.Hotkey != _settings.Hotkey;
                 _settings.Hotkey = r.Hotkey;
                 _settings.TilesHotkey = r.TilesHotkey;
+                _settings.Language = r.Language;
                 SaveSettings();
                 if (hotkeyChanged) RegisterHotkey();
                 try { Autostart.Set(ExePath, r.Autostart); }
                 catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or System.Security.SecurityException) { Log.Error("Автозапуск", ex); }
                 Log.Info($"Настройки сохранены: отдых {r.RestOffer.Describe()}, возврат {r.Schedule.Describe()}, клавиша {r.Hotkey}");
-                _tray?.ShowBalloon("Настройки сохранены", _hotkeyProblem ?? $"Возврат: {r.Schedule.Describe()}. Клавиша: {r.Hotkey}.");
+                _tray?.ShowBalloon(L.T("Настройки сохранены", "Settings saved"), _hotkeyProblem ?? L.T($"Возврат: {r.Schedule.Describe()}. Клавиша: {r.Hotkey}.", $"Back to work: {r.Schedule.Describe()}. Hotkey: {r.Hotkey}."));
             };
         }
         _settingsWindow.Load(_settings, Autostart.IsEnabled(ExePath), _hotkeyProblem);
         _settingsWindow.Present();
     }
 
-    private string TrayTip => _switcher.IsResting ? "GigaRest — отдых" : "GigaRest — работа";
+    private string TrayTip => _switcher.IsResting ? L.T("GigaRest — отдых", "GigaRest — resting") : L.T("GigaRest — работа", "GigaRest — working");
 
     private void RegisterHotkey()
     {
         if (!Hotkey.TryParse(_settings.Hotkey, out var hotkey))
         {
-            _hotkeyProblem = $"Горячая клавиша «{_settings.Hotkey}» записана с ошибкой — поправьте в settings.json";
+            _hotkeyProblem = L.T($"Горячая клавиша «{_settings.Hotkey}» записана с ошибкой — поправьте в settings.json", $"The hotkey \"{_settings.Hotkey}\" isn't written correctly. Please fix it in settings.json");
         }
         else
         {
@@ -930,28 +932,28 @@ public sealed partial class App : Application, IXamlMetadataProvider
         if (_hotkeyProblem is not null)
         {
             Log.Warn(_hotkeyProblem);
-            _tray!.ShowBalloon("Горячая клавиша", _hotkeyProblem);
+            _tray!.ShowBalloon(L.T("Горячая клавиша", "Hotkey"), _hotkeyProblem);
         }
     }
 
     private IReadOnlyList<TrayMenuItem?> MenuItems() =>
     [
-        new TrayMenuItem(MenuToggle, _switcher.IsResting ? "Вернуться к работе" : "Перейти в отдых…", !_busy, Bold: true),
-        new TrayMenuItem(MenuShow, "Показать окно"),
-        new TrayMenuItem(MenuPrograms, "Рабочие программы…"),
+        new TrayMenuItem(MenuToggle, _switcher.IsResting ? L.T("Вернуться к работе", "Back to work") : L.T("Перейти в отдых…", "Start resting…"), !_busy, Bold: true),
+        new TrayMenuItem(MenuShow, L.T("Показать окно", "Show window")),
+        new TrayMenuItem(MenuPrograms, L.T("Рабочие программы…", "Work programs…")),
         null,
-        new TrayMenuItem(MenuTest, "Пробный режим — на тестовых окнах…", !_busy && !_switcher.IsResting),
-        new TrayMenuItem(MenuTestClose, "Закрыть тестовые окна", !_busy),
+        new TrayMenuItem(MenuTest, L.T("Пробный режим — на тестовых окнах…", "Trial run with test windows…"), !_busy && !_switcher.IsResting),
+        new TrayMenuItem(MenuTestClose, L.T("Закрыть тестовые окна", "Close test windows"), !_busy),
         null,
-        new TrayMenuItem(MenuSettings, "Настройки…"),
-        new TrayMenuItem(MenuStats, "Статистика отдыха…"),
+        new TrayMenuItem(MenuSettings, L.T("Настройки…", "Settings…")),
+        new TrayMenuItem(MenuStats, L.T("Статистика отдыха…", "Rest statistics…")),
         _updater?.Available is { } update
-            ? new TrayMenuItem(MenuUpdate, $"Обновить до {update.Version}", Bold: false)
-            : new TrayMenuItem(MenuUpdate, "Проверить обновления"),
-        new TrayMenuItem(MenuAutostart, "Запускать вместе с Windows", Checked: Autostart.IsEnabled(ExePath)),
-        new TrayMenuItem(MenuLogs, "Открыть журнал"),
+            ? new TrayMenuItem(MenuUpdate, L.T($"Обновить до {update.Version}", $"Update to {update.Version}"), Bold: false)
+            : new TrayMenuItem(MenuUpdate, L.T("Проверить обновления", "Check for updates")),
+        new TrayMenuItem(MenuAutostart, L.T("Запускать вместе с Windows", "Start with Windows"), Checked: Autostart.IsEnabled(ExePath)),
+        new TrayMenuItem(MenuLogs, L.T("Открыть журнал", "Open log")),
         null,
-        new TrayMenuItem(MenuExit, "Выход"),
+        new TrayMenuItem(MenuExit, L.T("Выход", "Exit")),
     ];
 
     private void OnMenu(int id)
@@ -972,12 +974,12 @@ public sealed partial class App : Application, IXamlMetadataProvider
                 {
                     Autostart.Set(ExePath, enable);
                     Log.Info($"Автозапуск: {(enable ? "включён" : "выключен")}");
-                    _tray?.ShowBalloon("Автозапуск", enable ? "GigaRest будет запускаться вместе с Windows, в трее." : "Автозапуск выключен.");
+                    _tray?.ShowBalloon(L.T("Автозапуск", "Start with Windows"), enable ? L.T("GigaRest будет запускаться вместе с Windows, в трее.", "GigaRest will start with Windows, in the tray.") : L.T("Автозапуск выключен.", "GigaRest won't start with Windows anymore."));
                 }
                 catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or System.Security.SecurityException)
                 {
                     Log.Error("Автозапуск", ex);
-                    _tray?.ShowBalloon("Автозапуск", "Не получилось изменить автозапуск: " + ex.Message);
+                    _tray?.ShowBalloon(L.T("Автозапуск", "Start with Windows"), L.T("Не получилось изменить автозапуск: ", "Couldn't change the startup setting: ") + ex.Message);
                 }
                 break;
             case MenuLogs:
@@ -1099,14 +1101,14 @@ public sealed partial class App : Application, IXamlMetadataProvider
             Log.Info($"Пробный режим: тестовых окон {picked.Count}");
             var hasSecond = _desktop.GetMonitors().Count > 1;
             w.ShowPlan(picked, hasSecond,
-                hasSecond ? null : "Второго монитора сейчас нет — тест 4 просто останется на месте.", test: true);
+                hasSecond ? null : L.T("Второго монитора сейчас нет — тест 4 просто останется на месте.", "There's no second monitor right now, so test 4 will just stay where it is."), test: true);
             w.Present();
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             Log.Error("Пробный режим", ex);
             w.ShowPlan(Scan(), _desktop.GetMonitors().Count > 1,
-                "Не получилось открыть тестовые окна: " + ex.Message + ". Если программа лежит в папке только для чтения — распакуйте её, например, в «Документы».");
+                L.T("Не получилось открыть тестовые окна: ", "Couldn't open the test windows: ") + ex.Message + L.T(". Если программа лежит в папке только для чтения — распакуйте её, например, в «Документы».", ". If the program is in a read-only folder, unzip it somewhere else, for example to Documents."));
             w.Present();
         }
     }
@@ -1118,7 +1120,7 @@ public sealed partial class App : Application, IXamlMetadataProvider
         foreach (var p in _desktop.GetProcesses().Where(p => TestPrograms.IsTest(p.ExeName)))
             if (_desktop.Terminate(p.Key)) count++;
         Log.Info($"Тестовые окна закрыты: {count}");
-        _tray?.ShowBalloon("Пробный режим", count > 0 ? "Тестовые окна закрыты." : "Тестовых окон нет.");
+        _tray?.ShowBalloon(L.T("Пробный режим", "Trial run"), count > 0 ? L.T("Тестовые окна закрыты.", "Test windows closed.") : L.T("Тестовых окон нет.", "No test windows open."));
     }
 
     private List<RunningProgram> Scan()
@@ -1164,7 +1166,7 @@ public sealed partial class App : Application, IXamlMetadataProvider
         catch (Exception ex)
         {
             Log.Error("Переход в отдых", ex);
-            w.ShowError("Не получилось перейти в отдых: " + ex.Message);
+            w.ShowError(L.T("Не получилось перейти в отдых: ", "Couldn't switch to rest: ") + ex.Message);
         }
         finally
         {
@@ -1188,12 +1190,12 @@ public sealed partial class App : Application, IXamlMetadataProvider
             if (restStarted is { } started && started > DateTime.MinValue) RecordStats(s => s.AddRest(started, DateTime.UtcNow));
             w.ShowWork(report);
             _tray?.SetTip(TrayTip);
-            _tray?.ShowBalloon("Работа", report.Summary);
+            _tray?.ShowBalloon(L.T("Работа", "Work"), report.Summary);
         }
         catch (Exception ex)
         {
             Log.Error("Возврат к работе", ex);
-            w.ShowError("Не получилось вернуться к работе: " + ex.Message);
+            w.ShowError(L.T("Не получилось вернуться к работе: ", "Couldn't get back to work: ") + ex.Message);
         }
         finally
         {

@@ -60,10 +60,18 @@ public static class Apps
         {
             var hit = list.FirstOrDefault(s => keys.Any(k => string.Equals(s.Name, k, StringComparison.OrdinalIgnoreCase)
                                                          || string.Equals(System.IO.Path.GetFileName(s.TargetPath.Replace('\\', '/')), k, StringComparison.OrdinalIgnoreCase)));
-            if (hit is not null) result.Add(new AppChoice(name, hit.TargetPath));
+            if (hit is not null) result.Add(new AppChoice(Display(name), hit.TargetPath));
         }
         return result;
     }
+
+    private static string Display(string name) => name switch
+    {
+        "Яндекс Музыка" => Text.L.T(name, "Yandex Music"),
+        "VK Музыка" => Text.L.T(name, "VK Music"),
+        "Яндекс Браузер" => Text.L.T(name, "Yandex Browser"),
+        _ => name,
+    };
 
     /// <summary>Имя для своего exe: «C:\…\Аудио плеер.exe» → «Аудио плеер».</summary>
     public static string NameOf(string exePath) => System.IO.Path.GetFileNameWithoutExtension(exePath.Replace('\\', '/'));

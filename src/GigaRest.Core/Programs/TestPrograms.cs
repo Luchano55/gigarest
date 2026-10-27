@@ -1,4 +1,5 @@
 using GigaRest.Core.Settings;
+using GigaRest.Core.Text;
 
 namespace GigaRest.Core.Programs;
 
@@ -10,12 +11,12 @@ public static class TestPrograms
 {
     public sealed record Spec(string ExeName, string Mode, ProgramAction Action, bool AllowTerminate, string Title, bool Tile = false);
 
-    public static readonly IReadOnlyList<Spec> All =
+    public static IReadOnlyList<Spec> All =>
     [
-        new("Тест 1 — закроется.exe", "normal", ProgramAction.Close, false, "Тест 1 — закроется сама"),
-        new("Тест 2 — спросит.exe", "ask", ProgramAction.Close, false, "Тест 2 — спросит «Сохранить?»"),
-        new("Тест 3 — трей.exe", "tray", ProgramAction.Close, true, "Тест 3 — прячется в трей"),
-        new("Тест 4 — второй монитор.exe", "normal", ProgramAction.SecondMonitor, false, "Тест 4 — на второй монитор", Tile: true),
+        new("Тест 1 — закроется.exe", "normal", ProgramAction.Close, false, L.T("Тест 1 — закроется сама", "Test 1 — closes by itself")),
+        new("Тест 2 — спросит.exe", "ask", ProgramAction.Close, false, L.T("Тест 2 — спросит «Сохранить?»", "Test 2 — asks “Save?”")),
+        new("Тест 3 — трей.exe", "tray", ProgramAction.Close, true, L.T("Тест 3 — прячется в трей", "Test 3 — hides to the tray")),
+        new("Тест 4 — второй монитор.exe", "normal", ProgramAction.SecondMonitor, false, L.T("Тест 4 — на второй монитор", "Test 4 — goes to the second monitor"), Tile: true),
     ];
 
     public static bool IsTest(string programId) =>

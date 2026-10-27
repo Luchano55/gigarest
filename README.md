@@ -88,6 +88,10 @@
 
 ![Слушать](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/main/19-slushat.png)
 
+Свои сервисы: «+ Добавить сервис…» в «Смотреть» и «Слушать» — готовые одной кнопкой или любой сайт по адресу. Правый щелчок по сервису — открывать прямо здесь, в браузере по умолчанию или в выбранном браузере.
+
+![Добавить сервис](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/main/26-servis.png)
+
 На втором мониторе — живые плитки разрешённых окон. Под плитками — что играет, сколько непрочитанных в Telegram, какая страница открыта в браузере. Щёлкнули — окно плавно открылось, «Свернуть» — снова плитка.
 
 ![Плитки на втором мониторе](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/main/12-plitki.png)
@@ -107,6 +111,10 @@
 Статистика отдыха: сколько отдыхали по дням и во что играли.
 
 ![Статистика](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/main/25-statistika.png)
+
+GigaRest говорит по-русски и по-английски (English): язык — как в Windows или выбранный в настройках.
+
+![English](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/main/27-english.png)
 
 Обновление — в один щелчок, ход видно в окошке.
 

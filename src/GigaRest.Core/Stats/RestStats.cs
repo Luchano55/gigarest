@@ -1,5 +1,6 @@
 using GigaRest.Core.Games;
 using GigaRest.Core.Logging;
+using GigaRest.Core.Text;
 
 namespace GigaRest.Core.Stats;
 
@@ -78,7 +79,9 @@ public sealed class RestStats
     {
         if (t.TotalMinutes < 1) return "—";
         var h = (int)t.TotalHours;
-        return h > 0 ? (t.Minutes > 0 ? $"{h} ч {t.Minutes} мин" : $"{h} ч") : $"{t.Minutes} мин";
+        return h > 0
+            ? (t.Minutes > 0 ? L.T($"{h} ч {t.Minutes} мин", $"{h} h {t.Minutes} min") : L.T($"{h} ч", $"{h} h"))
+            : L.T($"{t.Minutes} мин", $"{t.Minutes} min");
     }
 }
 

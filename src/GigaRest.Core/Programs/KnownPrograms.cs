@@ -1,4 +1,5 @@
 using GigaRest.Core.Settings;
+using GigaRest.Core.Text;
 
 namespace GigaRest.Core.Programs;
 
@@ -30,16 +31,16 @@ public sealed record KnownProgram
 public static class KnownPrograms
 {
     // Имена exe проверять на ПК Романа (docs/manual-tests.md). (?) — не подтверждено.
-    public static readonly IReadOnlyList<KnownProgram> All =
+    public static IReadOnlyList<KnownProgram> All =>
     [
         new()
         {
-            Exe = "bitrix24.exe", DisplayName = "Битрикс24", DefaultAction = ProgramAction.Close,
+            Exe = "bitrix24.exe", DisplayName = L.T("Битрикс24", "Bitrix24"), DefaultAction = ProgramAction.Close,
             HidesToTray = true, IsChromium = true,
-            TerminateHint = "Можно включить: данные Битрикс24 хранятся на сервере",
+            TerminateHint = L.T("Можно включить: данные Битрикс24 хранятся на сервере", "Safe to turn on: Bitrix24 keeps its data on the server"),
         },
         new() { Exe = "outlook.exe", DisplayName = "Outlook", DefaultAction = ProgramAction.Close },
-        new() { Exe = "olk.exe", DisplayName = "Outlook (новый)", DefaultAction = ProgramAction.Close, IsChromium = true },
+        new() { Exe = "olk.exe", DisplayName = L.T("Outlook (новый)", "Outlook (new)"), DefaultAction = ProgramAction.Close, IsChromium = true },
         new()
         {
             Exe = "chrome.exe", DisplayName = "Chrome", DefaultAction = ProgramAction.Close, IsChromium = true,
@@ -50,9 +51,9 @@ public static class KnownPrograms
         },
         new()
         {
-            Exe = "yandexdisk2.exe", DisplayName = "Яндекс Диск", DefaultAction = ProgramAction.Close,
+            Exe = "yandexdisk2.exe", DisplayName = L.T("Яндекс Диск", "Yandex Disk"), DefaultAction = ProgramAction.Close,
             HidesToTray = true, TrayOnly = true, TrayWaitSeconds = 1,
-            TerminateHint = "Без галочки останется работать в трее",
+            TerminateHint = L.T("Без галочки останется работать в трее", "Without this tick it keeps running in the tray"),
         },
         new()
         {
@@ -64,7 +65,7 @@ public static class KnownPrograms
         new()
         {
             // Музыкой управляем из «Слушать» на основном экране — по умолчанию не трогаем.
-            Exe = "яндекс музыка.exe", DisplayName = "Яндекс Музыка", DefaultAction = ProgramAction.Keep,
+            Exe = "яндекс музыка.exe", DisplayName = L.T("Яндекс Музыка", "Yandex Music"), DefaultAction = ProgramAction.Keep,
             IsChromium = true, HidesToTray = true,
         },
         new() { Exe = "sharex.exe", DisplayName = "ShareX", HidesToTray = true, TrayWaitSeconds = 2 },

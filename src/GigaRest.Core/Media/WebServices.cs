@@ -20,21 +20,21 @@ public static class WebServices
 {
     public const string DefaultBrowser = "browser";
 
-    public static readonly IReadOnlyList<ServicePreset> Presets =
+    public static IReadOnlyList<ServicePreset> Presets =>
     [
         new("YouTube", "https://www.youtube.com/", ServiceKind.Watch),
-        new("VK Видео", "https://vkvideo.ru/", ServiceKind.Watch),
+        new(Text.L.T("VK Видео", "VK Video"), "https://vkvideo.ru/", ServiceKind.Watch),
         new("Rutube", "https://rutube.ru/", ServiceKind.Watch),
         new("Twitch", "https://www.twitch.tv/", ServiceKind.Watch),
-        new("Кинопоиск", "https://hd.kinopoisk.ru/", ServiceKind.Watch, Protected: true),
+        new(Text.L.T("Кинопоиск", "Kinopoisk"), "https://hd.kinopoisk.ru/", ServiceKind.Watch, Protected: true),
         new("Okko", "https://okko.tv/", ServiceKind.Watch, Protected: true),
-        new("Иви", "https://www.ivi.ru/", ServiceKind.Watch, Protected: true),
+        new(Text.L.T("Иви", "Ivi"), "https://www.ivi.ru/", ServiceKind.Watch, Protected: true),
         new("Netflix", "https://www.netflix.com/", ServiceKind.Watch, Protected: true),
-        new("Яндекс Музыка", "https://music.yandex.ru/", ServiceKind.Listen),
+        new(Text.L.T("Яндекс Музыка", "Yandex Music"), "https://music.yandex.ru/", ServiceKind.Listen),
         new("YouTube Music", "https://music.youtube.com/", ServiceKind.Listen),
-        new("VK Музыка", "https://vk.com/music", ServiceKind.Listen),
+        new(Text.L.T("VK Музыка", "VK Music"), "https://vk.com/music", ServiceKind.Listen),
         new("SoundCloud", "https://soundcloud.com/", ServiceKind.Listen),
-        new("Звук", "https://zvuk.com/", ServiceKind.Listen),
+        new(Text.L.T("Звук", "Zvuk"), "https://zvuk.com/", ServiceKind.Listen),
         new("Spotify", "https://open.spotify.com/", ServiceKind.Listen, Protected: true),
         new("Apple Music", "https://music.apple.com/", ServiceKind.Listen, Protected: true),
     ];
@@ -42,8 +42,8 @@ public static class WebServices
     /// <summary>Что есть с первого запуска: YouTube в «Смотреть», Яндекс Музыка в «Слушать».</summary>
     public static List<WebService> Defaults() =>
     [
-        FromPreset(Presets.First(p => p.Name == "YouTube")),
-        FromPreset(Presets.First(p => p.Name == "Яндекс Музыка")),
+        FromPreset(Presets.First(p => p.Url == "https://www.youtube.com/")),
+        FromPreset(Presets.First(p => p.Url == "https://music.yandex.ru/")),
     ];
 
     public static WebService FromPreset(ServicePreset p) => new()

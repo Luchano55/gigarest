@@ -35,5 +35,5 @@ public sealed class RunningProgram
     public string? ExePath => Roots.Select(r => r.ExePath).FirstOrDefault(p => !string.IsNullOrEmpty(p));
 
     /// <summary>Описание под названием: «2 окна», «в трее».</summary>
-    public string Note => IsBackground ? "фоновый процесс" : Windows.Count == 0 ? "в трее" : Text.Sizes.Plural(Windows.Count, "окно", "окна", "окон");
+    public string Note => IsBackground ? Text.L.T("фоновый процесс", "background process") : Windows.Count == 0 ? Text.L.T("в трее", "in the tray") : Text.L.Plural(Windows.Count, "окно", "окна", "окон", "window", "windows");
 }

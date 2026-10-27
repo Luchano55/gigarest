@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using GigaRest.Core.Text;
 
 namespace GigaRest.Core.Updates;
 
@@ -24,13 +25,13 @@ public static class UpdateChannels
     {
         Stable => Stable,
         Dev => Dev,
-        _ => displayVersion.Contains("-dev", StringComparison.OrdinalIgnoreCase) || displayVersion == "разработчика" ? Dev : Stable,
+        _ => displayVersion.Contains("-dev", StringComparison.OrdinalIgnoreCase) || displayVersion is AppVersion.DevRu or AppVersion.DevEn ? Dev : Stable,
     };
 
     /// <summary>Папка с файлами выпуска канала (version.json, архив, установщик).</summary>
     public static string BaseUrl(string channel) => channel == Stable ? Releases + "latest/download/" : Releases + "download/dev-build/";
 
-    public static string Describe(string channel) => channel == Stable ? "стабильные версии" : "тестовые сборки";
+    public static string Describe(string channel) => channel == Stable ? L.T("стабильные версии", "stable versions") : L.T("тестовые сборки", "test builds");
 }
 
 /// <summary>
@@ -78,7 +79,9 @@ public static class AppVersion
 {
     public static int CurrentBuild => FromVersion(Assembly.GetEntryAssembly()?.GetName().Version);
 
-    public static string Display => DisplayFrom(Assembly.GetEntryAssembly()?.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion) ?? "разработчика";
+    public const string DevRu = "разработчика", DevEn = "dev build";
+
+    public static string Display => DisplayFrom(Assembly.GetEntryAssembly()?.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion) ?? L.T(DevRu, DevEn);
 
     public static int FromVersion(Version? version) => version is { Build: > 0 } v ? v.Build : 0;
 

@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using GigaRest.Core.Games;
 using GigaRest.Core.Logging;
+using GigaRest.Core.Text;
 using Microsoft.Win32;
 
 namespace GigaRest.Windows;
@@ -126,7 +127,7 @@ public static class GameSources
                 foreach (var a in game.LaunchArgs) psi.ArgumentList.Add(a);
                 if (game.WorkingDirectory is { } dir && Directory.Exists(dir)) psi.WorkingDirectory = dir;
             }
-            else return "не найден файл игры";
+            else return L.T("не найден файл игры", "game file not found");
             using var _ = Process.Start(psi);
             LauncherWindows.KeepMinimized(game.Store);
             return null;

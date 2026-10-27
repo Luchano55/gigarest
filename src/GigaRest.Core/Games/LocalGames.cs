@@ -18,7 +18,7 @@ public static class LocalGames
     private const string HeroSuffix = "шапка";
 
     public static string DefaultCoversFolder() => System.IO.Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.MyPictures), "GigaRest", "Обложки");
+        Environment.GetFolderPath(Environment.SpecialFolder.MyPictures), "GigaRest", Text.L.T("Обложки", "Covers"));
 
     public static Game FromCustom(CustomGame c) => new()
     {

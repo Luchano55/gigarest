@@ -212,6 +212,17 @@ internal static class Screenshots
         update.Report("Скачиваем: 42% (25 из 60 МБ)", 42);
         await Capture(update.Root, Path.Combine(dir, "23-obnovlenie.png"));
 
+        // Английская версия: то же окно перехода.
+        GigaRest.Core.Text.L.Use(GigaRest.Core.Text.L.English);
+        var english = new SwitcherWindow();
+        english.Present();
+        english.SizeToDesign(fitScreen: false);
+        english.UseDesignSizeForCapture();
+        english.ShowPlan(ProgramScanner.Scan(processes, windows, new AppSettings(), selfPid: 1), hasSecondMonitor: true, notice: null);
+        await Capture(english.Root, Path.Combine(dir, "27-english.png"));
+        english.CloseForGood();
+        GigaRest.Core.Text.L.Use(GigaRest.Core.Text.L.Russian);
+
         // Последнее закрытое окно завершает программу — поэтому закрываем оба только в конце.
         programsWindow.CloseForGood();
         settingsWindow.CloseForGood();

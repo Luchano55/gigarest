@@ -1,3 +1,4 @@
+using GigaRest.Core.Text;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -20,18 +21,18 @@ public sealed class UpdateWindow : Window
 
     public UpdateWindow(string version)
     {
-        Title = "Обновление GigaRest";
+        Title = L.T("Обновление GigaRest", "GigaRest update");
         _root = new Grid { Padding = new Thickness(22, 18, 22, 18), RowSpacing = 10 };
         for (var i = 0; i < 4; i++) _root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        _title = Text($"Обновление до {version}", 16, Ink, Microsoft.UI.Text.FontWeights.SemiBold);
+        _title = Text(L.T($"Обновление до {version}", $"Updating to {version}"), 16, Ink, Microsoft.UI.Text.FontWeights.SemiBold);
         _root.Children.Add(_title);
         _bar = new ProgressBar { Minimum = 0, Maximum = 100, IsIndeterminate = true, Height = 6, Foreground = Brush(Warm) };
         Grid.SetRow(_bar, 1);
         _root.Children.Add(_bar);
-        _status = Text("Готовимся…", 13, Lead, wrap: true);
+        _status = Text(L.T("Готовимся…", "Getting ready…"), 13, Lead, wrap: true);
         Grid.SetRow(_status, 2);
         _root.Children.Add(_status);
-        _close = ColoredButton("Закрыть", Hover, Hex("#2EFFFFFF"), Ink);
+        _close = ColoredButton(L.T("Закрыть", "Close"), Hover, Hex("#2EFFFFFF"), Ink);
         _close.Visibility = Visibility.Collapsed;
         _close.HorizontalAlignment = HorizontalAlignment.Right;
         _close.Click += (_, _) => Close();
@@ -67,7 +68,7 @@ public sealed class UpdateWindow : Window
 
     public void Fail(string message)
     {
-        _title.Text = "Обновление не получилось";
+        _title.Text = L.T("Обновление не получилось", "Update failed");
         _bar.Visibility = Visibility.Collapsed;
         _status.Text = message;
         _close.Visibility = Visibility.Visible;
