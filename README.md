@@ -30,8 +30,7 @@
   <a href="#features">Features</a> ·
   <a href="#screenshots">Screenshots</a> ·
   <a href="#install">Install</a> ·
-  <a href="#faq">FAQ</a> ·
-  <a href="#whats-next">What's next</a>
+  <a href="#faq">FAQ</a>
 </p>
 
 > The app speaks English and Russian. It follows your Windows language; you can switch it in Settings → Language. The screenshots below show the Russian interface, except the one marked English.
@@ -155,9 +154,5 @@ Updates in one click, with progress in a small window.
 **A browser tile shows only an icon?** — Some browsers stop drawing a window that is covered by another window. This is a known limitation; a fix is planned.
 
 **Only one monitor?** — There are no tiles; allowed apps simply stay open.
-
-## What's next
-
-- We're thinking about a Focus mode: one work app on the main monitor, a calm scene or work tiles on the second.
 
 What's new — [docs/CHANGELOG.md](docs/CHANGELOG.md) (in Russian). License — MIT.
