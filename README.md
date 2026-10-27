@@ -158,8 +158,6 @@ Updates in one click, with progress in a small window.
 
 ## What's next
 
-- Focus mode: one work app on the main monitor, a calm scene or work tiles on the second.
-- Your Wallpaper Engine video wallpapers as Quiet screen scenes.
-- Sleep timer and mixing nature sounds.
+- We're thinking about a Focus mode: one work app on the main monitor, a calm scene or work tiles on the second.
 
 What's new — [docs/CHANGELOG.md](docs/CHANGELOG.md) (in Russian). License — MIT.
