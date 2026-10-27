@@ -1,156 +1,165 @@
 <h1 align="center">GigaRest</h1>
 
 <p align="center">
-  <b>Режим отдыха для Windows 10/11.</b> Одна кнопка — и компьютер из рабочего становится домашним.<br>
-  Рабочие программы вежливо закрываются, уведомления затихают, на мониторе — спокойная сцена,<br>
-  на втором мониторе — живые плитки нужных окон. Вторая кнопка возвращает всё, как было.
+  <b>English</b> · <a href="README.ru.md">Русский</a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/Luchano55/gigarest/actions/workflows/build.yml"><img src="https://img.shields.io/github/actions/workflow/status/Luchano55/gigarest/build.yml?label=сборка&logo=githubactions&logoColor=white" alt="Сборка"></a>
-  <a href="https://github.com/Luchano55/gigarest/releases/latest"><img src="https://img.shields.io/github/v/release/Luchano55/gigarest?label=версия&color=0078D4" alt="Версия"></a>
-  <a href="https://github.com/Luchano55/gigarest/releases/tag/dev-build"><img src="https://img.shields.io/github/v/release/Luchano55/gigarest?include_prereleases&sort=date&display_name=release&label=тестовая%20сборка&color=6e7781" alt="Тестовая сборка"></a>
-  <a href="#установка"><img src="https://img.shields.io/badge/Windows-10%20%7C%2011%20(x64)-0078D4" alt="Windows 10 | 11"></a>
+  <b>Rest mode for Windows 10/11.</b> One button turns your work PC into a home PC.<br>
+  Work apps close politely, notifications go quiet, a calm scene fills your main monitor,<br>
+  and live tiles of the windows you want stay on the second one. Another button brings everything back.
+</p>
+
+<p align="center">
+  <a href="https://github.com/Luchano55/gigarest/actions/workflows/build.yml"><img src="https://img.shields.io/github/actions/workflow/status/Luchano55/gigarest/build.yml?label=build&logo=githubactions&logoColor=white" alt="Build status"></a>
+  <a href="https://github.com/Luchano55/gigarest/releases/latest"><img src="https://img.shields.io/github/v/release/Luchano55/gigarest?label=version&color=0078D4" alt="Latest version"></a>
+  <a href="https://github.com/Luchano55/gigarest/releases/tag/dev-build"><img src="https://img.shields.io/github/v/release/Luchano55/gigarest?include_prereleases&sort=date&display_name=release&label=test%20build&color=6e7781" alt="Latest test build"></a>
+  <a href="#install"><img src="https://img.shields.io/badge/Windows-10%20%7C%2011%20(x64)-0078D4" alt="Windows 10 | 11"></a>
   <a href="https://dotnet.microsoft.com/download/dotnet/8.0"><img src="https://img.shields.io/badge/.NET-8-512BD4?logo=dotnet&logoColor=white" alt=".NET 8"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/лицензия-MIT-green" alt="Лицензия MIT"></a>
-  <a href="#приватность"><img src="https://img.shields.io/badge/100%25-офлайн-2ea44f" alt="Офлайн"></a>
-  <a href="#приватность"><img src="https://img.shields.io/badge/без-администратора-2ea44f" alt="Без прав администратора"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT license"></a>
+  <a href="#privacy"><img src="https://img.shields.io/badge/100%25-offline-2ea44f" alt="Offline"></a>
+  <a href="#privacy"><img src="https://img.shields.io/badge/no-admin%20rights-2ea44f" alt="No admin rights"></a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/Luchano55/gigarest/releases/latest/download/GigaRest-Setup.exe"><img src="https://img.shields.io/github/v/release/Luchano55/gigarest?label=Скачать%20для%20Windows&style=for-the-badge&color=0078D4" alt="Скачать GigaRest для Windows"></a>
+  <a href="https://github.com/Luchano55/gigarest/releases/latest/download/GigaRest-Setup.exe"><img src="https://img.shields.io/github/v/release/Luchano55/gigarest?label=Download%20for%20Windows&style=for-the-badge&color=0078D4" alt="Download GigaRest for Windows"></a>
 </p>
 
 <p align="center">
-  <a href="#как-это-работает">Как это работает</a> ·
-  <a href="#возможности">Возможности</a> ·
-  <a href="#скриншоты">Скриншоты</a> ·
-  <a href="#установка">Установка</a> ·
-  <a href="#вопросы">Вопросы</a> ·
-  <a href="#что-дальше">Что дальше</a>
+  <a href="#how-it-works">How it works</a> ·
+  <a href="#features">Features</a> ·
+  <a href="#screenshots">Screenshots</a> ·
+  <a href="#install">Install</a> ·
+  <a href="#faq">FAQ</a> ·
+  <a href="#whats-next">What's next</a>
 </p>
 
-## Как это работает
+> The app speaks English and Russian. It follows your Windows language; you can switch it in Settings → Language. The screenshots below show the Russian interface, except the one marked English.
 
-1. Вечером нажмите **Ctrl+Alt+Home** (или значок в трее → «Работа → Отдых»).
-2. GigaRest вежливо закрывает рабочие программы — те, что вы сами отметили. Если программа спросит «Сохранить?», он ждёт вашего ответа.
-3. Основной монитор — «Тихий» экран: пейзаж или ваши обои с лёгким снегом, туманом, огоньками или дождём. Внизу одна строка: **Продолжить · Играть · Смотреть · Слушать · Сцены**.
-4. Второй монитор — до четырёх живых плиток: мессенджер, личный браузер, музыка. Щёлкнули — окно открылось, «Свернуть» — снова плитки.
-5. Утром — «Вернуться к работе»: закрытое открывается, окна встают на свои места.
+## How it works
 
-## Возможности
+1. In the evening, press **Ctrl+Alt+Home** (or the tray icon → "Work → Rest").
+2. GigaRest politely closes your work apps — only the ones you marked. If an app asks "Save changes?", it waits for your answer.
+3. Your main monitor shows the Quiet screen: a landscape or your own wallpaper with gentle snow, fog, fireflies or rain. At the bottom, one line: **Continue · Play · Watch · Listen · Scenes**.
+4. Your second monitor shows up to four live tiles: a messenger, your personal browser, music. Click one to open the window; "Minimize" turns it back into a tile.
+5. In the morning, "Back to work": what was closed opens again, and windows return to their places.
 
-- **Вежливое закрытие.** Ничего не завершается принудительно без вашей галочки. Свёрнутые в трей и фоновые программы — по вашему выбору, и потом запускаются с теми же параметрами. Можно закрыть и насовсем — тогда после отдыха программа не откроется.
-- **Второй монитор на картинке.** Какие окна станут плитками и в каком порядке — перетаскиванием прямо в главном окне.
-- **Память.** В итоге видно, сколько освободилось.
-- **«Не беспокоить».** На время отдыха — только приоритетные уведомления, потом — как было.
-- **«Тихий» экран.** Встроенные пейзажи и папка «Мои сцены» для своих картинок и видео в 4K; плавное движение, эффекты поверх. Бережёт OLED: ничего не стоит на месте, курсор прячется, экран темнеет без дела, а через час — выключается. Управление мышью и клавиатурой. Во время игры на весь экран сцена стоит и не занимает видеокарту.
-- **Играть.** Одна библиотека установленных игр из Steam, Epic, GOG и Battle.net плюс свои игры без магазина — с обложками (можно свои), поиском и фильтром по магазинам; запуск одним щелчком, без окна лаунчера.
-- **Смотреть.** YouTube прямо на «Тихом» экране — главная или последний просмотренный ролик; папка с фильмами и встроенный плеер с продолжением с места остановки; можно выбрать свой плеер.
-- **Слушать.** Яндекс Музыка прямо на «Тихом» экране — поиск, плейлисты, «Моя волна»; звуки природы (дождь, море, костёр, ветер); что играет и кнопки «назад / пауза / дальше».
-- **Продолжить.** Последняя игра, фильм, ролик YouTube и музыка — одним щелчком.
-- **Статистика.** Сколько отдыхали за день и неделю и во что играли — только у вас на компьютере.
-- **Живые плитки** на втором мониторе с подписями: что играет, сколько непрочитанных, какая страница открыта.
-- **Расписание.** Мягкое предложение отдохнуть вечером и вернуться к работе утром.
-- **Самообновление** в один щелчок.
+## Features
 
-## Скриншоты
+- **Polite closing.** Nothing is ended by force unless you ticked the box. Apps that hide in the tray and background apps are handled the way you choose and later start again with the same parameters. You can also close an app for good — then it won't reopen after rest.
+- **Second monitor as a picture.** Drag tiles right in the main window to choose which windows become tiles and in what order.
+- **Memory.** The summary shows how much was freed.
+- **Do not disturb.** Only priority notifications while you rest, then back to normal.
+- **Quiet screen.** Built-in landscapes and a "My scenes" folder for your own 4K pictures and videos; slow motion and effects on top. Kind to OLED: nothing stays still, the cursor hides, the screen dims when idle and turns off after an hour. Mouse and keyboard control. While a fullscreen game runs, the scene pauses and leaves the GPU alone.
+- **Play.** One library of installed games from Steam, Epic, GOG and Battle.net plus your own games outside stores — with covers (your own too), search and store filters; one click to launch, without the launcher window.
+- **Watch.** YouTube right on the Quiet screen — the home page or the last video you watched; your movies folder and a built-in player that resumes where you stopped; or your own player.
+- **Listen.** Yandex Music right on the Quiet screen; nature sounds (rain, sea, campfire, wind); what's playing with back / pause / next; and where the sound goes — headphones, speakers, monitor.
+- **Your own services.** Any video or music site in Watch and Listen — ready-made ones in one click or your own by address; they open right here or in the browser you pick.
+- **Continue.** Your last game, movie, YouTube video and music — one click away.
+- **Statistics.** How long you rested today and this week, and what you played — kept only on your PC.
+- **Live tiles** on the second monitor with captions: what's playing, unread messages, which page is open.
+- **Schedule.** A gentle offer to rest in the evening and to get back to work in the morning.
+- **English and Russian.** Follows your Windows language or the one you pick.
+- **Self-update** in one click.
 
-Главное окно — «Работа → Отдых». Слева — оба монитора: плитки второго монитора можно перетащить или поменять местами двумя щелчками, «×» убирает, «+» добавляет. Справа — что будет с каждой программой: «Закрыть · На второй монитор · Не трогать»; у закрываемой можно выбрать «не откроется после отдыха».
+## Screenshots
 
-![Работа → Отдых](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/main/1-perehod.png)
+The main window — "Work → Rest". On the left, both monitors: drag the second monitor's tiles or click two to swap them, "×" removes, "+" adds. On the right, what happens to each app: "Close · Second monitor · Leave alone"; an app you close can be set to not reopen after rest.
 
-Программы закрываются вежливо и по очереди — видно, какая закрывается сейчас. Если какая-то спросит «Сохранить?», GigaRest подождёт ответа.
+![Work → Rest](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/main/1-perehod.png)
 
-![Переход идёт](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/main/2-progress.png)
-
-Итог: сколько освободилось памяти, что закрылось, что спряталось в трей. Возврат к работе — одной кнопкой (или Ctrl+Alt+Home).
-
-![Отдых](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/main/3-otdyh.png)
-
-В отдыхе на основном мониторе — «Тихий» экран: сцена, часы и одна строка «Продолжить · Играть · Смотреть · Слушать · Сцены». Уведомления молчат («Не беспокоить»).
-
-![Тихий экран](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/main/11-tihiy.png)
-
-«Играть» — игры Steam, Epic, GOG и Battle.net с обложками, недавние сверху; щелчок запускает игру без окна лаунчера. «Продолжить» — последняя игра и последний фильм.
-
-![Играть](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/main/17-igrat.png)
-
-«Вся библиотека» — все установленные игры из всех магазинов в одном месте: последняя игра крупно, поиск, фильтр по магазинам, обложки.
-
-![Библиотека](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/main/24-biblioteka.png)
-
-«Смотреть» — YouTube прямо на «Тихом» экране (главная или последний ролик; «Свернуть» — окошко в углу, ролик идёт дальше) и фильмы из вашей папки во встроенном плеере с продолжением с места остановки.
-
-![Смотреть](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/main/20-smotret.png)
-
-«Слушать» — Яндекс Музыка прямо здесь: поиск, плейлисты, «Моя волна»; что играет и кнопки «назад», «пауза», «дальше».
-
-![Слушать](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/main/19-slushat.png)
-
-Свои сервисы: «+ Добавить сервис…» в «Смотреть» и «Слушать» — готовые одной кнопкой или любой сайт по адресу. Правый щелчок по сервису — открывать прямо здесь, в браузере по умолчанию или в выбранном браузере.
-
-![Добавить сервис](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/main/26-servis.png)
-
-На втором мониторе — живые плитки разрешённых окон. Под плитками — что играет, сколько непрочитанных в Telegram, какая страница открыта в браузере. Щёлкнули — окно плавно открылось, «Свернуть» — снова плитка.
-
-![Плитки на втором мониторе](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/main/12-plitki.png)
-
-Утром — «Снова работа»: закрытое открылось, окна на своих местах.
-
-![Снова работа](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/main/4-rabota.png)
-
-Какие программы рабочие — выбирается в отдельном окне, в том числе те, что сейчас не запущены. При первом запуске GigaRest подсказывает сам.
-
-![Рабочие программы](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/main/5-programmy.png)
-
-Настройки: расписание, горячие клавиши, «Не беспокоить», папка с фильмами, канал обновлений, автозапуск.
-
-![Настройки](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/main/6-nastroyki.png)
-
-Статистика отдыха: сколько отдыхали по дням и во что играли.
-
-![Статистика](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/main/25-statistika.png)
-
-GigaRest говорит по-русски и по-английски (English): язык — как в Windows или выбранный в настройках.
+The same window in English.
 
 ![English](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/main/27-english.png)
 
-Обновление — в один щелчок, ход видно в окошке.
+Apps close politely, one at a time — you can see which one is closing now. If one asks "Save changes?", GigaRest waits for your answer.
 
-![Обновление](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/main/23-obnovlenie.png)
+![Switching](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/main/2-progress.png)
 
-## Установка
+The summary: how much memory was freed, what closed, what hid in the tray. Back to work is one button away (or Ctrl+Alt+Home).
 
-**[Скачать GigaRest-Setup.exe](https://github.com/Luchano55/gigarest/releases/latest/download/GigaRest-Setup.exe)** — последняя стабильная версия.
+![Rest](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/main/3-otdyh.png)
 
-- Права администратора не нужны: GigaRest ставится в вашу папку пользователя и появляется в меню «Пуск» и в «Установленных приложениях».
-- Windows может предупредить «Неизвестный издатель» — у установщика нет платной цифровой подписи. Нажмите «Подробнее» → «Выполнить в любом случае».
-- При первом запуске GigaRest предложит выбрать рабочие программы и подскажет сам.
-- Без установки: [GigaRest-win-x64.zip](https://github.com/Luchano55/gigarest/releases/latest/download/GigaRest-win-x64.zip) — распакуйте в обычную папку и запустите GigaRest.exe.
-- Удаление — «Параметры» → «Приложения» → GigaRest → «Удалить». Настройки остаются в `%AppData%\GigaRest`.
+While you rest, the main monitor shows the Quiet screen: a scene, a clock and one line "Continue · Play · Watch · Listen · Scenes". Notifications stay silent (Do not disturb).
 
-**Обновления** GigaRest проверяет сам и предлагает в один щелчок (или значок в трее → «Проверить обновления»). В настройках можно выбрать: стабильные версии или тестовые сборки — всё новое сразу, но могут быть ошибки. [Тестовая сборка](https://github.com/Luchano55/gigarest/releases/tag/dev-build) обновляется после каждой проверенной сборки.
+![Quiet screen](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/main/11-tihiy.png)
 
-## Приватность
+Play — Steam, Epic, GOG and Battle.net games with covers, recent ones first; a click launches the game without the launcher window.
 
-- Работает офлайн. Сам GigaRest ходит в сеть только за проверкой обновлений на GitHub. Встроенные Яндекс Музыка и YouTube открываются, только когда вы их сами откроете.
-- Без телеметрии и без учётных записей.
-- Без прав администратора; в журнал не пишутся заголовки окон и личные данные.
+![Play](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/main/17-igrat.png)
 
-## Вопросы
+The whole library — every installed game from every store in one place: the last game large, search, store filters, covers.
 
-**Что если программа спросит «Сохранить?»** — GigaRest ждёт вашего ответа и никогда не отвечает за вас. «Отмена» — программа остаётся открытой.
+![Library](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/main/24-biblioteka.png)
 
-**Steam или Battle.net открываются поверх?** — Steam запускает игру сразу, без своего окна; главное окно Battle.net сворачивается само.
+Watch — YouTube right on the Quiet screen ("Minimize" shrinks it to a corner and the video keeps playing) and movies from your folder in the built-in player.
 
-**Плитка Zen показывает только значок?** — Некоторые браузеры перестают рисовать окно, закрытое другим окном. Это известное ограничение, его решение — в планах.
+![Watch](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/main/20-smotret.png)
 
-**Один монитор?** — Плиток нет, разрешённые программы просто остаются открытыми.
+Listen — music right here, what's playing with back, pause and next, where the sound goes, and nature sounds.
 
-## Что дальше
+![Listen](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/main/19-slushat.png)
 
-- Плейлисты и звуки природы в «Слушать».
-- Устройство вывода звука для отдыха.
+Your own services: "+ Add a service…" in Watch and Listen. Right-click a service to open it here, in your default browser or in a browser you choose.
 
-Что нового — [docs/CHANGELOG.md](docs/CHANGELOG.md). Лицензия — MIT.
+![Add a service](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/main/26-servis.png)
+
+Live tiles of allowed windows on the second monitor, with captions underneath.
+
+![Tiles on the second monitor](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/main/12-plitki.png)
+
+In the morning — "Back to work": closed apps opened again, windows in their places.
+
+![Back to work](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/main/4-rabota.png)
+
+Choose your work apps in a separate window, including ones that aren't running. On first start GigaRest suggests them itself.
+
+![Work apps](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/main/5-programmy.png)
+
+Settings: schedule, hotkeys, Do not disturb, movies folder, update channel, language, autostart.
+
+![Settings](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/main/6-nastroyki.png)
+
+Rest statistics: how long you rested each day and what you played.
+
+![Statistics](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/main/25-statistika.png)
+
+Updates in one click, with progress in a small window.
+
+![Update](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/main/23-obnovlenie.png)
+
+## Install
+
+**[Download GigaRest-Setup.exe](https://github.com/Luchano55/gigarest/releases/latest/download/GigaRest-Setup.exe)** — the latest stable version.
+
+- No admin rights needed: GigaRest installs into your user folder and appears in the Start menu and in Installed apps.
+- Windows may warn about an "Unknown publisher" — the installer has no paid code signature. Click "More info" → "Run anyway".
+- On first start GigaRest offers to pick your work apps and suggests them itself.
+- Without installing: [GigaRest-win-x64.zip](https://github.com/Luchano55/gigarest/releases/latest/download/GigaRest-win-x64.zip) — unpack into a regular folder and run GigaRest.exe.
+- To uninstall: Settings → Apps → GigaRest → Uninstall. Your settings stay in `%AppData%\GigaRest`.
+
+**Updates.** GigaRest checks for updates itself and offers them in one click (or the tray icon → "Check for updates"). In Settings you can choose stable versions or test builds — everything new right away, but there may be bugs. The [test build](https://github.com/Luchano55/gigarest/releases/tag/dev-build) is updated after every checked build.
+
+## Privacy
+
+- Works offline. GigaRest itself only goes online to check GitHub for updates. Built-in sites (YouTube, Yandex Music, your services) open only when you open them.
+- No telemetry and no accounts.
+- No admin rights; window titles and personal data are never written to the log.
+
+## FAQ
+
+**What if an app asks "Save changes?"** — GigaRest waits for your answer and never answers for you. "Cancel" keeps the app open.
+
+**Do Steam or Battle.net pop up on top?** — Steam starts the game right away without its window; the Battle.net main window minimizes itself.
+
+**A browser tile shows only an icon?** — Some browsers stop drawing a window that is covered by another window. This is a known limitation; a fix is planned.
+
+**Only one monitor?** — There are no tiles; allowed apps simply stay open.
+
+## What's next
+
+- Focus mode: one work app on the main monitor, a calm scene or work tiles on the second.
+- Your Wallpaper Engine video wallpapers as Quiet screen scenes.
+- Sleep timer and mixing nature sounds.
+
+What's new — [docs/CHANGELOG.md](docs/CHANGELOG.md) (in Russian). License — MIT.
