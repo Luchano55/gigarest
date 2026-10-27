@@ -1,0 +1,155 @@
+using GigaRest.Core.Settings;
+
+namespace GigaRest.Core.Programs;
+
+/// <summary>Ярлык из меню «Пуск»: название и куда он ведёт.</summary>
+public sealed record ShortcutInfo(string Name, string TargetPath);
+
+/// <summary>Строка окна «Рабочие программы».</summary>
+public sealed class SelectorRow
+{
+    public required string Id { get; init; }
+    public required string DisplayName { get; set; }
+    public string? ExePath { get; init; }
+    public bool IsRunning { get; init; }
+    public bool HidesToTray { get; init; }
+    public ProgramAction Action { get; set; }
+    public bool AllowTerminate { get; set; }
+    /// <summary>Завершать принудительно, даже если есть несохранённое.</summary>
+    public bool ForceKill { get; set; }
+    /// <summary>«Закрыть насовсем»: после отдыха не открывать.</summary>
+    public bool NoRelaunch { get; set; }
+    /// <summary>Фоновый процесс: варианты только «завершать в отдыхе» / «не трогать».</summary>
+    public bool IsBackground { get; init; }
+    public long PrivateBytes { get; init; }
+    /// <summary>Чем запустим обратно — для фоновых показываем, чтобы было спокойно.</summary>
+    public string? RelaunchInfo { get; init; }
+    /// <summary>Автоподсказка: «похоже на рабочую: почта».</summary>
+    public string? Hint { get; set; }
+}
+
+/// <summary>
+/// Выбор рабочих программ: запущенные, уже настроенные и установленные (ярлыки меню «Пуск»),
+/// без дублей и без деинсталляторов.
+/// </summary>
+public static class ProgramCatalog
+{
+    private static readonly string[] JunkWords =
+    [
+        "uninstall", "удалить", "удаление", "деинстал", "setup", "install", "readme", "help", "справка",
+        "license", "лиценз", "update", "обновл", "repair", "website", "сайт",
+    ];
+
+    /// <summary>Ярлыки → программы: только .exe, без деинсталляторов, один ярлык на exe.</summary>
+    public static List<ShortcutInfo> CleanShortcuts(IEnumerable<ShortcutInfo> shortcuts) => shortcuts
+        .Where(s => s.TargetPath.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+        .Where(s => !KnownPrograms.System.Contains(ExeName(s.TargetPath)))
+        .Where(s => !JunkWords.Any(j => s.Name.Contains(j, StringComparison.OrdinalIgnoreCase)
+                                        || ExeName(s.TargetPath).Contains(j, StringComparison.OrdinalIgnoreCase))
+                    && !ExeName(s.TargetPath).StartsWith("unins", StringComparison.OrdinalIgnoreCase))
+        .GroupBy(s => ExeName(s.TargetPath), StringComparer.OrdinalIgnoreCase)
+        .Select(g => g.OrderBy(s => s.Name.Length).First())
+        .ToList();
+
+    /// <summary>Все строки: сначала настроенные (не «Оставить»), потом запущенные, потом установленные — по алфавиту.</summary>
+    public static List<SelectorRow> BuildRows(
+        AppSettings settings, IEnumerable<RunningProgram> running, IEnumerable<ShortcutInfo> shortcuts,
+        IEnumerable<RunningProgram>? background = null)
+    {
+        var rows = new Dictionary<string, SelectorRow>(StringComparer.OrdinalIgnoreCase);
+        var runningList = running.ToList();
+
+        foreach (var p in runningList)
+        {
+            rows[p.Id] = new SelectorRow
+            {
+                Id = p.Id, DisplayName = p.DisplayName, ExePath = p.Roots.FirstOrDefault()?.ExePath, IsRunning = true,
+                HidesToTray = p.Known?.HidesToTray == true || p.Windows.Count == 0,
+                Action = p.Action, AllowTerminate = p.AllowTerminate, ForceKill = p.ForceKill, NoRelaunch = p.NoRelaunch, IsBackground = p.IsBackground,
+                PrivateBytes = p.PrivateBytes,
+            };
+        }
+
+        // Фоновые — отдельной группой; их настройка — «завершать» (Close + можно завершать) или «не трогать».
+        foreach (var b in background ?? [])
+        {
+            if (rows.ContainsKey(b.Id)) continue;
+            var s = settings.Find(b.Id);
+            var root = b.Roots[0];
+            rows[b.Id] = new SelectorRow
+            {
+                Id = b.Id, DisplayName = s?.DisplayName is { Length: > 0 } n ? n : b.DisplayName, ExePath = root.ExePath,
+                IsRunning = true, IsBackground = true, PrivateBytes = b.PrivateBytes,
+                Action = s?.Action == ProgramAction.Close ? ProgramAction.Close : ProgramAction.Keep,
+                AllowTerminate = s?.Action == ProgramAction.Close,
+                RelaunchInfo = Session.RelaunchPlanner.Plan(root, null) is { } spec
+                    ? spec.FileName + (spec.Arguments.Count > 0 ? " " + string.Join(" ", spec.Arguments) : "")
+                    : null,
+            };
+        }
+
+        foreach (var s in settings.Programs.Where(s => !rows.ContainsKey(s.Id)))
+        {
+            var known = KnownPrograms.Find(s.Id);
+            rows[s.Id] = new SelectorRow
+            {
+                Id = s.Id, DisplayName = s.DisplayName.Length > 0 ? s.DisplayName : known?.DisplayName ?? ProgramScanner.FriendlyName(s.Id),
+                HidesToTray = known?.HidesToTray == true, Action = s.Action, AllowTerminate = s.AllowTerminate, ForceKill = s.ForceKill, NoRelaunch = s.NoRelaunch,
+            };
+        }
+
+        foreach (var sc in CleanShortcuts(shortcuts))
+        {
+            var id = ExeName(sc.TargetPath).ToLowerInvariant();
+            if (rows.ContainsKey(id)) continue;
+            var known = KnownPrograms.Find(id);
+            rows[id] = new SelectorRow
+            {
+                Id = id, DisplayName = known?.DisplayName ?? sc.Name, ExePath = sc.TargetPath,
+                HidesToTray = known?.HidesToTray == true, Action = ProgramAction.Keep,
+            };
+        }
+
+        return rows.Values
+            .OrderBy(r => r.Action == ProgramAction.Keep ? 1 : 0)
+            .ThenBy(r => r.IsRunning ? 0 : 1)
+            .ThenBy(r => r.DisplayName, StringComparer.CurrentCultureIgnoreCase)
+            .ToList();
+    }
+
+    /// <summary>Поиск по названию и имени exe, без учёта регистра.</summary>
+    public static IEnumerable<SelectorRow> Filter(IEnumerable<SelectorRow> rows, string? query)
+    {
+        if (string.IsNullOrWhiteSpace(query)) return rows;
+        var q = query.Trim();
+        return rows.Where(r => r.DisplayName.Contains(q, StringComparison.CurrentCultureIgnoreCase)
+                               || r.Id.Contains(q, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>Сохранить выбор: в настройки попадают все строки, где действие не «Оставить», и уже известные.</summary>
+    public static void Save(AppSettings settings, IEnumerable<SelectorRow> rows)
+    {
+        foreach (var r in rows)
+        {
+            var s = settings.Find(r.Id);
+            if (s is null)
+            {
+                if (r.Action == ProgramAction.Keep && !r.AllowTerminate && !r.ForceKill) continue;
+                s = new ProgramSetting { Id = r.Id };
+                settings.Programs.Add(s);
+            }
+            s.DisplayName = r.DisplayName;
+            s.Action = r.Action;
+            // Для фонового «завершать» и есть разрешение завершать.
+            s.AllowTerminate = r.IsBackground ? r.Action == ProgramAction.Close : r.AllowTerminate || r.ForceKill;
+            s.ForceKill = !r.IsBackground && r.Action == ProgramAction.Close && r.ForceKill;
+            s.NoRelaunch = !r.IsBackground && r.Action == ProgramAction.Close && r.NoRelaunch;
+        }
+    }
+
+    public static string ExeName(string path)
+    {
+        var i = path.LastIndexOfAny(['\\', '/']);
+        return i >= 0 ? path[(i + 1)..] : path;
+    }
+}

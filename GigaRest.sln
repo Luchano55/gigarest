@@ -1,0 +1,66 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{703AEA30-B3D7-48E3-A42D-30186B880DE0}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GigaRest.Core", "src\GigaRest.Core\GigaRest.Core.csproj", "{A7590EFC-A683-45A9-8164-59B07C0A6A8E}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GigaRest.Windows", "src\GigaRest.Windows\GigaRest.Windows.csproj", "{A0B7A05B-EF50-45F2-9DD0-DC532D0362C4}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GigaRest.App", "src\GigaRest.App\GigaRest.App.csproj", "{1BA21A43-15BC-4F77-B0B3-7BC1E7DB245E}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{28101976-90E7-415A-BD7A-02488C5ACD77}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GigaRest.Core.Tests", "tests\GigaRest.Core.Tests\GigaRest.Core.Tests.csproj", "{82384D4A-9C91-4667-871B-2E68E77C23A8}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GigaRest.Windows.Tests", "tests\GigaRest.Windows.Tests\GigaRest.Windows.Tests.csproj", "{A4DFC3BC-8EDA-4F2D-8C65-DC9886B76212}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tools-src", "tools-src", "{ED927174-6C51-4BCC-BE21-D71B3E94E7EE}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TestDummy", "tools-src\TestDummy\TestDummy.csproj", "{19C9F2D8-DB55-4E52-882B-A8A54BB758B5}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{A7590EFC-A683-45A9-8164-59B07C0A6A8E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A7590EFC-A683-45A9-8164-59B07C0A6A8E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A7590EFC-A683-45A9-8164-59B07C0A6A8E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A7590EFC-A683-45A9-8164-59B07C0A6A8E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A0B7A05B-EF50-45F2-9DD0-DC532D0362C4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A0B7A05B-EF50-45F2-9DD0-DC532D0362C4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A0B7A05B-EF50-45F2-9DD0-DC532D0362C4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A0B7A05B-EF50-45F2-9DD0-DC532D0362C4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1BA21A43-15BC-4F77-B0B3-7BC1E7DB245E}.Debug|Any CPU.ActiveCfg = Debug|x64
+		{1BA21A43-15BC-4F77-B0B3-7BC1E7DB245E}.Debug|Any CPU.Build.0 = Debug|x64
+		{1BA21A43-15BC-4F77-B0B3-7BC1E7DB245E}.Release|Any CPU.ActiveCfg = Release|x64
+		{1BA21A43-15BC-4F77-B0B3-7BC1E7DB245E}.Release|Any CPU.Build.0 = Release|x64
+		{82384D4A-9C91-4667-871B-2E68E77C23A8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{82384D4A-9C91-4667-871B-2E68E77C23A8}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{82384D4A-9C91-4667-871B-2E68E77C23A8}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{82384D4A-9C91-4667-871B-2E68E77C23A8}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A4DFC3BC-8EDA-4F2D-8C65-DC9886B76212}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A4DFC3BC-8EDA-4F2D-8C65-DC9886B76212}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A4DFC3BC-8EDA-4F2D-8C65-DC9886B76212}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A4DFC3BC-8EDA-4F2D-8C65-DC9886B76212}.Release|Any CPU.Build.0 = Release|Any CPU
+		{19C9F2D8-DB55-4E52-882B-A8A54BB758B5}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{19C9F2D8-DB55-4E52-882B-A8A54BB758B5}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{19C9F2D8-DB55-4E52-882B-A8A54BB758B5}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{19C9F2D8-DB55-4E52-882B-A8A54BB758B5}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{A7590EFC-A683-45A9-8164-59B07C0A6A8E} = {703AEA30-B3D7-48E3-A42D-30186B880DE0}
+		{A0B7A05B-EF50-45F2-9DD0-DC532D0362C4} = {703AEA30-B3D7-48E3-A42D-30186B880DE0}
+		{1BA21A43-15BC-4F77-B0B3-7BC1E7DB245E} = {703AEA30-B3D7-48E3-A42D-30186B880DE0}
+		{82384D4A-9C91-4667-871B-2E68E77C23A8} = {28101976-90E7-415A-BD7A-02488C5ACD77}
+		{A4DFC3BC-8EDA-4F2D-8C65-DC9886B76212} = {28101976-90E7-415A-BD7A-02488C5ACD77}
+		{19C9F2D8-DB55-4E52-882B-A8A54BB758B5} = {ED927174-6C51-4BCC-BE21-D71B3E94E7EE}
+	EndGlobalSection
+EndGlobal

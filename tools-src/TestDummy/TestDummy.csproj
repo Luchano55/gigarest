@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Подопытная программа для Windows-тестов: окна, вопрос «Сохранить?», прятанье в трей. -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <AssemblyName>TestDummy</AssemblyName>
+  </PropertyGroup>
+</Project>

@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- WinUI 3 без упаковки MSIX, Windows App SDK внутри программы (ставить ничего не нужно). Собирается только на Windows. -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.19041.0</TargetPlatformMinVersion>
+    <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+    <RootNamespace>GigaRest.App</RootNamespace>
+    <AssemblyName>GigaRest</AssemblyName>
+    <UseWinUI>true</UseWinUI>
+    <WindowsPackageType>None</WindowsPackageType>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <SelfContained>true</SelfContained>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <Platforms>x64</Platforms>
+    <Platform>x64</Platform>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\GigaRest.ico</ApplicationIcon>
+    <!-- Интерфейс собран в коде, без XAML-разметки: свой Main. -->
+    <DefineConstants>$(DefineConstants);DISABLE_XAML_GENERATED_MAIN</DefineConstants>
+    <EnableMsixTooling>true</EnableMsixTooling>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.8.260921001" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\GigaRest.Windows\GigaRest.Windows.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="Assets\GigaRest.ico" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Встроенные сцены (свои, без чужих прав) — assets/scenes. -->
+    <Content Include="..\..\assets\scenes\*.jpg" Link="Assets\Scenes\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\assets\effects\*.png" Link="Assets\Effects\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>
