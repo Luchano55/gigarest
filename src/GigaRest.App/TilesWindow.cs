@@ -1,4 +1,5 @@
 using GigaRest.Core.Desktop;
+using GigaRest.Core.Text;
 using GigaRest.Core.Tiles;
 using GigaRest.Windows;
 using Microsoft.UI;
@@ -34,16 +35,35 @@ public sealed class TilesWindow : Window
     private int _ticks;
 
     public event Action<TileInfo>? OpenRequested;
+    private readonly Image _background;
+
+    /// <summary>
+    /// Фон — та же сцена, что на «Тихом» экране, приглушённая (ТЗ, раздел 6). Видео-сцена — встроенный лес:
+    /// второй видеопоток только ради фона под плитками не нужен.
+    /// </summary>
+    public void SetBackground(string? imagePath)
+    {
+        try
+        {
+            var uri = imagePath is not null && File.Exists(imagePath) ? new Uri(imagePath) : RestScreens.SceneUri("forest.jpg");
+            _background.Source = new BitmapImage(uri) { DecodePixelWidth = 2560 };
+        }
+        catch (Exception ex) when (ex is UriFormatException or ArgumentException)
+        {
+            GigaRest.Core.Logging.Log.Warn("Фон плиток: " + ex.Message);
+        }
+    }
     public FrameworkElement Root => _root;
 
     public TilesWindow()
     {
-        Title = "GigaRest — второй монитор";
+        Title = L.T("GigaRest — второй монитор", "GigaRest — second monitor");
         _root = new Grid { Background = Brush("#05060A"), RequestedTheme = ElementTheme.Dark };
-        _root.Children.Add(new Image
+        _background = new Image
         {
             Source = new BitmapImage(RestScreens.SceneUri("forest.jpg")), Stretch = Stretch.UniformToFill, Opacity = 0.85,
-        });
+        };
+        _root.Children.Add(_background);
         _root.Children.Add(new Border { Background = Brush("#73040509") });
 
         var layout = new Grid { Padding = new Thickness(40, 28, 40, 40), RowSpacing = 20 };
@@ -61,7 +81,7 @@ public sealed class TilesWindow : Window
         _caption.VerticalAlignment = VerticalAlignment.Bottom;
         Grid.SetColumn(_caption, 1);
         header.Children.Add(_caption);
-        var hint = _hint = Text("«Свернуть» или Ctrl+Alt+End — обратно в плитки", 13, Hex("#8CFFFFFF"));
+        var hint = _hint = Text(L.T("«Свернуть» или Ctrl+Alt+End — обратно в плитки", "Minimize or Ctrl+Alt+End to go back to tiles"), 13, Hex("#8CFFFFFF"));
         hint.VerticalAlignment = VerticalAlignment.Bottom;
         hint.Margin = new Thickness(0, 0, 0, 6);
         Grid.SetColumn(hint, 2);
@@ -118,7 +138,7 @@ public sealed class TilesWindow : Window
         }
         _liveCaptions = liveCopies;
         if (liveCopies) RefreshCaptions();
-        _caption.Text = $"второй монитор · {GigaRest.Core.Text.Sizes.Plural(shown.Count, "окно", "окна", "окон")} · щёлкните, чтобы открыть";
+        _caption.Text = L.T($"второй монитор · {L.Plural(shown.Count, "окно", "окна", "окон", "window", "windows")} · щёлкните, чтобы открыть", $"second monitor · {L.Plural(shown.Count, "окно", "окна", "окон", "window", "windows")} · click to open");
         PlaceThumbnails();
     }
 
@@ -163,7 +183,7 @@ public sealed class TilesWindow : Window
         return (tile, slot, status);
     }
 
-    private const string DefaultStatus = "щёлкните, чтобы открыть";
+    private static string DefaultStatus => L.T("щёлкните, чтобы открыть", "click to open");
 
     /// <summary>
     /// Подписи под плитками раз в 2 секунды: что играет, сколько непрочитанных в Telegram, какая страница в браузере.
@@ -291,7 +311,7 @@ public sealed class TilesWindow : Window
             if (_openHwnd == hwnd) _openHwnd = 0;
             t.Thumb?.Dispose();
             _tiles[i] = (t.Info, t.Slot, t.Status, null);
-            t.Status.Text = $"{t.Info.Name} закрыта · щёлкните, чтобы открыть";
+            t.Status.Text = L.T($"{t.Info.Name} закрыта · щёлкните, чтобы открыть", $"{t.Info.Name} is closed · click to open");
         }
     }
 
@@ -309,7 +329,7 @@ public sealed class TilesWindow : Window
 
     public nint Handle => RestScreens.Hwnd(this);
 
-    public void SetHotkeyHint(string hotkey) => _hint.Text = $"«Свернуть» или {hotkey} — обратно в плитки";
+    public void SetHotkeyHint(string hotkey) => _hint.Text = L.T($"«Свернуть» или {hotkey} — обратно в плитки", $"Minimize or {hotkey} to go back to tiles");
 
     /// <summary>Для скриншотов: корень 1440×900, без полноэкранного режима.</summary>
     public void UseDesignSizeForCapture()

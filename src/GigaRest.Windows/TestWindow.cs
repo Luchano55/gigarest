@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using GigaRest.Core.Text;
 
 namespace GigaRest.Windows;
 
@@ -23,14 +24,17 @@ public static class TestWindow
     public static int Run(string[] args)
     {
         _mode = Arg(args, "--mode") switch { "ask" => Mode.Ask, "tray" => Mode.Tray, _ => Mode.Normal };
-        var title = Arg(args, "--title") ?? "Тестовое окно GigaRest";
+        var title = Arg(args, "--title") ?? L.T("Тестовое окно GigaRest", "GigaRest test window");
         _text = _mode switch
         {
-            Mode.Ask => "Это тестовое окно. На крестик оно спросит «Сохранить?», как Word или Блокнот.",
-            Mode.Tray => "Это тестовое окно. На крестик оно спрячется в трей, как Telegram или Битрикс24.",
-            _ => "Это тестовое окно. На крестик оно просто закроется.",
+            Mode.Ask => L.T("Это тестовое окно. На крестик оно спросит «Сохранить?», как Word или Блокнот.",
+                            "This is a test window. When you click X it asks “Save?”, like Word or Notepad."),
+            Mode.Tray => L.T("Это тестовое окно. На крестик оно спрячется в трей, как Telegram или Битрикс24.",
+                             "This is a test window. When you click X it hides to the tray, like Telegram or Bitrix24."),
+            _ => L.T("Это тестовое окно. На крестик оно просто закроется.", "This is a test window. When you click X it simply closes."),
         };
-        if (args.Contains("--tile")) _text = "Это тестовое окно. При переходе в отдых оно переедет на второй монитор.";
+        if (args.Contains("--tile")) _text = L.T("Это тестовое окно. При переходе в отдых оно переедет на второй монитор.",
+                                                 "This is a test window. When you switch to rest it moves to the second monitor.");
 
         _proc = Proc;
         var cls = "GigaRest.TestWindow";
@@ -70,7 +74,7 @@ public static class TestWindow
             case WM_CLOSE:
                 if (_mode == Mode.Tray) { ShowWindow(hwnd, SW_HIDE); return 0; }
                 if (_mode == Mode.Ask &&
-                    MessageBoxW(hwnd, "Сохранить изменения в тестовом документе?", "Тестовое окно", MB_YESNOCANCEL | MB_ICONQUESTION) == IDCANCEL)
+                    MessageBoxW(hwnd, L.T("Сохранить изменения в тестовом документе?", "Save changes to the test document?"), L.T("Тестовое окно", "Test window"), MB_YESNOCANCEL | MB_ICONQUESTION) == IDCANCEL)
                     return 0;
                 DestroyWindow(hwnd);
                 return 0;

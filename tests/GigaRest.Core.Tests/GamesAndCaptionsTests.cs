@@ -334,3 +334,186 @@ public class TilePlanTests
         Assert.Null(list[1].TileOrder);
     }
 }
+
+public class QuietTimersTests
+{
+    [Fact]
+    public void Stages()
+    {
+        var t = new GigaRest.Core.Scenes.QuietTimers { DimAfter = TimeSpan.FromMinutes(15), ScreenOffAfter = TimeSpan.FromMinutes(60) };
+        Assert.False(t.At(TimeSpan.FromSeconds(10)).HideCursor);
+        var q = t.At(TimeSpan.FromSeconds(25));
+        Assert.True(q.HideCursor && q.CloseList && q.DimWords);
+        Assert.False(q.DimScene);
+        Assert.True(t.At(TimeSpan.FromMinutes(16)).DimScene);
+        Assert.Null(t.At(TimeSpan.FromMinutes(59)).ScreenOffInSeconds);
+        Assert.Equal(50, t.At(TimeSpan.FromMinutes(60) + TimeSpan.FromSeconds(10)).ScreenOffInSeconds);
+        Assert.True(t.At(TimeSpan.FromMinutes(61)).ScreenOffNow);
+    }
+
+    [Fact]
+    public void ScreenOffCanBeDisabled()
+    {
+        var t = GigaRest.Core.Scenes.QuietTimers.From(new GigaRest.Core.Settings.AppSettings { ScreenOffMinutes = 0, DimMinutes = 5 });
+        Assert.Null(t.ScreenOffAfter);
+        Assert.False(t.At(TimeSpan.FromHours(5)).ScreenOffNow);
+        Assert.True(t.At(TimeSpan.FromMinutes(6)).DimScene);
+    }
+}
+
+public class LibraryFilterTests
+{
+    private static readonly Game[] Games =
+    [
+        new() { Id = "steam:1", Name = "Ёлка", Store = "Steam", LastPlayedUtc = new DateTime(2026, 10, 1) },
+        new() { Id = "steam:2", Name = "Альфа", Store = "Steam" },
+        new() { Id = "bnet:wow", Name = "World of Warcraft", Store = "Battle.net", LastPlayedUtc = new DateTime(2026, 10, 20) },
+        new() { Id = "epic:x", Name = "Бета", Store = "Epic" },
+    ];
+
+    [Fact]
+    public void StoreSearchAndOrder()
+    {
+        Assert.Equal(["World of Warcraft", "Ёлка", "Альфа", "Бета"], GameLibraries.Filter(Games, null, null, byName: false).Select(g => g.Name));
+        Assert.Equal(["Альфа", "Ёлка"], GameLibraries.Filter(Games, "Steam", null, byName: true).Select(g => g.Name).OrderBy(n => n));
+        Assert.Equal(["Ёлка"], GameLibraries.Filter(Games, null, "елк", byName: false).Select(g => g.Name));
+        Assert.Equal(["World of Warcraft"], GameLibraries.Filter(Games, null, "WAR", byName: false).Select(g => g.Name));
+    }
+
+    [Fact]
+    public void SteamHeroFromCache()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "gigarest hero " + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var folder = Path.Combine(dir, "appcache", "librarycache", "570", "abc");
+            Directory.CreateDirectory(folder);
+            File.WriteAllText(Path.Combine(folder, "library_hero.jpg"), "");
+            Assert.Equal(Path.Combine(folder, "library_hero.jpg"), GameLibraries.SteamCacheFile(dir, "570", "library_hero.jpg"));
+            Assert.Null(GameLibraries.SteamCacheFile(dir, "1", "library_hero.jpg"));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+}
+
+public class LocalGamesTests
+{
+    [Fact]
+    public void CoversFromFolderOverrideStore()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "gigarest обложки " + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "Diablo IV.jpg"), "");
+            File.WriteAllText(Path.Combine(dir, "diablo iv шапка.png"), "");
+            File.WriteAllText(Path.Combine(dir, "Ёлка.webp"), "");
+            File.WriteAllText(Path.Combine(dir, "заметка.txt"), "");
+            var games = LocalGames.ApplyCovers(
+            [
+                new Game { Id = "bnet:fenris", Name = "Diablo IV", Store = "Battle.net" },
+                new Game { Id = "steam:1", Name = "Елка", Store = "Steam", CoverPath = "steam.jpg" },
+                new Game { Id = "steam:2", Name = "Другая", Store = "Steam", CoverPath = "steam2.jpg" },
+            ], dir);
+            Assert.EndsWith("Diablo IV.jpg", games[0].CoverPath);
+            Assert.EndsWith("diablo iv шапка.png", games[0].HeroPath);
+            Assert.EndsWith("Ёлка.webp", games[1].CoverPath); // своя главнее, «ё» = «е»
+            Assert.Equal("steam2.jpg", games[2].CoverPath);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Theory]
+    [InlineData(@"C:\Games\Hollow Knight\hollow_knight.exe", "Hollow Knight")]
+    [InlineData(@"D:\Игры\Сталкер\bin\xrEngine.exe", "xrEngine")]
+    public void NameFromExe(string path, string expected) => Assert.Equal(expected, LocalGames.NameFromExe(path.Replace('\\', Path.DirectorySeparatorChar)));
+
+    [Fact]
+    public void CustomGameIsLaunchable()
+    {
+        var g = LocalGames.FromCustom(new CustomGame { Name = "Hollow Knight", Path = @"C:\Games\HK\hk.exe" });
+        Assert.Equal("Свои", g.Store);
+        Assert.Equal(@"C:\Games\HK\hk.exe", g.ExePath);
+        Assert.StartsWith("custom:", g.Id);
+    }
+}
+
+public class NatureSoundsTests
+{
+    [Theory]
+    [InlineData(GigaRest.Core.Sounds.NatureSound.Rain)]
+    [InlineData(GigaRest.Core.Sounds.NatureSound.Sea)]
+    [InlineData(GigaRest.Core.Sounds.NatureSound.Fire)]
+    [InlineData(GigaRest.Core.Sounds.NatureSound.Wind)]
+    public void LoopIsAudibleUnclippedAndSeamless(GigaRest.Core.Sounds.NatureSound sound)
+    {
+        var s = GigaRest.Core.Sounds.NatureSounds.Generate(sound, seconds: 8);
+        Assert.Equal(8 * 44100 * 2, s.Length);
+        var rms = Math.Sqrt(s.Average(v => (double)v * v));
+        Assert.True(rms > 300, $"слишком тихо: {rms}");
+        Assert.True(s.Max(v => Math.Abs((int)v)) < short.MaxValue, "перегруз");
+        // Шов кольца: последний и первый отсчёты рядом (нет щелчка при повторе).
+        Assert.True(Math.Abs(s[^2] - s[0]) < 9000);
+    }
+
+    [Fact]
+    public void WavHeader()
+    {
+        var wav = GigaRest.Core.Sounds.NatureSounds.ToWav([1, -1, 2, -2]);
+        Assert.Equal("RIFF", System.Text.Encoding.ASCII.GetString(wav, 0, 4));
+        Assert.Equal(44 + 8, wav.Length);
+    }
+}
+
+public class RestStatsTests
+{
+    [Fact]
+    public void DaysWeekTopGames()
+    {
+        var tz = TimeZoneInfo.Utc;
+        var s = new GigaRest.Core.Stats.RestStats();
+        var now = new DateTime(2026, 10, 27, 23, 0, 0);
+        s.AddRest(new DateTime(2026, 10, 27, 19, 0, 0), new DateTime(2026, 10, 27, 21, 30, 0)); // сегодня 2,5 ч
+        s.AddRest(new DateTime(2026, 10, 25, 23, 0, 0), new DateTime(2026, 10, 26, 1, 0, 0));  // через полночь: 1 ч + 1 ч
+        s.AddRest(new DateTime(2026, 10, 10, 19, 0, 0), new DateTime(2026, 10, 10, 20, 0, 0)); // давно — не в неделе
+        s.AddRest(new DateTime(2026, 10, 20, 19, 0, 0), new DateTime(2026, 10, 24, 20, 0, 0)); // забытый — не считаем
+        var wow = new Game { Id = "bnet:wow", Name = "World of Warcraft", Store = "Battle.net" };
+        var d4 = new Game { Id = "bnet:fenris", Name = "Diablo IV", Store = "Battle.net" };
+        s.AddLaunch(wow, now.AddDays(-1)); s.AddLaunch(wow, now.AddDays(-2)); s.AddLaunch(d4, now.AddDays(-3));
+
+        var sum = s.Summarize(now, tz);
+
+        Assert.Equal(150, sum.Today.TotalMinutes);
+        Assert.Equal(270, sum.Week.TotalMinutes);
+        Assert.Equal(60, sum.Days[4].Minutes); // 25-е
+        Assert.Equal(60, sum.Days[5].Minutes); // 26-е
+        Assert.Equal(("World of Warcraft", 2), sum.TopGames[0]);
+        Assert.Equal(2, sum.Evenings);
+        Assert.Equal("2 ч 30 мин", GigaRest.Core.Stats.RestStats.Format(sum.Today));
+    }
+}
+
+public class SteamPlaytimeTests
+{
+    [Fact]
+    public void ReadsLocalConfig()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "gigarest steam " + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var cfg = Path.Combine(dir, "userdata", "123", "config");
+            Directory.CreateDirectory(cfg);
+            File.WriteAllText(Path.Combine(cfg, "localconfig.vdf"), """
+                "UserLocalConfigStore" { "Software" { "Valve" { "Steam" { "apps" {
+                  "570" { "LastPlayed" "1761400000" "Playtime" "740" "Playtime2wks" "95" }
+                  "10" { "LastPlayed" "1" }
+                } } } } }
+                """);
+            var pt = GameLibraries.SteamPlaytime(dir);
+            Assert.Equal((740, 95), pt["570"]);
+            Assert.False(pt.ContainsKey("10"));
+            Assert.Equal("12 ч в игре", GameLibraries.PlaytimeText(740));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+}

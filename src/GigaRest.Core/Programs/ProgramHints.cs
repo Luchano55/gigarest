@@ -1,4 +1,5 @@
 using GigaRest.Core.Settings;
+using GigaRest.Core.Text;
 
 namespace GigaRest.Core.Programs;
 
@@ -53,19 +54,47 @@ public static class ProgramHints
     /// <summary>Подсказка по имени exe; путь помогает узнать игры (папки steamapps, Games).</summary>
     public static ProgramHint? Suggest(string programId, string? exePath = null)
     {
-        if (Work.TryGetValue(programId, out var w)) return new(ProgramAction.Close, "похоже на рабочую: " + w);
-        if (Personal.TryGetValue(programId, out var p)) return new(ProgramAction.SecondMonitor, "похоже на личную: " + p);
-        if (MainScreen.TryGetValue(programId, out var m)) return new(ProgramAction.Keep, "не трогаем: " + m);
-        if (Games.TryGetValue(programId, out var g)) return new(ProgramAction.Keep, "не трогаем: " + g);
+        if (Work.TryGetValue(programId, out var w)) return new(ProgramAction.Close, L.T("похоже на рабочую: ", "looks like work: ") + Show(w));
+        if (Personal.TryGetValue(programId, out var p)) return new(ProgramAction.SecondMonitor, L.T("похоже на личную: ", "looks personal: ") + Show(p));
+        if (MainScreen.TryGetValue(programId, out var m)) return new(ProgramAction.Keep, L.T("не трогаем: ", "leave as is: ") + Show(m));
+        if (Games.TryGetValue(programId, out var g)) return new(ProgramAction.Keep, L.T("не трогаем: ", "leave as is: ") + Show(g));
         if (exePath is not null && (exePath.Contains(@"\steamapps\", StringComparison.OrdinalIgnoreCase)
                                     || exePath.Contains(@"\Epic Games\", StringComparison.OrdinalIgnoreCase)
                                     || exePath.Contains(@"\Games\", StringComparison.OrdinalIgnoreCase)))
-            return new(ProgramAction.Keep, "не трогаем: похоже на игру");
+            return new(ProgramAction.Keep, L.T("не трогаем: похоже на игру", "leave as is: looks like a game"));
         var known = KnownPrograms.Find(programId);
         if (known is not null && known.DefaultAction != ProgramAction.Keep)
-            return new(known.DefaultAction, known.DefaultAction == ProgramAction.Close ? "похоже на рабочую" : "похоже на личную");
+            return new(known.DefaultAction, known.DefaultAction == ProgramAction.Close ? L.T("похоже на рабочую", "looks like work") : L.T("похоже на личную", "looks personal"));
         return null;
     }
+
+    private static string Show(string kind) => L.T(kind, kind switch
+    {
+        "рабочий чат и задачи" => "work chat and tasks",
+        "почта" => "email",
+        "видеозвонки" => "video calls",
+        "рабочий чат" => "work chat",
+        "1С" => "1C",
+        "документы" => "documents",
+        "таблицы" => "spreadsheets",
+        "презентации" => "presentations",
+        "заметки" => "notes",
+        "удалённый доступ" => "remote access",
+        "скриншоты для работы" => "screenshots for work",
+        "редактор кода" => "code editor",
+        "дизайн" => "design",
+        "заметки и задачи" => "notes and tasks",
+        "облачный диск" => "cloud storage",
+        "терминал" => "terminal",
+        "мессенджер" => "messenger",
+        "личный браузер" => "personal browser",
+        "ассистент" => "assistant",
+        "музыка — кнопки в «Слушать»" => "music — controls in “Listen”",
+        "плеер — фильмы в «Смотреть»" => "player — films in “Watch”",
+        "игры" => "games",
+        "запись и стримы" => "recording and streaming",
+        _ => kind,
+    });
 
     /// <summary>
     /// Применить подсказки к строкам, которые ещё «Оставить». На второй монитор — не больше четырёх (столько плиток).

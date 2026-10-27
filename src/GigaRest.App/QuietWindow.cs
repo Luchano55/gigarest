@@ -4,6 +4,8 @@ using GigaRest.Core.Desktop;
 using GigaRest.Core.Games;
 using GigaRest.Core.Media;
 using GigaRest.Core.Scenes;
+using GigaRest.Core.Sounds;
+using GigaRest.Core.Text;
 using GigaRest.Windows;
 using Microsoft.UI;
 using Microsoft.UI.Text;
@@ -25,7 +27,6 @@ namespace GigaRest.App;
 /// </summary>
 public sealed class QuietWindow : Window
 {
-    private static readonly CultureInfo Ru = CultureInfo.GetCultureInfo("ru-RU");
     private static readonly Color TextColor = Hex("#E0FFFFFF"); // 88% — бережём OLED
 
     private readonly Grid _root;
@@ -49,6 +50,15 @@ public sealed class QuietWindow : Window
     private readonly Button _toastDetails;
     private readonly DispatcherTimer _tick = new() { Interval = TimeSpan.FromSeconds(1) };
     private DateTime _lastInput = DateTime.Now;
+
+    /// <summary>Таймеры простоя (затемнение, выключение экрана) — из настроек.</summary>
+    public QuietTimers Timers { get; set; } = new();
+    private bool _cursorHidden, _screenOff;
+    private Border _offCard = null!;
+    private TextBlock _offText = null!;
+    private static readonly string[] WordList = ["Продолжить", "Играть", "Смотреть", "Слушать", "Сцены"];
+    private int _wordIndex = -1;
+
     private DateTime _lastShift = DateTime.Now;
     private string? _openWord;
     private int _sceneIndex;
@@ -71,7 +81,7 @@ public sealed class QuietWindow : Window
     public void SetDnd(bool? on)
     {
         _dnd.Visibility = on is null ? Visibility.Collapsed : Visibility.Visible;
-        ((TextBlock)_dnd.Content).Text = on == false ? "включить «Не беспокоить»" : "не беспокоить";
+        ((TextBlock)_dnd.Content).Text = on == false ? L.T("включить «Не беспокоить»", "turn on Do not disturb") : L.T("не беспокоить", "do not disturb");
         _dnd.Opacity = on == false ? 1 : 0.6;
     }
 
@@ -83,7 +93,7 @@ public sealed class QuietWindow : Window
     private IReadOnlyList<Film>? _films;
     private Film? _lastFilm;
     private IReadOnlyDictionary<string, double> _positions = new Dictionary<string, double>();
-    private string _filmsFolderName = "Видео";
+    private string _filmsFolderName = L.T("Видео", "Videos");
     private AppChoice? _musicApp;
     private IReadOnlyList<AppChoice> _players = [];
     private string? _player; // null — встроенный
@@ -100,12 +110,40 @@ public sealed class QuietWindow : Window
 
     public void SetMusicApp(AppChoice? app) { _musicApp = app; Refresh("Слушать"); }
 
+    private List<WebService> _services = WebServices.Defaults();
+    private IReadOnlyList<AppChoice> _browsers = [];
+
+    /// <summary>Список сервисов поменялся (добавили, убрали, сменили браузер) — сохранить настройки.</summary>
+    public event Action? ServicesChanged;
+    /// <summary>Сервис открывается не здесь, а в браузере: сервис и адрес.</summary>
+    public event Action<WebService, string>? OpenInBrowserRequested;
+
+    /// <summary>Сайты для «Смотреть» и «Слушать» — тот же список, что в настройках (меняется на месте).</summary>
+    public void SetServices(List<WebService> services) { _services = services; Refresh("Смотреть", "Слушать"); }
+
+    public void SetBrowsers(IReadOnlyList<AppChoice> browsers) { _browsers = browsers; }
+
     public void SetPlayers(IReadOnlyList<AppChoice> players, string? current)
     {
         _players = players;
         _player = current;
         Refresh("Смотреть", "Плеер");
     }
+
+    /// <summary>Раздел (ключ — русское слово) → надпись на языке интерфейса.</summary>
+    private static string Display(string word) => word switch
+    {
+        "Продолжить" => L.T("Продолжить", "Continue"),
+        "Играть" => L.T("Играть", "Play"),
+        "Смотреть" => L.T("Смотреть", "Watch"),
+        "Слушать" => L.T("Слушать", "Listen"),
+        "Сцены" => L.T("Сцены", "Scenes"),
+        "Плеер" => L.T("Плеер", "Player"),
+        _ => word,
+    };
+
+    /// <summary>Магазин (ключ) → надпись: «Свои» — игры, добавленные вручную.</summary>
+    private static string StoreName(string store) => store == "Свои" ? L.T("Свои", "My games") : store;
 
     private void Refresh(params string[] words)
     {
@@ -130,9 +168,36 @@ public sealed class QuietWindow : Window
     }
 
     /// <summary>Установленные игры: сначала недавние. Вызывать из потока окна.</summary>
+    // ---------- звуки природы и «Продолжить» ----------
+
+    private readonly NaturePlayer _nature = new();
+    private NatureSound? _lastNature;
+    private (string Url, string Title, DateTime Utc)? _lastYouTube;
+
+    /// <summary>Выбрали звук природы (null — тишина) или громкость — запомнить.</summary>
+    public event Action<NatureSound?, double>? NatureChanged;
+    /// <summary>В YouTube открыли ролик — запомнить для «Продолжить».</summary>
+    public event Action<string, string>? YouTubeWatched;
+
+    public void InitNature(NatureSound? last, double volume)
+    {
+        _lastNature = last;
+        _nature.Volume = volume;
+    }
+
+    public void SetLastYouTube(string? url, string? title, DateTime? utc)
+    {
+        _lastYouTube = url is not null && utc is { } t ? (url, title ?? L.T("ролик", "video"), t) : null;
+    }
+
+    public event Action? AddGameRequested;
+    public event Action<Game>? RemoveGameRequested;
+    public event Action? OpenCoversRequested;
+
     public void SetGames(IReadOnlyList<Game> games)
     {
         _games = games;
+        if (_library is not null) ShowLibrary(); // библиотека открыта — обновить (добавили или убрали игру)
         if (_openWord is "Играть" or "Продолжить") { var w = _openWord; _openWord = null; OnWord(w); }
     }
     public FrameworkElement Root => _root;
@@ -140,7 +205,7 @@ public sealed class QuietWindow : Window
     public QuietWindow(IReadOnlyList<Scene> scenes, string? sceneId = null, SceneEffect? effect = null)
     {
         _scenes = scenes;
-        Title = "GigaRest — отдых";
+        Title = L.T("GigaRest — отдых", "GigaRest — rest");
         _root = new Grid { Background = Brush("#05060A"), RequestedTheme = ElementTheme.Dark };
 
         // Сцена с медленным движением (Ken Burns) — анимацию считает системный композитор.
@@ -166,12 +231,12 @@ public sealed class QuietWindow : Window
         _overlay.Children.Add(clockBox);
 
         var top = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 22, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 8, 0, 0) };
-        _dnd = QuietButton("не беспокоить", 13);
+        _dnd = QuietButton(L.T("не беспокоить", "do not disturb"), 13);
         _dnd.Opacity = 0.6;
         _dnd.Visibility = Visibility.Collapsed;
         _dnd.Click += (_, _) => DndClicked?.Invoke();
         top.Children.Add(_dnd);
-        var back = QuietButton("Вернуться к работе", 13);
+        var back = QuietButton(L.T("Вернуться к работе", "Back to work"), 13);
         back.Click += (_, _) => ReturnRequested?.Invoke();
         top.Children.Add(back);
         _overlay.Children.Add(top);
@@ -193,7 +258,8 @@ public sealed class QuietWindow : Window
         _words = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 36 };
         foreach (var w in new[] { "Продолжить", "Играть", "Смотреть", "Слушать", "Сцены" })
         {
-            var b = QuietButton(w, 17);
+            var b = QuietButton(Display(w), 17);
+            b.Tag = w;
             b.Click += (_, _) => OnWord(w);
             _words.Children.Add(b);
         }
@@ -207,7 +273,7 @@ public sealed class QuietWindow : Window
 
         // Итог перехода — ненадолго, сверху по центру.
         _toastText = Text("", 15, TextColor, wrap: true);
-        _toastDetails = QuietButton("Подробнее", 13);
+        _toastDetails = QuietButton(L.T("Подробнее", "Details"), 13);
         _toastDetails.Click += (_, _) => DetailsRequested?.Invoke();
         var toastBox = new StackPanel { Spacing = 6 };
         toastBox.Children.Add(_toastText);
@@ -222,9 +288,26 @@ public sealed class QuietWindow : Window
         _overlay.Children.Add(_toast);
         _root.Children.Add(_overlay);
 
+        // «Экран выключится через 60 с» — после долгого простоя (защита OLED).
+        _offText = Text("", 15, TextColor, wrap: true);
+        var offNow = QuietButton(L.T("Выключить сейчас", "Turn off now"), 13);
+        offNow.Click += (_, _) => TurnScreenOff();
+        var offBox = new StackPanel { Spacing = 6 };
+        offBox.Children.Add(_offText);
+        offBox.Children.Add(Text(L.T("Пошевелите мышью или нажмите любую клавишу — экран останется включённым.", "Move the mouse or press any key to keep the screen on."), 12, Hex("#99FFFFFF"), wrap: true));
+        offBox.Children.Add(offNow);
+        _offCard = new Border
+        {
+            Background = Brush("#CC0C0D12"), BorderBrush = Brush("#14FFFFFF"), BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(16), Padding = new Thickness(22, 16, 22, 14), MaxWidth = 440,
+            HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+            Visibility = Visibility.Collapsed, Child = offBox,
+        };
+
         // Затемнение после 15 минут без действий (сцена — до 10%).
         _dim = new Border { Background = Brush(Colors.Black), Opacity = 0, IsHitTestVisible = false };
         _root.Children.Add(_dim);
+        _root.Children.Add(_offCard); // над затемнением — его видно
 
         Content = _root;
         _root.PointerMoved += (_, _) => Wake();
@@ -347,7 +430,7 @@ public sealed class QuietWindow : Window
                 var scene = _scenes[i];
                 var current = i == _sceneIndex;
                 UIElement picture = scene.IsVideo
-                    ? new Grid { Background = Brush("#33FFFFFF"), Children = { new TextBlock { Text = "▶ видео", Foreground = Brush("#CCFFFFFF"), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } } }
+                    ? new Grid { Background = Brush("#33FFFFFF"), Children = { new TextBlock { Text = L.T("▶ видео", "▶ video"), Foreground = Brush("#CCFFFFFF"), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } } }
                     : new Image { Source = new BitmapImage(new Uri(scene.Path)) { DecodePixelWidth = 300 }, Stretch = Stretch.UniformToFill };
                 var thumb = new StackPanel { Spacing = 8, Width = 150 };
                 thumb.Children.Add(new Border
@@ -369,11 +452,11 @@ public sealed class QuietWindow : Window
 
             // Эффект поверх — один за раз.
             var effects = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Margin = new Thickness(0, 10, 0, 0) };
-            var over = Text("Поверх", 13, Hex("#80FFFFFF"));
+            var over = Text(L.T("Поверх", "Overlay"), 13, Hex("#80FFFFFF"));
             over.VerticalAlignment = VerticalAlignment.Center;
             over.Margin = new Thickness(0, 0, 8, 0);
             effects.Children.Add(over);
-            foreach (var (fx, label) in new[] { (SceneEffect.None, "Ничего"), (SceneEffect.Snow, "Снег"), (SceneEffect.Fog, "Туман"), (SceneEffect.Lights, "Огоньки"), (SceneEffect.Rain, "Дождь") })
+            foreach (var (fx, label) in new[] { (SceneEffect.None, L.T("Ничего", "None")), (SceneEffect.Snow, L.T("Снег", "Snow")), (SceneEffect.Fog, L.T("Туман", "Fog")), (SceneEffect.Lights, L.T("Огоньки", "Lights")), (SceneEffect.Rain, L.T("Дождь", "Rain")) })
             {
                 var selected = fx == _effect;
                 var seg = new Button
@@ -396,7 +479,7 @@ public sealed class QuietWindow : Window
             }
             _panelContent.Children.Add(effects);
 
-            var folder = QuietButton("Свои картинки и видео — папка «Мои сцены» (открыть)", 12);
+            var folder = QuietButton(L.T("Свои картинки и видео — папка «Мои сцены» (открыть)", "Your own pictures and videos — the “My scenes” folder (open)"), 12);
             folder.Margin = new Thickness(0, 8, 0, 0);
             folder.Click += (_, _) => OpenMyScenesRequested?.Invoke();
             _panelContent.Children.Add(folder);
@@ -404,12 +487,18 @@ public sealed class QuietWindow : Window
         else if (word == "Играть")
         {
             _panel.Width = _games is { Count: > 0 } ? 820 : 520;
-            _panelContent.Children.Add(Text("Играть", 17, Hex("#E6FFFFFF"), FontWeights.Medium));
+            _panelContent.Children.Add(Text(Display("Играть"), 17, Hex("#E6FFFFFF"), FontWeights.Medium));
             if (_games is null || _games.Count == 0)
             {
-                var note = Text(_games is null ? "Ищем игры…" : "Игр не нашлось. GigaRest смотрит в Steam, Epic, GOG и Battle.net.", 13, Hex("#99FFFFFF"), wrap: true);
+                var note = Text(_games is null ? L.T("Ищем игры…", "Looking for games…") : L.T("Игр не нашлось. GigaRest смотрит в Steam, Epic, GOG и Battle.net.", "No games found. GigaRest looks in Steam, Epic, GOG and Battle.net."), 13, Hex("#99FFFFFF"), wrap: true);
                 note.Margin = new Thickness(0, 6, 0, 4);
                 _panelContent.Children.Add(note);
+                if (_games is not null)
+                {
+                    var open = QuietButton(L.T("Открыть библиотеку и добавить игру без магазина →", "Open the library and add a game from outside a store →"), 13);
+                    open.Click += (_, _) => ShowLibrary();
+                    _panelContent.Children.Add(open);
+                }
             }
             else
             {
@@ -419,80 +508,107 @@ public sealed class QuietWindow : Window
                 _panelContent.Children.Add(recent);
                 if (_games.Count > 5)
                 {
-                    var all = Text("Все игры", 13, Hex("#99FFFFFF"));
+                    var all = Text(L.T("Все игры", "All games"), 13, Hex("#99FFFFFF"));
                     all.Margin = new Thickness(0, 12, 0, 0);
                     _panelContent.Children.Add(all);
                     var list = new StackPanel { Spacing = 2, Margin = new Thickness(-12, 4, -12, 0) };
                     foreach (var game in _games.Skip(5)) list.Children.Add(GameListRow(game));
                     _panelContent.Children.Add(new ScrollViewer { Content = list, MaxHeight = 260, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
                 }
-                var count = Text(GigaRest.Core.Text.Sizes.Plural(_games.Count, "игра", "игры", "игр") + " · Steam, Epic, GOG, Battle.net", 12, Hex("#66FFFFFF"));
-                count.Margin = new Thickness(0, 8, 0, 0);
-                _panelContent.Children.Add(count);
+                var library = QuietButton(L.T($"Вся библиотека — {Sizes.Plural(_games.Count, "игра", "игры", "игр")} →", $"Whole library — {L.Plural(_games.Count, "игра", "игры", "игр", "game", "games")} →"), 13);
+                library.Margin = new Thickness(0, 8, 0, 0);
+                library.Click += (_, _) => ShowLibrary();
+                _panelContent.Children.Add(library);
             }
         }
-        else if (word == "Продолжить" && (_games?.FirstOrDefault(g => g.LastPlayedUtc is not null) is not null || _lastFilm is not null))
+        else if (word == "Продолжить")
         {
-            _panel.Width = 520;
-            _panelContent.Children.Add(Text("Продолжить", 17, Hex("#E6FFFFFF"), FontWeights.Medium));
+            _panel.Width = 540;
+            _panelContent.Children.Add(Text(Display("Продолжить"), 17, Hex("#E6FFFFFF"), FontWeights.Medium));
             var rows = new StackPanel { Spacing = 2, Margin = new Thickness(-12, 6, -12, 0) };
             if (_games?.FirstOrDefault(g => g.LastPlayedUtc is not null) is { } last) rows.Children.Add(GameRow(last, big: true));
             if (_lastFilm is { } film) rows.Children.Add(FilmRow(film, big: true));
+            if (_lastYouTube is { } yt && DateTime.UtcNow - yt.Utc < TimeSpan.FromDays(14))
+                rows.Children.Add(LinkRow("▶  " + yt.Title, "YouTube · " + GameLibraries.LastPlayedText(yt.Utc, DateTime.Now),
+                    () => ShowWeb(YouTube, "YouTube", yt.Url, navigate: true), big: true));
+            if (_lastNature is { } sound && _nature.Current is null)
+                rows.Children.Add(LinkRow(L.T("♫  Звуки: ", "♫  Sounds: ") + NatureSounds.Name(sound), L.T("как в прошлый раз", "like last time"), () => PlayNature(sound), big: true));
             _panelContent.Children.Add(rows);
+            var music = new StackPanel { Margin = new Thickness(-12, 0, -12, 0) };
+            _panelContent.Children.Add(music);
+            _ = FillContinueMusicAsync(music);
+            if (rows.Children.Count == 0)
+            {
+                var empty = Text(_games is null ? L.T("Ищем, что продолжить…", "Looking for something to continue…") : L.T("Здесь будут последняя игра, фильм, ролик YouTube и музыка — как только вы их откроете в GigaRest.", "Your last game, film, YouTube video and music will show up here once you open them in GigaRest."), 13, Hex("#99FFFFFF"), wrap: true);
+                empty.Margin = new Thickness(0, 6, 0, 4);
+                _panelContent.Children.Add(empty);
+            }
         }
         else if (word == "Слушать")
         {
             _panel.Width = 520;
-            _panelContent.Children.Add(Text("Слушать", 17, Hex("#E6FFFFFF"), FontWeights.Medium));
-            var web = LinkRow(!_web.ContainsKey(Music) ? "♫  Яндекс Музыка здесь" : "♫  Вернуть Яндекс Музыку", "поиск, плейлисты, «Моя волна»", ShowWebMusic, big: true);
-            web.Margin = new Thickness(-12, 6, -12, 0);
-            _panelContent.Children.Add(web);
+            _panelContent.Children.Add(Text(Display("Слушать"), 17, Hex("#E6FFFFFF"), FontWeights.Medium));
+            var listen = _services.Where(x => x.Kind == ServiceKind.Listen).ToList();
+            var web = new StackPanel { Spacing = 2, Margin = new Thickness(-12, 6, -12, 0) };
+            foreach (var service in listen) web.Children.Add(ServiceRow(service, big: listen.Count <= 2));
+            _panelContent.Children.Add(listen.Count > 3 ? new ScrollViewer { Content = web, MaxHeight = 200, VerticalScrollBarVisibility = ScrollBarVisibility.Auto } : web);
+            _panelContent.Children.Add(AddServiceLink(ServiceKind.Listen));
             var box = new StackPanel { Spacing = 8, Margin = new Thickness(0, 8, 0, 0) };
             box.Children.Add(Text("…", 13, Hex("#99FFFFFF")));
             _panelContent.Children.Add(box);
             _ = FillListenAsync(box);
+            _panelContent.Children.Add(NatureSection());
         }
         else if (word == "Смотреть")
         {
             _panel.Width = 560;
-            _panelContent.Children.Add(Text("Смотреть", 17, Hex("#E6FFFFFF"), FontWeights.Medium));
+            _panelContent.Children.Add(Text(Display("Смотреть"), 17, Hex("#E6FFFFFF"), FontWeights.Medium));
             var list = new StackPanel { Spacing = 2, Margin = new Thickness(-12, 6, -12, 0) };
-            list.Children.Add(LinkRow(_web.ContainsKey(YouTube) ? "▶  Вернуться к YouTube" : "▶  YouTube", _web.ContainsKey(YouTube) ? "продолжить, где были" : "главная, прямо здесь", () => ShowYouTube(lastWatched: false)));
-            list.Children.Add(LinkRow("▶  YouTube · последний ролик", "тот, что смотрели последним", () => ShowYouTube(lastWatched: true)));
+            foreach (var service in _services.Where(x => x.Kind == ServiceKind.Watch))
+            {
+                list.Children.Add(ServiceRow(service));
+                if (WebServices.IsYouTube(service) && service.OpenIn is null)
+                    list.Children.Add(ServiceRow(service, lastWatched: true));
+            }
             if (_films is { Count: > 0 })
                 foreach (var film in _films.Take(30)) list.Children.Add(FilmRow(film));
             _panelContent.Children.Add(new ScrollViewer { Content = list, MaxHeight = 420, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
             if (_films is { Count: 0 })
             {
-                var empty = Text($"В папке «{_filmsFolderName}» видео нет. Выберите папку, где лежат фильмы.", 13, Hex("#99FFFFFF"), wrap: true);
+                var empty = Text(L.T($"В папке «{_filmsFolderName}» видео нет. Выберите папку, где лежат фильмы.", $"No videos in the “{_filmsFolderName}” folder. Choose the folder where your films are."), 13, Hex("#99FFFFFF"), wrap: true);
                 empty.Margin = new Thickness(0, 6, 0, 0);
                 _panelContent.Children.Add(empty);
             }
             var footer = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 18, Margin = new Thickness(0, 6, 0, 0) };
-            var folder = QuietButton(_films is null ? "Ищем фильмы…" : $"Папка: {_filmsFolderName} · выбрать", 12);
+            var folder = QuietButton(_films is null ? L.T("Ищем фильмы…", "Looking for films…") : L.T($"Папка: {_filmsFolderName} · выбрать", $"Folder: {_filmsFolderName} · choose"), 12);
             folder.Click += (_, _) => FilmsFolderPickRequested?.Invoke();
             footer.Children.Add(folder);
-            var open = QuietButton("открыть", 12);
+            var open = QuietButton(L.T("открыть", "open"), 12);
             open.Click += (_, _) => OpenFilmsFolderRequested?.Invoke();
             footer.Children.Add(open);
-            var player = QuietButton($"Плеер: {PlayerName} · сменить", 12);
+            footer.Children.Add(AddServiceLink(ServiceKind.Watch, inline: true));
+            var player = QuietButton(L.T($"Плеер: {PlayerName} · сменить", $"Player: {PlayerName} · change"), 12);
             player.Click += (_, _) => { _openWord = null; OnWord("Плеер"); };
             footer.Children.Add(player);
             _panelContent.Children.Add(footer);
         }
+        else if (word.StartsWith(AddServiceWord, StringComparison.Ordinal))
+        {
+            FillAddService(word == AddServiceWord + nameof(ServiceKind.Watch) ? ServiceKind.Watch : ServiceKind.Listen);
+        }
         else if (word == "Плеер")
         {
             _panel.Width = 560;
-            _panelContent.Children.Add(Text("Чем открывать фильмы", 17, Hex("#E6FFFFFF"), FontWeights.Medium));
+            _panelContent.Children.Add(Text(L.T("Чем открывать фильмы", "How to open films"), 17, Hex("#E6FFFFFF"), FontWeights.Medium));
             var list = new StackPanel { Spacing = 2, Margin = new Thickness(-12, 6, -12, 0) };
-            list.Children.Add(ChoiceRow("Встроенный плеер GigaRest", "фильм открывается прямо здесь", _player is null, () => PlayerChosen?.Invoke(null)));
+            list.Children.Add(ChoiceRow(L.T("Встроенный плеер GigaRest", "GigaRest built-in player"), L.T("фильм открывается прямо здесь", "the film opens right here"), _player is null, () => PlayerChosen?.Invoke(null)));
             foreach (var p in _players)
-                list.Children.Add(ChoiceRow(p.Name, "ваш плеер, на весь экран", string.Equals(_player, p.Path, StringComparison.OrdinalIgnoreCase), () => PlayerChosen?.Invoke(p.Path)));
+                list.Children.Add(ChoiceRow(p.Name, L.T("ваш плеер, на весь экран", "your player, full screen"), string.Equals(_player, p.Path, StringComparison.OrdinalIgnoreCase), () => PlayerChosen?.Invoke(p.Path)));
             if (_player is not null && !_players.Any(p => string.Equals(p.Path, _player, StringComparison.OrdinalIgnoreCase)))
-                list.Children.Add(ChoiceRow(Apps.NameOf(_player), "выбран вами", true, () => { }));
-            list.Children.Add(ChoiceRow("Другой плеер…", "выбрать программу (.exe)", false, () => PlayerPickRequested?.Invoke()));
+                list.Children.Add(ChoiceRow(Apps.NameOf(_player), L.T("выбран вами", "chosen by you"), true, () => { }));
+            list.Children.Add(ChoiceRow(L.T("Другой плеер…", "Another player…"), L.T("выбрать программу (.exe)", "choose a program (.exe)"), false, () => PlayerPickRequested?.Invoke()));
             _panelContent.Children.Add(list);
-            var back = QuietButton("← Смотреть", 12);
+            var back = QuietButton("← " + Display("Смотреть"), 12);
             back.Margin = new Thickness(0, 6, 0, 0);
             back.Click += (_, _) => { _openWord = null; OnWord("Смотреть"); };
             _panelContent.Children.Add(back);
@@ -502,8 +618,8 @@ public sealed class QuietWindow : Window
             _panel.Width = 460;
             var (title, text) = word switch
             {
-                "Продолжить" => ("Продолжить", _games is null ? "Ищем последнюю игру…" : "Здесь будут последняя игра и последний фильм — как только вы запустите их отсюда, из «Играть» или «Смотреть»."),
-                _ => (word, ""),
+                "Продолжить" => (Display("Продолжить"), _games is null ? L.T("Ищем последнюю игру…", "Looking for your last game…") : L.T("Здесь будут последняя игра и последний фильм — как только вы запустите их отсюда, из «Играть» или «Смотреть».", "Your last game and film will show up here once you start them from Play or Watch.")),
+                _ => (Display(word), ""),
             };
             _panelContent.Children.Add(Text(title, 17, Hex("#E6FFFFFF"), FontWeights.Medium));
             var body = Text(text, 13, Hex("#99FFFFFF"), wrap: true);
@@ -519,13 +635,13 @@ public sealed class QuietWindow : Window
     {
         if (big) return GameListRow(game, big: true);
         var when = GameLibraries.LastPlayedText(game.LastPlayedUtc, DateTime.Now);
-        return LinkRow(game.Name, when.Length > 0 ? $"{game.Store} · {when}" : game.Store, () => PlayRequested?.Invoke(game));
+        return LinkRow(game.Name, when.Length > 0 ? $"{StoreName(game.Store)} · {when}" : StoreName(game.Store), () => PlayRequested?.Invoke(game));
     }
 
     private static string GameMeta(Game game)
     {
         var when = GameLibraries.LastPlayedText(game.LastPlayedUtc, DateTime.Now);
-        return when.Length > 0 ? $"{game.Store} · {when}" : game.Store;
+        return when.Length > 0 ? $"{StoreName(game.Store)} · {when}" : StoreName(game.Store);
     }
 
     /// <summary>Карточка недавней игры: вертикальная обложка, название, магазин.</summary>
@@ -628,21 +744,28 @@ public sealed class QuietWindow : Window
         {
             if (_musicApp is { } app)
             {
-                var start = LinkRow($"▶  Открыть {app.Name}", "", () => MusicAppRequested?.Invoke(app), big: true);
+                var start = LinkRow(L.T($"▶  Открыть {app.Name}", $"▶  Open {app.Name}"), "", () => MusicAppRequested?.Invoke(app), big: true);
                 start.Margin = new Thickness(-12, 0, -12, 0);
                 box.Children.Add(start);
-                box.Children.Add(Text("Включите музыку — здесь появятся кнопки «назад», «пауза», «дальше».", 12, Hex("#73FFFFFF"), wrap: true));
+                box.Children.Add(Text(L.T("Включите музыку — здесь появятся кнопки «назад», «пауза», «дальше».", "Start some music and the back, pause and next buttons will appear here."), 12, Hex("#73FFFFFF"), wrap: true));
             }
             else
             {
-                box.Children.Add(Text("Сейчас ничего не играет, а программу для музыки GigaRest не нашёл.", 13, Hex("#99FFFFFF"), wrap: true));
+                box.Children.Add(Text(L.T("Сейчас ничего не играет, а программу для музыки GigaRest не нашёл.", "Nothing is playing, and GigaRest didn’t find a music app."), 13, Hex("#99FFFFFF"), wrap: true));
             }
-            box.Children.Add(MusicAppLink());
+            var line = new Grid();
+            line.ColumnDefinitions.Add(new ColumnDefinition());
+            line.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            line.Children.Add(MusicAppLink());
+            var output = AudioOutputButton();
+            Grid.SetColumn(output, 1);
+            line.Children.Add(output);
+            box.Children.Add(line);
             return;
         }
         var track = Text(current.Text, 19, Hex("#E6FFFFFF"), FontWeights.SemiBold, wrap: true);
         box.Children.Add(track);
-        if (current.Source.Length > 0) box.Children.Add(Text(current.Source + (current.Playing ? " · играет" : " · пауза"), 12, Hex("#73FFFFFF")));
+        if (current.Source.Length > 0) box.Children.Add(Text(current.Source + (current.Playing ? L.T(" · играет", " · playing") : L.T(" · пауза", " · paused")), 12, Hex("#73FFFFFF")));
         var buttons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(-8, 4, 0, 0) };
         foreach (var (command, glyph) in new[] { (MediaCommand.Previous, "\uE892"), (MediaCommand.PlayPause, current.Playing ? "\uE769" : "\uE768"), (MediaCommand.Next, "\uE893") })
         {
@@ -662,18 +785,84 @@ public sealed class QuietWindow : Window
             };
             buttons.Children.Add(b);
         }
-        box.Children.Add(buttons);
+        var row = new Grid();
+        row.ColumnDefinitions.Add(new ColumnDefinition());
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        row.Children.Add(buttons);
+        var audio = AudioOutputButton();
+        audio.Margin = new Thickness(0, 4, 0, 0);
+        Grid.SetColumn(audio, 1);
+        row.Children.Add(audio);
+        box.Children.Add(row);
         box.Children.Add(MusicAppLink());
+    }
+
+    /// <summary>Устройства вывода звука — по умолчанию из Windows; для скриншотов подменяются.</summary>
+    internal Func<List<AudioDevice>> AudioList { get; set; } = AudioDevices.List;
+    internal Func<string, bool> AudioSetDefault { get; set; } = AudioDevices.SetDefault;
+
+    /// <summary>Значок наушников и куда сейчас идёт звук; щелчок — список устройств, как «Выбор устройства вывода» в Windows.</summary>
+    private Button AudioOutputButton()
+    {
+        var name = Text("", 12, Hex("#99FFFFFF"));
+        name.MaxWidth = 170;
+        name.TextTrimming = TextTrimming.CharacterEllipsis;
+        name.VerticalAlignment = VerticalAlignment.Center;
+        var content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+        content.Children.Add(new FontIcon { Glyph = "\uE7F6", FontSize = 16, FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"), Foreground = Brush("#D9FFFFFF"), VerticalAlignment = VerticalAlignment.Center });
+        content.Children.Add(name);
+        var b = new Button
+        {
+            Content = content, Height = 44, Padding = new Thickness(12, 0, 12, 0), VerticalAlignment = VerticalAlignment.Center,
+            Background = Brush(Colors.Transparent), BorderThickness = new Thickness(0), CornerRadius = new CornerRadius(12),
+        };
+        b.Resources["ButtonBackgroundPointerOver"] = Brush("#1AFFFFFF");
+        b.Resources["ButtonBackgroundPressed"] = Brush("#26FFFFFF");
+        b.Resources["ButtonBorderBrushPointerOver"] = Brush(Colors.Transparent);
+        b.Resources["ButtonBorderBrushPressed"] = Brush(Colors.Transparent);
+        ToolTipService.SetToolTip(b, L.T("Куда идёт звук", "Sound output"));
+
+        List<AudioDevice> devices = [];
+        async Task LoadAsync()
+        {
+            devices = await Task.Run(AudioList);
+            name.Text = devices.FirstOrDefault(d => d.IsDefault)?.Name ?? "";
+            name.Visibility = name.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+            b.Visibility = devices.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        }
+        _ = LoadAsync();
+        b.Click += async (_, _) =>
+        {
+            Wake();
+            await LoadAsync();
+            if (devices.Count == 0) return;
+            var menu = new MenuFlyout { Placement = Microsoft.UI.Xaml.Controls.Primitives.FlyoutPlacementMode.BottomEdgeAlignedRight };
+            foreach (var d in devices)
+            {
+                var device = d;
+                var item = new MenuFlyoutItem { Text = (device.IsDefault ? "✓  " : "     ") + device.Name };
+                item.Click += async (_, _) =>
+                {
+                    if (!device.IsDefault && !AudioSetDefault(device.Id))
+                        ShowSummary(L.T($"Не получилось переключить звук на «{device.Name}». Это можно сделать в Windows: значок звука у часов → выбор устройства.",
+                                        $"Couldn’t switch sound to “{device.Name}”. You can do it in Windows: sound icon by the clock → choose a device."), hasProblems: true);
+                    await LoadAsync();
+                };
+                menu.Items.Add(item);
+            }
+            menu.ShowAt(b);
+        };
+        return b;
     }
 
     private Button MusicAppLink()
     {
-        var link = QuietButton(_musicApp is { } app ? $"Программа: {app.Name} · сменить" : "Выбрать программу для музыки…", 12);
+        var link = QuietButton(_musicApp is { } app ? L.T($"Программа: {app.Name} · сменить", $"App: {app.Name} · change") : L.T("Выбрать программу для музыки…", "Choose a music app…"), 12);
         link.Click += (_, _) => MusicAppPickRequested?.Invoke();
         return link;
     }
 
-    private string PlayerName => _player is null ? "встроенный" : _players.FirstOrDefault(p => string.Equals(p.Path, _player, StringComparison.OrdinalIgnoreCase))?.Name ?? Apps.NameOf(_player);
+    private string PlayerName => _player is null ? L.T("встроенный", "built-in") : _players.FirstOrDefault(p => string.Equals(p.Path, _player, StringComparison.OrdinalIgnoreCase))?.Name ?? Apps.NameOf(_player);
 
     private Button ChoiceRow(string title, string meta, bool selected, Action click) =>
         LinkRow((selected ? "✓  " : "     ") + title, meta, () => { click(); }, keepOpen: true);
@@ -681,9 +870,146 @@ public sealed class QuietWindow : Window
     private Button FilmRow(Film film, bool big = false)
     {
         var added = GameLibraries.LastPlayedText(film.ModifiedUtc, DateTime.Now);
-        var meta = _positions.TryGetValue(film.Path, out var pos) ? "с " + Apps.Position(pos)
-            : big ? "фильм" : added.Length > 0 ? "добавлен " + added : "";
+        var meta = _positions.TryGetValue(film.Path, out var pos) ? L.T("с ", "from ") + Apps.Position(pos)
+            : big ? L.T("фильм", "film") : added.Length > 0 ? L.T("добавлен ", "added ") + added : "";
         return LinkRow(big ? $"▶  {film.Name}" : film.Name, meta, () => FilmRequested?.Invoke(film), big);
+    }
+
+    // ---------- свои сервисы: сайты с видео и музыкой, добавляются как свои игры ----------
+
+    private const string AddServiceWord = "Добавить сервис:";
+
+    private string BrowserName(string? openIn) => openIn switch
+    {
+        null => "",
+        WebServices.DefaultBrowser => L.T("браузер", "browser"),
+        _ => _browsers.FirstOrDefault(b => string.Equals(b.Path, openIn, StringComparison.OrdinalIgnoreCase))?.Name ?? Apps.NameOf(openIn),
+    };
+
+    /// <summary>Строка сервиса; правый щелчок — где открывать и «Убрать». lastWatched — вторая строка YouTube.</summary>
+    private Button ServiceRow(WebService s, bool big = false, bool lastWatched = false)
+    {
+        var glyph = s.Kind == ServiceKind.Watch ? "▶  " : "♫  ";
+        var open = _web.ContainsKey(WebKey(s));
+        string title, meta;
+        if (lastWatched) (title, meta) = (glyph + s.Name + L.T(" · последний ролик", " · last video"), L.T("тот, что смотрели последним", "the one you watched last"));
+        else if (s.OpenIn is not null) (title, meta) = (glyph + s.Name, L.T("откроется: ", "opens in: ") + BrowserName(s.OpenIn) + " ↗");
+        else if (open) (title, meta) = (glyph + L.T("Вернуться к ", "Back to ") + s.Name, L.T("продолжить, где были", "pick up where you left off"));
+        else (title, meta) = (glyph + s.Name, WebServices.IsYouTube(s) ? L.T("главная, прямо здесь", "home page, right here") : L.T("прямо здесь", "right here"));
+        var row = LinkRow(title, meta, () => OpenService(s, lastWatched), big);
+
+        var menu = new MenuFlyout();
+        void Choice(string text, string? openIn)
+        {
+            var item = new MenuFlyoutItem { Text = (string.Equals(s.OpenIn, openIn, StringComparison.OrdinalIgnoreCase) ? "✓  " : "     ") + text };
+            item.Click += (_, _) =>
+            {
+                s.OpenIn = openIn;
+                ServicesChanged?.Invoke();
+                Refresh("Смотреть", "Слушать");
+            };
+            menu.Items.Add(item);
+        }
+        Choice(L.T("Открывать здесь, в GigaRest", "Open here, in GigaRest"), null);
+        Choice(L.T("Открывать в браузере по умолчанию", "Open in the default browser"), WebServices.DefaultBrowser);
+        foreach (var b in _browsers) Choice(L.T("Открывать в ", "Open in ") + b.Name, b.Path);
+        menu.Items.Add(new MenuFlyoutSeparator());
+        var remove = new MenuFlyoutItem { Text = L.T("Убрать из списка", "Remove from list") };
+        remove.Click += (_, _) =>
+        {
+            if (_web.ContainsKey(WebKey(s)) && _services.Count(x => WebKey(x) == WebKey(s)) == 1) CloseWeb(WebKey(s));
+            _services.Remove(s);
+            ServicesChanged?.Invoke();
+            Refresh("Смотреть", "Слушать");
+        };
+        menu.Items.Add(remove);
+        row.ContextFlyout = menu;
+        ToolTipService.SetToolTip(row, L.T("Правый щелчок — где открывать или убрать", "Right-click to choose where it opens or remove it"));
+        return row;
+    }
+
+    private Button AddServiceLink(ServiceKind kind, bool inline = false)
+    {
+        var b = QuietButton(inline ? L.T("+ сервис", "+ service") : L.T("+ Добавить сервис…", "+ Add a service…"), 12);
+        if (!inline) b.Margin = new Thickness(0, 2, 0, 0);
+        b.Click += (_, _) => { _openWord = null; OnWord(AddServiceWord + kind); };
+        return b;
+    }
+
+    /// <summary>Панель «Добавить сервис»: готовые одной кнопкой или свой адрес.</summary>
+    private void FillAddService(ServiceKind kind)
+    {
+        var section = kind == ServiceKind.Watch ? "Смотреть" : "Слушать";
+        _panel.Width = 560;
+        _panelContent.Children.Add(Text(L.T($"Добавить в «{section}»", $"Add to {Display(section)}"), 17, Hex("#E6FFFFFF"), FontWeights.Medium));
+
+        void Added(WebService service)
+        {
+            WebServices.Add(_services, service);
+            ServicesChanged?.Invoke();
+            _openWord = null;
+            OnWord(section);
+        }
+
+        var presets = WebServices.Presets.Where(p => p.Kind == kind && !_services.Any(x => x.Kind == kind && WebServices.SameSite(x.Url, p.Url))).ToList();
+        if (presets.Count > 0)
+        {
+            var label = Text(L.T("Готовые", "Ready to add"), 13, Hex("#99FFFFFF"));
+            label.Margin = new Thickness(0, 10, 0, 6);
+            _panelContent.Children.Add(label);
+            var rows = new StackPanel { Spacing = 8 };
+            foreach (var chunk in presets.Chunk(4))
+            {
+                var line = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+                foreach (var p in chunk) line.Children.Add(Chip(p.Protected ? p.Name + " ↗" : p.Name, false, () => Added(WebServices.FromPreset(p))));
+                rows.Children.Add(line);
+            }
+            _panelContent.Children.Add(rows);
+            if (presets.Any(p => p.Protected))
+            {
+                var note = Text(L.T("↗ — фильмы и музыка по подписке защищены от копирования и во встроенном окне обычно не играют. Такие сервисы откроются в вашем браузере; правым щелчком по сервису это можно поменять.", "↗ — subscription films and music are copy-protected and usually won’t play in the built-in window. These services open in your browser; right-click a service to change that."), 12, Hex("#73FFFFFF"), wrap: true);
+                note.Margin = new Thickness(0, 8, 0, 0);
+                _panelContent.Children.Add(note);
+            }
+        }
+
+        var own = Text(L.T("Свой сайт", "Your own site"), 13, Hex("#99FFFFFF"));
+        own.Margin = new Thickness(0, 16, 0, 6);
+        _panelContent.Children.Add(own);
+        var address = new TextBox { PlaceholderText = L.T("адрес, например kino.example.ru", "address, e.g. kino.example.com"), RequestedTheme = ElementTheme.Dark, FontSize = 14 };
+        var name = new TextBox { PlaceholderText = L.T("название — можно не писать", "name — optional"), RequestedTheme = ElementTheme.Dark, FontSize = 14, Margin = new Thickness(0, 8, 0, 0) };
+        var error = Text("", 12, Hex("#FFE8A05B"), wrap: true);
+        error.Visibility = Visibility.Collapsed;
+        _panelContent.Children.Add(address);
+        _panelContent.Children.Add(name);
+        _panelContent.Children.Add(error);
+        void Submit()
+        {
+            if (WebServices.NormalizeUrl(address.Text) is not { } url)
+            {
+                error.Text = L.T("Это не похоже на адрес сайта. Пример: kino.example.ru", "That doesn’t look like a website address. Example: kino.example.com");
+                error.Visibility = Visibility.Visible;
+                return;
+            }
+            var preset = WebServices.PresetFor(url);
+            Added(new WebService
+            {
+                Url = url, Kind = kind,
+                Name = string.IsNullOrWhiteSpace(name.Text) ? WebServices.NameFromUrl(url) : name.Text.Trim(),
+                OpenIn = preset?.Protected == true ? WebServices.DefaultBrowser : null,
+            });
+        }
+        address.KeyDown += (_, e) => { if (e.Key == global::Windows.System.VirtualKey.Enter) { e.Handled = true; Submit(); } };
+        name.KeyDown += (_, e) => { if (e.Key == global::Windows.System.VirtualKey.Enter) { e.Handled = true; Submit(); } };
+
+        var footer = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 18, Margin = new Thickness(0, 8, 0, 0) };
+        var add = QuietButton(L.T("Добавить", "Add"), 13);
+        add.Click += (_, _) => Submit();
+        footer.Children.Add(add);
+        var back = QuietButton("← " + Display(section), 12);
+        back.Click += (_, _) => { _openWord = null; OnWord(section); };
+        footer.Children.Add(back);
+        _panelContent.Children.Add(footer);
     }
 
     /// <summary>Строка списка: название слева, пояснение справа, щелчок — действие.</summary>
@@ -714,6 +1040,70 @@ public sealed class QuietWindow : Window
         return b;
     }
 
+    /// <summary>Музыка на паузе — «Продолжить: исполнитель — песня».</summary>
+    private async Task FillContinueMusicAsync(StackPanel into)
+    {
+        var current = await Media();
+        if (_openWord != "Продолжить" || current is null || current.Playing) return;
+        into.Children.Add(LinkRow("♫  " + current.Text, current.Source.Length > 0 ? current.Source + L.T(" · пауза", " · paused") : L.T("на паузе", "paused"), async () =>
+        {
+            await MediaControl(MediaCommand.PlayPause);
+        }, big: true));
+    }
+
+    /// <summary>«Звуки природы»: дождь, море, костёр, ветер — один за раз, и громкость.</summary>
+    private StackPanel NatureSection()
+    {
+        var box = new StackPanel { Spacing = 8, Margin = new Thickness(0, 14, 0, 0) };
+        box.Children.Add(Text(L.T("Звуки природы", "Nature sounds"), 13, Hex("#99FFFFFF"), FontWeights.SemiBold));
+        var chips = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+        foreach (var sound in Enum.GetValues<NatureSound>())
+        {
+            var s = sound;
+            chips.Children.Add(NatureChip(NatureSounds.Name(s), _nature.Current == s, () => PlayNature(s)));
+        }
+        chips.Children.Add(NatureChip(L.T("Тишина", "Silence"), _nature.Current is null, StopNature));
+        box.Children.Add(chips);
+        var volume = new Slider { Minimum = 0, Maximum = 100, Value = _nature.Volume * 100, Width = 260, HorizontalAlignment = HorizontalAlignment.Left };
+        volume.Resources["SliderTrackValueFill"] = Brush("#E8A05B");
+        volume.Resources["SliderTrackValueFillPointerOver"] = Brush("#F0B46C");
+        volume.Resources["SliderThumbBackground"] = Brush("#F7CA8C");
+        volume.ValueChanged += (_, e) => { _nature.Volume = e.NewValue / 100; NatureChanged?.Invoke(_nature.Current ?? _lastNature, _nature.Volume); };
+        ToolTipService.SetToolTip(volume, L.T("Громкость звуков природы", "Nature sounds volume"));
+        box.Children.Add(volume);
+        return box;
+    }
+
+    private static Button NatureChip(string text, bool selected, Action click)
+    {
+        var b = new Button
+        {
+            Content = Text(text, 12.5, selected ? Hex("#24170C") : Hex("#D0D3DB"), selected ? FontWeights.SemiBold : FontWeights.Normal),
+            Padding = new Thickness(12, 5, 12, 5), CornerRadius = new CornerRadius(999),
+            Background = selected ? Vertical(Hex("#F7CA8C"), Hex("#E8A05B")) : Brush("#14FFFFFF"),
+            BorderBrush = Brush(selected ? "#99784620" : "#1FFFFFFF"), BorderThickness = new Thickness(1),
+        };
+        b.Resources["ButtonBackgroundPointerOver"] = selected ? Vertical(Hex("#F9D39C"), Hex("#EDAA68")) : Brush("#24FFFFFF");
+        b.Resources["ButtonBackgroundPressed"] = Brush("#33FFFFFF");
+        b.Click += (_, _) => click();
+        return b;
+    }
+
+    private async void PlayNature(NatureSound sound)
+    {
+        _lastNature = sound;
+        NatureChanged?.Invoke(sound, _nature.Volume);
+        var reopen = _openWord;
+        await _nature.PlayAsync(sound);
+        if (reopen == "Слушать" && _openWord == "Слушать") { _openWord = null; OnWord("Слушать"); }
+    }
+
+    private void StopNature()
+    {
+        _nature.Stop();
+        if (_openWord == "Слушать") { _openWord = null; OnWord("Слушать"); }
+    }
+
     /// <summary>Для скриншотов: открыть раздел нижней строки.</summary>
     public void OpenWordForCapture(string word) { _openWord = null; OnWord(word); }
 
@@ -729,7 +1119,7 @@ public sealed class QuietWindow : Window
         foreach (var child in _words.Children.OfType<Button>())
         {
             var tb = (TextBlock)child.Content;
-            tb.Foreground = Brush(_openWord == tb.Text ? "#FFFFFFFF" : _openWord is null ? "#BFFFFFFF" : "#80FFFFFF");
+            tb.Foreground = Brush(_openWord == child.Tag as string ? "#FFFFFFFF" : _openWord is null ? "#BFFFFFFF" : "#80FFFFFF");
         }
     }
 
@@ -750,7 +1140,114 @@ public sealed class QuietWindow : Window
             }
             return;
         }
-        if (e.Key == global::Windows.System.VirtualKey.Escape && _openWord is not null) { ClosePanel(); e.Handled = true; }
+        if (WebVisible) return; // клавиши — сайту
+        if (e.OriginalSource is TextBox)
+        {
+            if (e.Key == global::Windows.System.VirtualKey.Escape) { ClosePanel(); e.Handled = true; }
+            return; // стрелки — полю ввода
+        }
+        if (_library is not null)
+        {
+            if (e.Key == global::Windows.System.VirtualKey.Escape) { CloseLibrary(); e.Handled = true; }
+            return; // стрелки — поиску и сетке
+        }
+        switch (e.Key)
+        {
+            case global::Windows.System.VirtualKey.Escape: if (_openWord is not null) { ClosePanel(); e.Handled = true; } break;
+            case global::Windows.System.VirtualKey.Left: Navigate(Dir.Left); e.Handled = true; break;
+            case global::Windows.System.VirtualKey.Right: Navigate(Dir.Right); e.Handled = true; break;
+            case global::Windows.System.VirtualKey.Up: Navigate(Dir.Up); e.Handled = true; break;
+            case global::Windows.System.VirtualKey.Down: Navigate(Dir.Down); e.Handled = true; break;
+        }
+    }
+
+    // ---------- клавиатура: стрелки — по разделам и спискам, Enter — выбрать, Esc — назад ----------
+
+    private enum Dir { Left, Right, Up, Down }
+
+    private void StepWord(int delta)
+    {
+        var current = _openWord is not null ? Array.IndexOf(WordList, _openWord) : _wordIndex;
+        _wordIndex = current < 0 ? (delta >= 0 ? 0 : WordList.Length - 1) : (current + delta + WordList.Length) % WordList.Length;
+        _openWord = null;
+        OnWord(WordList[_wordIndex]);
+        FocusPanel();
+    }
+
+    private void FocusPanel()
+    {
+        if (FocusManager.FindFirstFocusableElement(_panelContent) is Control first) first.Focus(FocusState.Keyboard);
+    }
+
+    private bool FocusInPanel() =>
+        FocusManager.GetFocusedElement(_root.XamlRoot) is DependencyObject d && IsInside(d, _panel);
+
+    private static bool IsInside(DependencyObject element, DependencyObject container)
+    {
+        for (var d = element; d is not null; d = VisualTreeHelper.GetParent(d))
+            if (d == container) return true;
+        return false;
+    }
+
+    private void Navigate(Dir direction)
+    {
+        Wake();
+        try
+        {
+            if (_openWord is null)
+            {
+                StepWord(direction == Dir.Left ? -1 : direction == Dir.Right ? 1 : 0);
+                return;
+            }
+            if (!FocusInPanel()) { FocusPanel(); return; }
+            // Только направленный переход внутри панели (Next/Previous с границей поиска Windows не поддерживает — от этого и были вылеты).
+            var options = new FindNextElementOptions { SearchRoot = _panel };
+            var moved = FocusManager.TryMoveFocus(direction switch
+            {
+                Dir.Up => FocusNavigationDirection.Up,
+                Dir.Down => FocusNavigationDirection.Down,
+                Dir.Left => FocusNavigationDirection.Left,
+                _ => FocusNavigationDirection.Right,
+            }, options);
+            // Влево-вправо дальше некуда — соседний раздел.
+            if (!moved && direction is Dir.Left or Dir.Right) StepWord(direction == Dir.Left ? -1 : 1);
+        }
+        catch (Exception ex)
+        {
+            GigaRest.Core.Logging.Log.Warn("Клавиатура на «Тихом» экране: " + ex.Message);
+        }
+    }
+
+    // ---------- курсор и выключение экрана ----------
+
+    private void SetCursorHidden(bool hide)
+    {
+        if (hide == _cursorHidden) return;
+        _cursorHidden = hide;
+        ShowCursor(!hide);
+    }
+
+    private void TurnScreenOff()
+    {
+        _screenOff = true;
+        _offCard.Visibility = Visibility.Collapsed;
+        // Выключить монитор (как по таймеру Windows); любое движение мыши или клавиша включат его.
+        SendMessageW(RestScreens.Hwnd(this), 0x0112 /* WM_SYSCOMMAND */, 0xF170 /* SC_MONITORPOWER */, 2);
+    }
+
+    [DllImport("user32.dll")] private static extern int ShowCursor(bool show);
+    [DllImport("user32.dll")] private static extern nint SendMessageW(nint hwnd, uint msg, nint wParam, nint lParam);
+    [DllImport("user32.dll")] private static extern bool GetLastInputInfo(ref LASTINPUTINFO info);
+    [StructLayout(LayoutKind.Sequential)] private struct LASTINPUTINFO { public uint cbSize; public uint dwTime; }
+
+    private static TimeSpan Min(TimeSpan a, TimeSpan b) => a < b ? a : b;
+
+    /// <summary>Сколько компьютер без ввода вообще — мышь и клавиатура на любом мониторе.</summary>
+    private static TimeSpan SystemIdle()
+    {
+        var info = new LASTINPUTINFO { cbSize = (uint)Marshal.SizeOf<LASTINPUTINFO>() };
+        if (!GetLastInputInfo(ref info)) return TimeSpan.Zero;
+        return TimeSpan.FromMilliseconds(unchecked((uint)Environment.TickCount - info.dwTime));
     }
 
     private void Wake()
@@ -758,24 +1255,36 @@ public sealed class QuietWindow : Window
         _lastInput = DateTime.Now;
         _words.Opacity = 1;
         _dim.Opacity = 0;
+        _offCard.Visibility = Visibility.Collapsed;
+        _screenOff = false;
+        SetCursorHidden(false);
     }
 
     private void OnTick()
     {
         var now = DateTime.Now;
-        _clock.Text = now.ToString("HH:mm", Ru);
-        _date.Text = now.ToString("dddd, d MMMM", Ru);
-        if (_film is not null || WebVisible) _lastInput = now; // смотрят или выбирают музыку — не гасим экран
-        var idle = now - _lastInput;
-
-        // 20 секунд без действий — список закрывается, строка приглушается до 40%.
-        if (idle > TimeSpan.FromSeconds(20))
+        _clock.Text = now.ToString("HH:mm", L.Culture);
+        _date.Text = now.ToString(L.En ? "dddd, MMMM d" : "dddd, d MMMM", L.Culture);
+        // Простой «Тихого» экрана — по вводу в нём; затемнение и выключение — по вводу вообще
+        // (работаете на втором мониторе — экран не гаснет). Смотрят фильм или сайт — не гасим.
+        var watching = _film is not null || WebVisible || _paused || _library is not null;
+        if (WebVisible || _paused || _library is not null) _lastInput = now;
+        var own = Timers.At(now - _lastInput);
+        SetCursorHidden(own.HideCursor && !WebVisible);
+        if (own.CloseList && _film is null)
         {
             if (_openWord is not null) ClosePanel();
             _words.Opacity = 0.4;
         }
-        // 15 минут — сцена плавно темнеет до 10%.
-        _dim.Opacity = idle > TimeSpan.FromMinutes(15) ? 0.9 : 0;
+        var system = Timers.At(watching ? TimeSpan.Zero : Min(now - _lastInput, SystemIdle()));
+        _dim.Opacity = system.DimScene ? 0.9 : 0;
+        if (system.ScreenOffInSeconds is int left && !_screenOff)
+        {
+            _offText.Text = L.T($"Экран выключится через {Sizes.Plural(left, "секунду", "секунды", "секунд")}", $"The screen will turn off in {L.Plural(left, "секунду", "секунды", "секунд", "second", "seconds")}");
+            _offCard.Visibility = Visibility.Visible;
+        }
+        else _offCard.Visibility = Visibility.Collapsed;
+        if (system.ScreenOffNow && !_screenOff) TurnScreenOff();
 
         // Ничего не стоит на месте дольше 2 минут: сдвигаем весь слой на 10–30 px.
         if (now - _lastShift > TimeSpan.FromMinutes(2))
@@ -793,10 +1302,210 @@ public sealed class QuietWindow : Window
         else if (!busy && _paused) { _kenBurns.Resume(); _effects.Pause(false); _video?.Resume(); _paused = false; }
     }
 
+    // ---------- библиотека игр: все установленные из всех магазинов, на весь «Тихий» экран ----------
+
+    private Grid? _library;
+    private string? _libraryStore;
+    private string _libraryQuery = "";
+    private bool _libraryByName;
+
+    /// <summary>
+    /// «Вся библиотека»: сверху — последняя игра крупно, ниже — поиск, магазины, порядок и сетка обложек.
+    /// Только установленные игры. Esc или «Закрыть» — обратно к сцене.
+    /// </summary>
+    public void ShowLibrary()
+    {
+        ClosePanel();
+        Wake();
+        if (_library is not null) _root.Children.Remove(_library);
+        var games = _games ?? [];
+        var host = new Grid
+        {
+            Margin = new Thickness(56, 40, 56, 40), CornerRadius = new CornerRadius(20), Padding = new Thickness(28, 22, 28, 0),
+            Background = Vertical(Hex("#F2191B22"), Hex("#F70F1116")), BorderBrush = Brush("#1FFFFFFF"), BorderThickness = new Thickness(1),
+            RowSpacing = 16,
+        };
+        host.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // заголовок
+        host.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // последняя игра
+        host.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // фильтры
+        host.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); // сетка
+
+        var head = new Grid { ColumnSpacing = 14 };
+        head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        head.ColumnDefinitions.Add(new ColumnDefinition());
+        head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var title = Text(L.T("Библиотека", "Library"), 26, Hex("#F6F2EA"), FontWeights.SemiBold);
+        head.Children.Add(title);
+        var count = Text(L.Plural(games.Count, "игра установлена", "игры установлено", "игр установлено", "game installed", "games installed"), 13, Hex("#8A909C"));
+        count.VerticalAlignment = VerticalAlignment.Bottom;
+        count.Margin = new Thickness(0, 0, 0, 5);
+        Grid.SetColumn(count, 1);
+        head.Children.Add(count);
+        var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 18 };
+        var add = QuietButton(L.T("+ Добавить игру…", "+ Add a game…"), 13);
+        ToolTipService.SetToolTip(add, L.T("Игра без магазина: выберите её файл запуска (.exe)", "A game from outside a store: choose its launch file (.exe)"));
+        add.Click += (_, _) => AddGameRequested?.Invoke();
+        actions.Children.Add(add);
+        var covers = QuietButton(L.T("Папка обложек", "Covers folder"), 13);
+        ToolTipService.SetToolTip(covers, L.T("Положите картинку с названием игры («Diablo IV.jpg») — она станет обложкой. «Diablo IV шапка.jpg» — широкая картинка для «Продолжить».", "Drop in a picture named after the game (“Diablo IV.jpg”) and it becomes the cover. “Diablo IV шапка.jpg” is the wide picture for Continue."));
+        covers.Click += (_, _) => OpenCoversRequested?.Invoke();
+        actions.Children.Add(covers);
+        var close = QuietButton(L.T("Закрыть · Esc", "Close · Esc"), 13);
+        close.Click += (_, _) => CloseLibrary();
+        actions.Children.Add(close);
+        Grid.SetColumn(actions, 2);
+        head.Children.Add(actions);
+        host.Children.Add(head);
+
+        // Последняя игра — широкой картинкой (у Steam — своя шапка игры).
+        if (games.FirstOrDefault(g => g.LastPlayedUtc is not null) is { } last)
+        {
+            var hero = HeroCard(last);
+            Grid.SetRow(hero, 1);
+            host.Children.Add(hero);
+        }
+
+        var filters = new Grid { ColumnSpacing = 10 };
+        filters.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(280) });
+        filters.ColumnDefinitions.Add(new ColumnDefinition());
+        filters.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var search = new TextBox { PlaceholderText = L.T("Найти игру…", "Find a game…"), Text = _libraryQuery, FontSize = 14 };
+        filters.Children.Add(search);
+        var stores = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
+        Grid.SetColumn(stores, 1);
+        filters.Children.Add(stores);
+        var order = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
+        Grid.SetColumn(order, 2);
+        filters.Children.Add(order);
+        Grid.SetRow(filters, 2);
+        host.Children.Add(filters);
+
+        var grid = new VariableSizedWrapGrid { Orientation = Orientation.Horizontal, ItemWidth = 172, ItemHeight = 300 };
+        var scroll = new ScrollViewer { Content = grid, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Padding = new Thickness(0, 0, 0, 24) };
+        Grid.SetRow(scroll, 3);
+        host.Children.Add(scroll);
+
+        void Fill()
+        {
+            grid.Children.Clear();
+            var shown = GameLibraries.Filter(games, _libraryStore, _libraryQuery, _libraryByName);
+            foreach (var game in shown) grid.Children.Add(LibraryCard(game));
+            if (shown.Count == 0)
+                grid.Children.Add(Text(games.Count == 0 ? L.T("Игр не нашлось. GigaRest смотрит в Steam, Epic, GOG и Battle.net; игру без магазина — «+ Добавить игру…».", "No games found. GigaRest looks in Steam, Epic, GOG and Battle.net; for a game from outside a store, use “+ Add a game…”.") : L.T("Ничего не нашлось.", "Nothing found."), 14, Hex("#8A909C")));
+            // Фильтры — подсвечиваем выбранное.
+            stores.Children.Clear();
+            stores.Children.Add(Chip(L.T($"Все · {games.Count}", $"All · {games.Count}"), _libraryStore is null, () => { _libraryStore = null; Fill(); }));
+            foreach (var g in games.GroupBy(g => g.Store).OrderByDescending(g => g.Count()))
+            {
+                var store = g.Key;
+                stores.Children.Add(Chip($"{StoreName(store)} · {g.Count()}", _libraryStore == store, () => { _libraryStore = store; Fill(); }));
+            }
+            order.Children.Clear();
+            order.Children.Add(Chip(L.T("Недавние", "Recent"), !_libraryByName, () => { _libraryByName = false; Fill(); }));
+            order.Children.Add(Chip(L.T("А–Я", "A–Z"), _libraryByName, () => { _libraryByName = true; Fill(); }));
+        }
+        search.TextChanged += (_, _) => { _libraryQuery = search.Text; Fill(); };
+        Fill();
+
+        _library = host;
+        _root.Children.Add(host);
+        _overlay.Visibility = Visibility.Collapsed;
+        search.Focus(FocusState.Programmatic);
+    }
+
+    /// <summary>Для скриншотов.</summary>
+    public void CloseLibraryForCapture() => CloseLibrary();
+
+    private void CloseLibrary()
+    {
+        if (_library is null) return;
+        _root.Children.Remove(_library);
+        _library = null;
+        if (!WebVisible) _overlay.Visibility = Visibility.Visible;
+        Wake();
+    }
+
+    /// <summary>Кнопка-«таблетка» фильтра.</summary>
+    private static Button Chip(string text, bool selected, Action click)
+    {
+        var b = new Button
+        {
+            Content = Text(text, 12.5, selected ? Hex("#24170C") : Hex("#C9CDD6"), selected ? FontWeights.SemiBold : FontWeights.Normal),
+            Padding = new Thickness(12, 5, 12, 5), CornerRadius = new CornerRadius(999),
+            Background = selected ? Vertical(Hex("#F7CA8C"), Hex("#E8A05B")) : Brush("#14FFFFFF"),
+            BorderBrush = Brush(selected ? "#99784620" : "#1FFFFFFF"), BorderThickness = new Thickness(1),
+        };
+        b.Resources["ButtonBackgroundPointerOver"] = selected ? Vertical(Hex("#F9D39C"), Hex("#EDAA68")) : Brush("#24FFFFFF");
+        b.Resources["ButtonBackgroundPressed"] = selected ? Vertical(Hex("#EDB878"), Hex("#DC944F")) : Brush("#33FFFFFF");
+        b.Click += (_, _) => click();
+        return b;
+    }
+
+    /// <summary>Карточка в сетке: обложка, название, магазин и «когда играли». Щелчок — играть.</summary>
+    private Button LibraryCard(Game game)
+    {
+        var box = new StackPanel { Spacing = 6, Width = 156 };
+        box.Children.Add(Cover(game, 156, 234));
+        var name = Text(game.Name, 13, Hex("#E6FFFFFF"), FontWeights.SemiBold, wrap: true);
+        name.MaxLines = 2;
+        name.TextTrimming = TextTrimming.CharacterEllipsis;
+        box.Children.Add(name);
+        box.Children.Add(Text(GameMeta(game), 11.5, Hex("#80FFFFFF")));
+        if (game.PlayMinutes is { } minutes) box.Children.Add(Text(GameLibraries.PlaytimeText(minutes), 11.5, Hex("#66FFFFFF")));
+        var b = new Button
+        {
+            Content = box, Padding = new Thickness(6), CornerRadius = new CornerRadius(14), VerticalAlignment = VerticalAlignment.Top,
+            Background = Brush(Colors.Transparent), BorderThickness = new Thickness(0),
+        };
+        b.Resources["ButtonBackgroundPointerOver"] = Brush("#14FFFFFF");
+        b.Resources["ButtonBackgroundPressed"] = Brush("#24FFFFFF");
+        b.Click += (_, _) => { CloseLibrary(); PlayRequested?.Invoke(game); };
+        if (game.Store == "Свои")
+        {
+            var menu = new MenuFlyout();
+            var remove = new MenuFlyoutItem { Text = L.T("Убрать из библиотеки", "Remove from library") };
+            remove.Click += (_, _) => RemoveGameRequested?.Invoke(game);
+            menu.Items.Add(remove);
+            b.ContextFlyout = menu;
+            ToolTipService.SetToolTip(b, L.T("Правый щелчок — убрать из библиотеки", "Right-click to remove from library"));
+        }
+        return b;
+    }
+
+    /// <summary>Последняя игра — широкой картинкой с кнопкой «Играть».</summary>
+    private Border HeroCard(Game game)
+    {
+        var grid = new Grid { Height = 190 };
+        if (game.HeroPath is { } hero && File.Exists(hero))
+            grid.Children.Add(new Image { Source = new BitmapImage(new Uri(hero)) { DecodePixelWidth = 1920 }, Stretch = Stretch.UniformToFill, VerticalAlignment = VerticalAlignment.Center });
+        else
+            grid.Children.Add(new Border { Background = Vertical(ProgramColorDim(game.Name), Hex("#FF14151C")) });
+        var shade = new LinearGradientBrush { StartPoint = new(0, 0), EndPoint = new(1, 0) };
+        shade.GradientStops.Add(new GradientStop { Color = Hex("#E6101217"), Offset = 0 });
+        shade.GradientStops.Add(new GradientStop { Color = Hex("#00101217"), Offset = 0.75 });
+        grid.Children.Add(new Border { Background = shade });
+        var text = new StackPanel { Spacing = 6, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(28, 0, 0, 0) };
+        text.Children.Add(Text(Display("Продолжить"), 12, Hex("#B3FFFFFF"), FontWeights.SemiBold));
+        text.Children.Add(Text(game.Name, 28, Hex("#F6F2EA"), FontWeights.SemiBold));
+        text.Children.Add(Text(GameMeta(game), 13, Hex("#99FFFFFF")));
+        var play = WarmButton("▶  " + Display("Играть"), 15);
+        play.HorizontalAlignment = HorizontalAlignment.Left;
+        play.Margin = new Thickness(0, 6, 0, 0);
+        play.Click += (_, _) => { CloseLibrary(); PlayRequested?.Invoke(game); };
+        text.Children.Add(play);
+        grid.Children.Add(text);
+        return new Border { CornerRadius = new CornerRadius(16), Child = grid, BorderBrush = Brush("#1FFFFFFF"), BorderThickness = new Thickness(1) };
+    }
+
+    private static Color ProgramColorDim(string name)
+    {
+        var c = ProgramColor(name);
+        return Color.FromArgb(255, (byte)(c.R / 3), (byte)(c.G / 3), (byte)(c.B / 3));
+    }
+
     // ---------- сайты внутри «Тихого» экрана (Яндекс Музыка, YouTube): WebView2, свой профиль — вход запоминается ----------
 
-    private const string Music = "music", YouTube = "youtube";
-    private const string MusicUrl = "https://music.yandex.ru/";
+    private const string YouTube = "youtube";
     private const string YouTubeUrl = "https://www.youtube.com/";
     private const string YouTubeHistoryUrl = "https://www.youtube.com/feed/history";
     /// <summary>Встроенный сайт: панель, сам браузер, кнопка «Свернуть/Развернуть», состояние.</summary>
@@ -818,7 +1527,20 @@ public sealed class QuietWindow : Window
     /// <summary>Есть развёрнутая панель — её смотрят, экран не гасим и слова не показываем.</summary>
     private bool WebVisible => _web.Values.Any(w => !w.Mini);
 
-    private void ShowWebMusic() => ShowWeb(Music, "Яндекс Музыка", MusicUrl);
+    private static string WebKey(WebService s) => WebServices.IsYouTube(s) ? YouTube : s.Url;
+
+    /// <summary>Открыть сервис: здесь (панелью) или в браузере — как выбрано у сервиса.</summary>
+    private void OpenService(WebService s, bool lastWatched = false)
+    {
+        if (s.OpenIn is not null)
+        {
+            ClosePanel();
+            OpenInBrowserRequested?.Invoke(s, WebServices.IsYouTube(s) && lastWatched ? YouTubeHistoryUrl : s.Url);
+            return;
+        }
+        if (WebServices.IsYouTube(s)) ShowYouTube(lastWatched);
+        else ShowWeb(WebKey(s), s.Name, s.Url);
+    }
 
     private void ShowYouTube(bool lastWatched)
     {
@@ -860,10 +1582,10 @@ public sealed class QuietWindow : Window
         var title = Text(titleText, 14, Hex("#E6FFFFFF"), FontWeights.Medium);
         title.VerticalAlignment = VerticalAlignment.Center;
         bar.Children.Add(title);
-        var toggle = QuietButton("Свернуть", 13);
+        var toggle = QuietButton(L.T("Свернуть", "Minimize"), 13);
         Grid.SetColumn(toggle, 1);
         bar.Children.Add(toggle);
-        var close = QuietButton("Закрыть", 13);
+        var close = QuietButton(L.T("Закрыть", "Close"), 13);
         close.Margin = new Thickness(14, 0, 0, 0);
         close.Click += (_, _) => CloseWeb(key);
         Grid.SetColumn(close, 2);
@@ -886,7 +1608,20 @@ public sealed class QuietWindow : Window
             web.CoreWebView2.NewWindowRequested += (_, e) => { e.Handled = true; web.CoreWebView2.Navigate(e.Uri); };
             // Кнопка «во весь экран» в самом ролике — панель на весь монитор, без рамки и полосы.
             web.CoreWebView2.ContainsFullScreenElementChanged += (_, _) => SetFull(panel, web.CoreWebView2.ContainsFullScreenElement);
-            if (key == YouTube) web.CoreWebView2.NavigationCompleted += async (_, _) => await OpenLastWatchedAsync(web);
+            if (key == YouTube)
+            {
+                web.CoreWebView2.NavigationCompleted += async (_, _) => await OpenLastWatchedAsync(web);
+                // Открыли ролик — запомнить адрес и название для «Продолжить».
+                web.CoreWebView2.DocumentTitleChanged += (_, _) =>
+                {
+                    var src = web.CoreWebView2.Source;
+                    var title = web.CoreWebView2.DocumentTitle;
+                    if (!src.Contains("/watch?v=", StringComparison.Ordinal) || string.IsNullOrWhiteSpace(title) || title == "YouTube") return;
+                    title = title.EndsWith(" - YouTube", StringComparison.Ordinal) ? title[..^10] : title;
+                    _lastYouTube = (src, title, DateTime.UtcNow);
+                    YouTubeWatched?.Invoke(src, title);
+                };
+            }
             _openLastWatched = openLastWatched;
             web.Source = new Uri(url);
         }
@@ -894,7 +1629,7 @@ public sealed class QuietWindow : Window
         {
             GigaRest.Core.Logging.Log.Error($"Встроенный сайт {titleText}", ex);
             CloseWeb(key);
-            ShowSummary($"{titleText} не открылся: в Windows нет компонента Microsoft Edge WebView2. Его можно поставить с сайта Microsoft.", hasProblems: true);
+            ShowSummary(L.T($"{titleText} не открылся: в Windows нет компонента Microsoft Edge WebView2. Его можно поставить с сайта Microsoft.", $"{titleText} didn’t open: Windows is missing the Microsoft Edge WebView2 component. You can install it from the Microsoft website."), hasProblems: true);
         }
     }
 
@@ -919,7 +1654,7 @@ public sealed class QuietWindow : Window
     private static void SetMini(WebPanel panel, bool mini)
     {
         panel.Mini = mini;
-        panel.Toggle.Text = mini ? "Развернуть" : "Свернуть";
+        panel.Toggle.Text = mini ? L.T("Развернуть", "Expand") : L.T("Свернуть", "Minimize");
     }
 
     private void SetFull(WebPanel panel, bool full)
@@ -1021,7 +1756,7 @@ public sealed class QuietWindow : Window
         var title = Text(film.Name, 15, Hex("#E6FFFFFF"));
         title.VerticalAlignment = VerticalAlignment.Center;
         bar.Children.Add(title);
-        var close = QuietButton("Закрыть · Esc", 13);
+        var close = QuietButton(L.T("Закрыть · Esc", "Close · Esc"), 13);
         close.Click += (_, _) => CloseFilm();
         Grid.SetColumn(close, 1);
         bar.Children.Add(close);
@@ -1123,8 +1858,11 @@ public sealed class QuietWindow : Window
 
     public void CloseForGood()
     {
+        _nature.Dispose();
+        SetCursorHidden(false);
         CloseFilm(); // где остановились — запомнится
         foreach (var key in _web.Keys.ToList()) CloseWeb(key);
+        CloseLibrary();
         _closing = true;
         _tick.Stop();
         _kenBurns.Stop();

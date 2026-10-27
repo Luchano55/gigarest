@@ -32,11 +32,8 @@ public sealed class SwitcherWindow : Window
     private static readonly Color TextSoft = Hex("#A9AEBB");
     private static readonly Color TextMuted = Hex("#8A909C");
     private static readonly Color TextDim = Hex("#7F8590");
-    private static readonly Color Warm = Hex("#EEB36C");
     private static readonly Color WarmText = Hex("#F8D3A0");
-    private static readonly Color Good = Hex("#93C9A4");
     private static readonly Color Amber = Hex("#F0B46C");
-    private static readonly Color Bad = Hex("#EE8E74");
     private static readonly Color Blue = Hex("#8FB4F0");
 
     private readonly Grid _root;
@@ -64,6 +61,10 @@ public sealed class SwitcherWindow : Window
     private Mode _mode;
     private bool _closingForGood;
     private bool _hasSecondMonitor = true;
+
+    /// <summary>Сколько плиток разрешено настройками: 0 — плитки выключены, 1–4.</summary>
+    public int MaxTiles { get; set; } = TilePlan.Max;
+    private bool TilesAvailable => _hasSecondMonitor && MaxTiles > 0;
     private readonly List<(RunningProgram P, Grid Status)> _progressRows = [];
 
     private enum Mode { Plan, Progress, Rest, Returning, Work, Error }
@@ -106,10 +107,10 @@ public sealed class SwitcherWindow : Window
 
         var head = new StackPanel { Spacing = 10 };
         var titleRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 14 };
-        _headline = Text("Работа → Отдых", 36, TextHi, FontWeights.SemiBold);
+        _headline = Text(L.T("Работа → Отдых", "Work → Rest"), 36, TextHi, FontWeights.SemiBold);
         _headline.CharacterSpacing = -22;
         titleRow.Children.Add(_headline);
-        _badge = Text("ПРОБНЫЙ РЕЖИМ", 11, Warm, FontWeights.Bold);
+        _badge = Text(L.T("ПРОБНЫЙ РЕЖИМ", "TEST MODE"), 11, Warm, FontWeights.Bold);
         _badge.CharacterSpacing = 60;
         var badgeBox = new Border
         {
@@ -132,7 +133,7 @@ public sealed class SwitcherWindow : Window
         monitors.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(150) });
         monitors.ColumnDefinitions.Add(new ColumnDefinition());
         _mainScreen = new Grid();
-        _mainCaption = Caption("Основной", "Рабочий стол");
+        _mainCaption = Caption(L.T("Основной", "Main"), L.T("Рабочий стол", "Desktop"));
         var main = MonitorFigure(_mainScreen, 136, 86, _mainCaption, null, rotate: 10);
         main.VerticalAlignment = VerticalAlignment.Bottom;
         monitors.Children.Add(main);
@@ -141,7 +142,7 @@ public sealed class SwitcherWindow : Window
         _secondScreen.RowDefinitions.Add(new RowDefinition());
         _secondScreen.ColumnDefinitions.Add(new ColumnDefinition());
         _secondScreen.ColumnDefinitions.Add(new ColumnDefinition());
-        _secondCaption = Caption("Второй", "Живые плитки");
+        _secondCaption = Caption(L.T("Второй", "Second"), L.T("Живые плитки", "Live tiles"));
         _secondHint = Text("", 12, TextMuted, wrap: true);
         var second = MonitorFigure(_secondScreen, 330, 206, _secondCaption, _secondHint, rotate: -4);
         Grid.SetColumn(second, 1);
@@ -154,15 +155,15 @@ public sealed class SwitcherWindow : Window
         stats.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.15, GridUnitType.Star) });
         stats.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.3, GridUnitType.Star) });
         stats.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(0.8, GridUnitType.Star) });
-        (_ramTitle, _ramValue) = (Text("Освободится памяти", 12, TextMuted), Text("", 22, Hex("#F3C58C"), FontWeights.SemiBold));
-        (_dndTitle, _dndValue) = (Text("Уведомления", 12, TextMuted), Text("", 22, TextHi, FontWeights.SemiBold));
-        (_tilesTitle, _tilesValue) = (Text("Плитки", 12, TextMuted), Text("", 22, TextHi, FontWeights.SemiBold));
+        (_ramTitle, _ramValue) = (Text(L.T("Освободится памяти", "Memory to free"), 12, TextMuted), Text("", 22, Hex("#F3C58C"), FontWeights.SemiBold));
+        (_dndTitle, _dndValue) = (Text(L.T("Уведомления", "Notifications"), 12, TextMuted), Text("", 22, TextHi, FontWeights.SemiBold));
+        (_tilesTitle, _tilesValue) = (Text(L.T("Плитки", "Tiles"), 12, TextMuted), Text("", 22, TextHi, FontWeights.SemiBold));
         stats.Children.Add(StatCard(_ramTitle, _ramValue, 0));
         stats.Children.Add(StatCard(_dndTitle, _dndValue, 1));
         stats.Children.Add(StatCard(_tilesTitle, _tilesValue, 2));
         bottom.Children.Add(stats);
 
-        _goText = Text("Перейти в отдых", 17, Hex("#24170C"), FontWeights.SemiBold);
+        _goText = Text(L.T("Перейти в отдых", "Start resting"), 17, Hex("#24170C"), FontWeights.SemiBold);
         _go = GoButton(_goText);
         _go.Click += (_, _) => OnGo();
         bottom.Children.Add(_go);
@@ -178,7 +179,7 @@ public sealed class SwitcherWindow : Window
         _progressText.VerticalAlignment = VerticalAlignment.Center;
         Grid.SetColumn(_progressText, 1);
         progressRow.Children.Add(_progressText);
-        _cancel = SmallButton("Отменить");
+        _cancel = SmallButton(L.T("Отменить", "Cancel"));
         _cancel.Click += (_, _) => CancelRequested?.Invoke();
         Grid.SetColumn(_cancel, 2);
         progressRow.Children.Add(_cancel);
@@ -190,17 +191,17 @@ public sealed class SwitcherWindow : Window
         // «Пора за работу» по расписанию.
         _offerText = Text("", 13, TextSoft, wrap: true);
         var offerBox = new StackPanel { Spacing = 10 };
-        offerBox.Children.Add(Text("Пора за работу.", 16, TextHi, FontWeights.SemiBold));
+        offerBox.Children.Add(Text(L.T("Пора за работу.", "Time to get back to work."), 16, TextHi, FontWeights.SemiBold));
         offerBox.Children.Add(_offerText);
         var offerButtons = new Grid { ColumnSpacing = 8 };
         offerButtons.ColumnDefinitions.Add(new ColumnDefinition());
         offerButtons.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var back = GoButton(Text("Вернуться к работе", 14, Hex("#24170C"), FontWeights.SemiBold));
+        var back = GoButton(Text(L.T("Вернуться к работе", "Back to work"), 14, Hex("#24170C"), FontWeights.SemiBold));
         back.Height = 40;
         back.CornerRadius = new CornerRadius(10);
         back.Click += (_, _) => ReturnRequested?.Invoke();
         offerButtons.Children.Add(back);
-        var snooze = SmallButton("Через 15 минут");
+        var snooze = SmallButton(L.T("Через 15 минут", "In 15 minutes"));
         snooze.Height = 40;
         snooze.Click += (_, _) => { SnoozeRequested?.Invoke(); AppWindow.Hide(); };
         Grid.SetColumn(snooze, 1);
@@ -223,7 +224,7 @@ public sealed class SwitcherWindow : Window
         errorGrid.Children.Add(Bang());
         Grid.SetColumn(_errorText, 1);
         errorGrid.Children.Add(_errorText);
-        var errorClose = SmallButton("Закрыть");
+        var errorClose = SmallButton(L.T("Закрыть", "Close"));
         errorClose.VerticalAlignment = VerticalAlignment.Center;
         errorClose.Click += (_, _) => AppWindow.Hide();
         Grid.SetColumn(errorClose, 2);
@@ -237,10 +238,10 @@ public sealed class SwitcherWindow : Window
 
         _notice = Text("", 12.5, TextSoft, wrap: true);
         bottom.Children.Add(_notice);
-        _test = new HyperlinkButton { Content = Text("Попробовать на тестовых окнах — ваши программы не тронем", 13.5, Warm), Padding = new Thickness(0) };
+        _test = new HyperlinkButton { Content = Text(L.T("Попробовать на тестовых окнах — ваши программы не тронем", "Try it on test windows — your apps stay untouched"), 13.5, Warm), Padding = new Thickness(0) };
         _test.Click += (_, _) => TestRequested?.Invoke();
         bottom.Children.Add(_test);
-        _note = Text("Закрываем вежливо, как крестиком: если где-то не сохранено — программа спросит сама.", 12, TextDim, wrap: true);
+        _note = Text(L.T("Закрываем вежливо, как крестиком: если где-то не сохранено — программа спросит сама.", "We close apps politely, just like the X button: if something isn't saved, the app will ask you itself."), 12, TextDim, wrap: true);
         _note.Margin = new Thickness(0, -8, 0, 0);
         bottom.Children.Add(_note);
         var version = typeof(SwitcherWindow).Assembly
@@ -267,7 +268,7 @@ public sealed class SwitcherWindow : Window
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         header.ColumnDefinitions.Add(new ColumnDefinition());
-        _panelTitle = Text("Программы", 16, Hex("#F4F0E9"), FontWeights.SemiBold);
+        _panelTitle = Text(L.T("Программы", "Apps"), 16, Hex("#F4F0E9"), FontWeights.SemiBold);
         _panelTitle.VerticalAlignment = VerticalAlignment.Center;
         header.Children.Add(_panelTitle);
         _panelCount = Text("", 12.5, TextMuted);
@@ -286,7 +287,7 @@ public sealed class SwitcherWindow : Window
         Grid.SetRow(scroll, 1);
         panel.Children.Add(scroll);
 
-        _choose = new HyperlinkButton { Content = Text("Выбрать рабочие программы, в том числе незапущенные…", 13, Warm), Margin = new Thickness(24, 6, 24, 14), Padding = new Thickness(0) };
+        _choose = new HyperlinkButton { Content = Text(L.T("Выбрать рабочие программы, в том числе незапущенные…", "Choose work apps, including ones that aren't running…"), 13, Warm), Margin = new Thickness(24, 6, 24, 14), Padding = new Thickness(0) };
         _choose.Click += (_, _) => ProgramsRequested?.Invoke();
         Grid.SetRow(_choose, 2);
         panel.Children.Add(_choose);
@@ -303,7 +304,7 @@ public sealed class SwitcherWindow : Window
         Content = _root;
 
         AppWindow.SetIcon(System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "GigaRest.ico"));
-        DarkTitleBar();
+        DarkTitleBar(AppWindow);
         AppWindow.Closing += (sender, e) =>
         {
             if (_closingForGood) return;
@@ -321,20 +322,20 @@ public sealed class SwitcherWindow : Window
         Programs = programs;
         _hasSecondMonitor = hasSecondMonitor;
         IsTest = test;
-        _headline.Text = "Работа → Отдых";
+        _headline.Text = L.T("Работа → Отдых", "Work → Rest");
         ((Border)_badge.Tag).Visibility = test ? Visibility.Visible : Visibility.Collapsed;
         _lead.Text = test
-            ? "Всё как по-настоящему, но только с четырьмя тестовыми окнами. Ваши программы не тронем."
-            : "Рабочие программы закроются и освободят память, на втором мониторе останется только то, что вы разрешили";
+            ? L.T("Всё как по-настоящему, но только с четырьмя тестовыми окнами. Ваши программы не тронем.", "Everything works for real, but only with four test windows. Your apps stay untouched.")
+            : L.T("Рабочие программы закроются и освободят память, на втором мониторе останется только то, что вы разрешили", "Work apps will close and free up memory; the second monitor keeps only what you've allowed");
         SetMainScreen(rest: false);
-        SetGo("Перейти в отдых", enabled: true);
+        SetGo(L.T("Перейти в отдых", "Start resting"), enabled: true);
         _notice.Text = notice ?? "";
         ShowExtras(progress: false, offer: false, error: false);
-        _test.Content = Text(test ? "Выйти из пробного режима" : "Попробовать на тестовых окнах — ваши программы не тронем", 13.5, Warm);
+        _test.Content = Text(test ? L.T("Выйти из пробного режима", "Leave test mode") : L.T("Попробовать на тестовых окнах — ваши программы не тронем", "Try it on test windows — your apps stay untouched"), 13.5, Warm);
         _test.Visibility = Visibility.Visible;
         _note.Visibility = Visibility.Visible;
         _choose.Visibility = test ? Visibility.Collapsed : Visibility.Visible;
-        _panelCount.Text = test ? Sizes.Plural(programs.Count, "тестовое окно", "тестовых окна", "тестовых окон") : $"{programs.Count} запущено";
+        _panelCount.Text = test ? L.Plural(programs.Count, "тестовое окно", "тестовых окна", "тестовых окон", "test window", "test windows") : L.T($"{programs.Count} запущено", $"{programs.Count} running");
         RenderPlanList();
         RefreshForecast();
     }
@@ -342,17 +343,17 @@ public sealed class SwitcherWindow : Window
     public void ShowProgress(IReadOnlyList<RunningProgram> programs)
     {
         _mode = Mode.Progress;
-        _panelTitle.Text = "Программы";
+        _panelTitle.Text = L.T("Программы", "Apps");
         Programs = programs;
-        SetGo("Переходим…", enabled: false);
+        SetGo(L.T("Переходим…", "Switching…"), enabled: false);
         _notice.Text = "";
         ShowExtras(progress: true, offer: false, error: false);
         _cancel.Visibility = Visibility.Visible;
-        _progressText.Text = "Готовим отдых…";
+        _progressText.Text = L.T("Готовим отдых…", "Getting rest ready…");
         _progressBar.Value = 0;
         _test.Visibility = Visibility.Collapsed;
         _choose.Visibility = Visibility.Collapsed;
-        _secondHint.Text = "Плитки откроются, когда всё закроется";
+        _secondHint.Text = L.T("Плитки откроются, когда всё закроется", "Tiles will open once everything is closed");
         RenderSecondScreen(TilePlan.Ordered(programs).ToList(), interactive: false);
 
         _list.Children.Clear();
@@ -360,55 +361,55 @@ public sealed class SwitcherWindow : Window
         foreach (var p in programs)
         {
             var status = new Grid();
-            if (p.Action == ProgramAction.Close) { SetStatus(status, "в очереди", TextDim, dim: true); _progressRows.Add((p, status)); }
-            else if (p.Action == ProgramAction.SecondMonitor) SetStatus(status, "на второй монитор", Blue);
-            else SetStatus(status, "не трогаем", TextMuted);
+            if (p.Action == ProgramAction.Close) { SetStatus(status, L.T("в очереди", "waiting"), TextDim, dim: true); _progressRows.Add((p, status)); }
+            else if (p.Action == ProgramAction.SecondMonitor) SetStatus(status, L.T("на второй монитор", "to second monitor"), Blue);
+            else SetStatus(status, L.T("не трогаем", "left alone"), TextMuted);
             _list.Children.Add(Row(p.DisplayName, p.Id, p.ExePath, Detail(p), status));
         }
-        UpdateProgress(new SwitchProgress("Готовим отдых…", 0, _progressRows.Count));
+        UpdateProgress(new SwitchProgress(L.T("Готовим отдых…", "Getting rest ready…"), 0, _progressRows.Count));
     }
 
     public void UpdateProgress(SwitchProgress p)
     {
-        _progressText.Text = p.Total > 0 && _mode == Mode.Progress ? $"{p.Text} {Math.Min(p.Done + 1, p.Total)} из {p.Total}" : p.Text;
+        _progressText.Text = p.Total > 0 && _mode == Mode.Progress ? L.T($"{p.Text} {Math.Min(p.Done + 1, p.Total)} из {p.Total}", $"{p.Text} {Math.Min(p.Done + 1, p.Total)} of {p.Total}") : p.Text;
         _progressBar.Value = p.Total > 0 ? (double)p.Done / p.Total : 0;
         if (_mode != Mode.Progress) return;
-        _panelSummary.Text = $"закрыто {p.Done} из {_progressRows.Count}";
+        _panelSummary.Text = L.T($"закрыто {p.Done} из {_progressRows.Count}", $"{p.Done} of {_progressRows.Count} closed");
         // По порядку: закрытые, та, что закрываем сейчас, остальные в очереди.
         for (var i = 0; i < _progressRows.Count; i++)
         {
             var status = _progressRows[i].Status;
-            if (i < p.Done) SetStatus(status, "закрыта", Good);
-            else if (i == p.Done) SetStatus(status, "закрываем…", Warm, spinner: true);
-            else SetStatus(status, "в очереди", TextDim, dim: true);
+            if (i < p.Done) SetStatus(status, L.T("закрыта", "closed"), Good);
+            else if (i == p.Done) SetStatus(status, L.T("закрываем…", "closing…"), Warm, spinner: true);
+            else SetStatus(status, L.T("в очереди", "waiting"), TextDim, dim: true);
         }
     }
 
     public void ShowRest(RestReport report)
     {
         _mode = Mode.Rest;
-        _panelTitle.Text = "Программы";
-        _headline.Text = "Отдых. Рабочее закрыто.";
+        _panelTitle.Text = L.T("Программы", "Apps");
+        _headline.Text = L.T("Отдых. Рабочее закрыто.", "Rest. Work is closed.");
         ((Border)_badge.Tag).Visibility = Visibility.Collapsed;
-        _lead.Text = "На основном мониторе — тихий экран, на втором — ваши плитки." + (DoNotDisturb ? " Уведомления молчат." : "");
+        _lead.Text = L.T("На основном мониторе — тихий экран, на втором — ваши плитки.", "A quiet screen on the main monitor, your tiles on the second one.") + (DoNotDisturb ? L.T(" Уведомления молчат.", " Notifications are muted.") : "");
         SetMainScreen(rest: true);
-        _ramTitle.Text = "Освободилось";
+        _ramTitle.Text = L.T("Освободилось", "Memory freed");
         _ramValue.Text = report.FreedBytes > 0 ? "+" + Sizes.Format(report.FreedBytes) : "—";
         _ramValue.Foreground = Brush(Good);
-        SetGo("Вернуться к работе — запустить закрытое", enabled: true);
+        SetGo(L.T("Вернуться к работе — запустить закрытое", "Back to work — reopen closed apps"), enabled: true);
         _notice.Text = "";
         ShowExtras(progress: false, offer: false, error: false);
         _test.Visibility = Visibility.Collapsed;
         _note.Visibility = Visibility.Collapsed;
         _choose.Visibility = Visibility.Collapsed;
         var tiles = TilePlan.Ordered(Programs).ToList();
-        _secondHint.Text = tiles.Count > 0 ? "Сейчас на втором мониторе только эти окна" : "";
+        _secondHint.Text = tiles.Count > 0 ? L.T("Сейчас на втором мониторе только эти окна", "Only these windows are on the second monitor now") : "";
         RenderSecondScreen(tiles, interactive: false);
-        _tilesValue.Text = tiles.Count > 0 ? $"{tiles.Count} из {TilePlan.Max}" : "—";
+        _tilesValue.Text = tiles.Count > 0 ? L.T($"{Math.Min(tiles.Count, Math.Max(1, MaxTiles))} из {Math.Max(1, MaxTiles)}", $"{Math.Min(tiles.Count, Math.Max(1, MaxTiles))} of {Math.Max(1, MaxTiles)}") : "—";
 
         _list.Children.Clear();
         var closed = report.Results.Count(r => r.IsGone);
-        _panelSummary.Text = $"закрыто {closed} · осталось {Math.Max(0, Programs.Count - closed)}";
+        _panelSummary.Text = L.T($"закрыто {closed} · осталось {Math.Max(0, Programs.Count - closed)}", $"{closed} closed · {Math.Max(0, Programs.Count - closed)} left");
         foreach (var r in report.Results)
         {
             var p = Programs.FirstOrDefault(x => x.Id == r.ProgramId);
@@ -417,43 +418,43 @@ public sealed class SwitcherWindow : Window
             switch (r.Outcome)
             {
                 case CloseOutcome.InBackground:
-                    SetStatus(status, "спряталась в трей", Amber);
+                    SetStatus(status, L.T("спряталась в трей", "hid in the tray"), Amber);
                     _list.Children.Add(TrayRow(r, p, detail, status));
                     continue;
                 case CloseOutcome.StillOpen:
-                    SetStatus(status, "не закрылась", Bad);
+                    SetStatus(status, L.T("не закрылась", "didn't close"), Bad);
                     _list.Children.Add(ForceRow(r, p, detail, status));
                     continue;
-                case CloseOutcome.Closed: SetStatus(status, "закрыта", Good); break;
-                case CloseOutcome.Terminated: SetStatus(status, "завершена", Good); break;
-                case CloseOutcome.Elevated: SetStatus(status, "осталась · от администратора", TextMuted); break;
-                default: SetStatus(status, "осталась", TextMuted); break;
+                case CloseOutcome.Closed: SetStatus(status, L.T("закрыта", "closed"), Good); break;
+                case CloseOutcome.Terminated: SetStatus(status, L.T("завершена", "ended"), Good); break;
+                case CloseOutcome.Elevated: SetStatus(status, L.T("осталась · от администратора", "still open · runs as admin"), TextMuted); break;
+                default: SetStatus(status, L.T("осталась", "still open"), TextMuted); break;
             }
             _list.Children.Add(Row(r.DisplayName, r.ProgramId, p?.ExePath, detail, status));
         }
         foreach (var p in Programs.Where(p => report.Results.All(r => r.ProgramId != p.Id)))
         {
             var status = new Grid();
-            if (p.Action == ProgramAction.SecondMonitor) SetStatus(status, "на втором мониторе", Blue);
-            else SetStatus(status, "осталась", TextMuted);
+            if (p.Action == ProgramAction.SecondMonitor) SetStatus(status, L.T("на втором мониторе", "on second monitor"), Blue);
+            else SetStatus(status, L.T("осталась", "still open"), TextMuted);
             _list.Children.Add(Row(p.DisplayName, p.Id, p.ExePath, Detail(p), status));
         }
         if (_list.Children.Count == 0)
-            _list.Children.Add(Empty("Закрывать ничего не пришлось."));
+            _list.Children.Add(Empty(L.T("Закрывать ничего не пришлось.", "Nothing needed closing.")));
     }
 
     /// <summary>Отдых продолжается (например, после перезагрузки).</summary>
     public void ShowRestWaiting(IReadOnlyList<(string Id, string Name)>? closed = null)
     {
         _mode = Mode.Rest;
-        _headline.Text = "Отдых";
+        _headline.Text = L.T("Отдых", "Rest");
         ((Border)_badge.Tag).Visibility = Visibility.Collapsed;
-        _lead.Text = "Рабочие программы закрыты. Кнопка ниже запустит их обратно — так же, как было.";
+        _lead.Text = L.T("Рабочие программы закрыты. Кнопка ниже запустит их обратно — так же, как было.", "Work apps are closed. The button below will bring them back, just as they were.");
         SetMainScreen(rest: true);
-        _ramTitle.Text = "Освободилось";
+        _ramTitle.Text = L.T("Освободилось", "Memory freed");
         _ramValue.Text = "—";
         _tilesValue.Text = "—";
-        SetGo("Вернуться к работе — запустить закрытое", enabled: true);
+        SetGo(L.T("Вернуться к работе — запустить закрытое", "Back to work — reopen closed apps"), enabled: true);
         _notice.Text = "";
         ShowExtras(progress: false, offer: false, error: false);
         _test.Visibility = Visibility.Collapsed;
@@ -461,26 +462,26 @@ public sealed class SwitcherWindow : Window
         _choose.Visibility = Visibility.Collapsed;
         RenderSecondScreen([], interactive: false);
         _secondHint.Text = "";
-        _panelTitle.Text = "Откроется снова";
+        _panelTitle.Text = L.T("Откроется снова", "Will reopen");
         _panelCount.Text = "";
         _panelSummary.Text = "";
         _list.Children.Clear();
         foreach (var (id, name) in closed ?? [])
         {
             var status = new Grid();
-            SetStatus(status, "закрыта", TextMuted);
+            SetStatus(status, L.T("закрыта", "closed"), TextMuted);
             _list.Children.Add(Row(name, id, null, null, status));
         }
         if (closed is null || closed.Count == 0)
-            _list.Children.Add(Empty("Закрытых программ нет — открывать ничего не придётся."));
+            _list.Children.Add(Empty(L.T("Закрытых программ нет — открывать ничего не придётся.", "No apps were closed, so there's nothing to reopen.")));
     }
 
     /// <summary>Расписание: «Пора за работу» — вернуться или отложить на 15 минут.</summary>
     public void ShowReturnOffer(string when, IReadOnlyList<(string Id, string Name)>? closed = null)
     {
         ShowRestWaiting(closed);
-        _headline.Text = "Отдых. Рабочее закрыто.";
-        _offerText.Text = $"По расписанию ({when}). Вернуть рабочие программы сейчас?";
+        _headline.Text = L.T("Отдых. Рабочее закрыто.", "Rest. Work is closed.");
+        _offerText.Text = L.T($"По расписанию ({when}). Вернуть рабочие программы сейчас?", $"Scheduled ({when}). Bring your work apps back now?");
         ShowExtras(progress: false, offer: true, error: false);
         _go.Visibility = Visibility.Collapsed;
     }
@@ -488,13 +489,13 @@ public sealed class SwitcherWindow : Window
     public void ShowReturning()
     {
         _mode = Mode.Returning;
-        _headline.Text = "Отдых → Работа";
-        _lead.Text = "Открываем закрытые программы и ставим окна на свои места.";
-        SetGo("Возвращаемся…", enabled: false);
+        _headline.Text = L.T("Отдых → Работа", "Rest → Work");
+        _lead.Text = L.T("Открываем закрытые программы и ставим окна на свои места.", "Reopening closed apps and putting windows back in place.");
+        SetGo(L.T("Возвращаемся…", "Returning…"), enabled: false);
         _notice.Text = "";
         ShowExtras(progress: true, offer: false, error: false);
         _cancel.Visibility = Visibility.Collapsed;
-        _progressText.Text = "Открываем…";
+        _progressText.Text = L.T("Открываем…", "Opening…");
         _progressBar.Value = 0;
         _panelSummary.Text = "";
     }
@@ -502,16 +503,16 @@ public sealed class SwitcherWindow : Window
     public void ShowWork(ReturnReport report)
     {
         _mode = Mode.Work;
-        _headline.Text = "Снова работа";
+        _headline.Text = L.T("Снова работа", "Back at work");
         _lead.Text = report.Summary;
         SetMainScreen(rest: false);
         var total = report.Launched.Count + report.Failed.Count;
-        _ramTitle.Text = "Открыто";
-        _ramValue.Text = total > 0 ? $"{report.Launched.Count} из {total}" : "—";
+        _ramTitle.Text = L.T("Открыто", "Opened");
+        _ramValue.Text = total > 0 ? L.T($"{report.Launched.Count} из {total}", $"{report.Launched.Count} of {total}") : "—";
         _ramValue.Foreground = Brush(report.Failed.Count == 0 ? Good : Amber);
-        _dndValue.Text = "Включены";
-        _tilesValue.Text = "Убраны";
-        SetGo("Готово", enabled: true);
+        _dndValue.Text = L.T("Включены", "On");
+        _tilesValue.Text = L.T("Убраны", "Removed");
+        SetGo(L.T("Готово", "Done"), enabled: true);
         _notice.Text = "";
         ShowExtras(progress: false, offer: false, error: false);
         _test.Visibility = Visibility.Collapsed;
@@ -520,25 +521,25 @@ public sealed class SwitcherWindow : Window
         _secondScreen.Children.Clear();
         _secondScreen.Children.Add(BigWindow());
         _secondCaption.Inlines.Clear();
-        AddCaption(_secondCaption, "Второй", "Рабочий стол");
-        _secondHint.Text = "Плитки убраны, окна на своих местах";
-        _panelTitle.Text = "Программы";
+        AddCaption(_secondCaption, L.T("Второй", "Second"), L.T("Рабочий стол", "Desktop"));
+        _secondHint.Text = L.T("Плитки убраны, окна на своих местах", "Tiles removed, windows back in place");
+        _panelTitle.Text = L.T("Программы", "Apps");
         _panelCount.Text = "";
-        _panelSummary.Text = total > 0 ? $"открыто {report.Launched.Count} из {total}" : "";
+        _panelSummary.Text = total > 0 ? L.T($"открыто {report.Launched.Count} из {total}", $"{report.Launched.Count} of {total} opened") : "";
         _list.Children.Clear();
         foreach (var name in report.Launched)
         {
             var status = new Grid();
-            SetStatus(status, "открыта", Good);
+            SetStatus(status, L.T("открыта", "opened"), Good);
             _list.Children.Add(Row(name, name, null, null, status));
         }
         foreach (var name in report.Failed)
         {
             var status = new Grid();
-            SetStatus(status, "не открылась — откройте вручную", Bad);
+            SetStatus(status, L.T("не открылась — откройте вручную", "didn't open — open it yourself"), Bad);
             _list.Children.Add(Row(name, name, null, null, status));
         }
-        if (total == 0) _list.Children.Add(Empty("Запускать ничего не пришлось."));
+        if (total == 0) _list.Children.Add(Empty(L.T("Запускать ничего не пришлось.", "Nothing needed opening.")));
     }
 
     /// <summary>Сообщение под кнопкой, не меняя состояния окна.</summary>
@@ -549,18 +550,18 @@ public sealed class SwitcherWindow : Window
         _mode = Mode.Error;
         _errorText.Text = text;
         ShowExtras(progress: false, offer: false, error: true);
-        SetGo(_go.IsEnabled ? _goText.Text : "Перейти в отдых", enabled: true);
+        SetGo(_go.IsEnabled ? _goText.Text : L.T("Перейти в отдых", "Start resting"), enabled: true);
     }
 
     // ---------- список программ (состояние «План») ----------
 
     private void RenderPlanList()
     {
-        _panelTitle.Text = "Программы";
+        _panelTitle.Text = L.T("Программы", "Apps");
         _list.Children.Clear();
         if (Programs.Count == 0)
         {
-            _list.Children.Add(Empty("Открытых программ нет."));
+            _list.Children.Add(Empty(L.T("Открытых программ нет.", "No apps are open.")));
             return;
         }
         foreach (var p in Programs) _list.Children.Add(PlanRow(p));
@@ -576,7 +577,7 @@ public sealed class SwitcherWindow : Window
         {
             right = new Border
             {
-                Child = Text("Запущена от администратора — закроете только вы", 12, Hex("#CBBB9E"), wrap: true),
+                Child = Text(L.T("Запущена от администратора — закроете только вы", "Runs as administrator — only you can close it"), 12, Hex("#CBBB9E"), wrap: true),
                 Width = 290, Padding = new Thickness(11, 7, 11, 7), CornerRadius = new CornerRadius(9),
                 Background = Vertical(Color.FromArgb(26, 203, 187, 158), Color.FromArgb(10, 203, 187, 158)),
                 BorderBrush = Brush(Color.FromArgb(46, 203, 187, 158)), BorderThickness = new Thickness(1),
@@ -584,14 +585,14 @@ public sealed class SwitcherWindow : Window
         }
         else
         {
-            var tilesFull = p.Action != ProgramAction.SecondMonitor && TilePlan.Ordered(Programs).Count() >= TilePlan.Max;
+            var tilesFull = p.Action != ProgramAction.SecondMonitor && TilePlan.Ordered(Programs).Count() >= MaxTiles;
             var options = p.IsBackground
-                ? new[] { (ProgramAction.Close, "Завершить в отдыхе", true), (ProgramAction.Keep, "Не трогать", true) }
+                ? new[] { (ProgramAction.Close, L.T("Завершить в отдыхе", "End during rest"), true), (ProgramAction.Keep, L.T("Не трогать", "Leave alone"), true) }
                 : new[]
                 {
-                    (ProgramAction.Close, "Закрыть", true),
-                    (ProgramAction.SecondMonitor, "На второй монитор", _hasSecondMonitor && !tilesFull),
-                    (ProgramAction.Keep, "Не трогать", true),
+                    (ProgramAction.Close, L.T("Закрыть", "Close"), true),
+                    (ProgramAction.SecondMonitor, L.T("На второй монитор", "Second monitor"), TilesAvailable && !tilesFull),
+                    (ProgramAction.Keep, L.T("Не трогать", "Leave alone"), true),
                 };
             right = Segmented(p, options);
         }
@@ -610,19 +611,19 @@ public sealed class SwitcherWindow : Window
             line.Children.Add(Text("·", 12, Hex("#5A5F6A")));
             var toggle = new HyperlinkButton
             {
-                Content = Text(p.NoRelaunch ? "не откроется после отдыха" : "откроется после отдыха", 12, p.NoRelaunch ? Warm : Hex("#8F95A1")),
+                Content = Text(p.NoRelaunch ? L.T("не откроется после отдыха", "won't reopen after rest") : L.T("откроется после отдыха", "reopens after rest"), 12, p.NoRelaunch ? Warm : Hex("#8F95A1")),
                 Padding = new Thickness(0), MinHeight = 0,
             };
             ToolTipService.SetToolTip(toggle, p.NoRelaunch
-                ? "Закроем насовсем: при возврате к работе не откроем. Щёлкните, чтобы открывать снова"
-                : "Щёлкните, чтобы закрыть насовсем: при возврате к работе не открывать");
+                ? L.T("Закроем насовсем: при возврате к работе не откроем. Щёлкните, чтобы открывать снова", "Closed for good: it won't reopen when you're back at work. Click to reopen it again")
+                : L.T("Щёлкните, чтобы закрыть насовсем: при возврате к работе не открывать", "Click to close for good: don't reopen when you're back at work"));
             toggle.Click += (_, _) => { p.NoRelaunch = !p.NoRelaunch; ActionChanged?.Invoke(p); RenderPlanList(); };
             line.Children.Add(toggle);
             names.Children.Add(line);
             if (p.Known?.HidesToTray == true || p.Windows.Count == 0)
-                box.Children.Add(Check("если вместо закрытия уйдёт в значок у часов — завершить", p.AllowTerminate,
+                box.Children.Add(Check(L.T("если вместо закрытия уйдёт в значок у часов — завершить", "if it hides next to the clock instead of closing, end it"), p.AllowTerminate,
                     v => { p.AllowTerminate = v; ActionChanged?.Invoke(p); },
-                    p.Known?.TerminateHint ?? "Завершим, только если у программы не осталось окон и она ни о чём не спрашивает"));
+                    p.Known?.TerminateHint ?? L.T("Завершим, только если у программы не осталось окон и она ни о чём не спрашивает", "We'll end it only if the app has no windows left and isn't asking anything")));
         }
         return box;
     }
@@ -649,7 +650,9 @@ public sealed class SwitcherWindow : Window
             b.Resources["ButtonBorderBrushPressed"] = selected ? Brush(SelectedEdge(action)) : Brush(Colors.Transparent);
             b.Resources["ButtonBorderBrushDisabled"] = Brush(Colors.Transparent);
             if (!enabled && action == ProgramAction.SecondMonitor)
-                ToolTipService.SetToolTip(b, _hasSecondMonitor ? "На втором мониторе уже четыре плитки — уберите одну" : "Второй монитор не подключён");
+                ToolTipService.SetToolTip(b, !_hasSecondMonitor ? L.T("Второй монитор не подключён", "Second monitor isn't connected")
+                    : MaxTiles == 0 ? L.T("Плитки выключены в настройках", "Tiles are turned off in Settings")
+                    : L.T($"На втором мониторе уже {Sizes.Plural(MaxTiles, "плитка", "плитки", "плиток")} — уберите одну или разрешите больше в настройках", $"The second monitor already has {L.Plural(MaxTiles, "плитка", "плитки", "плиток", "tile", "tiles")}. Remove one or allow more in Settings"));
             b.Click += (_, _) =>
             {
                 if (selected) return;
@@ -740,15 +743,15 @@ public sealed class SwitcherWindow : Window
     {
         var box = new StackPanel();
         box.Children.Add(Row(r.DisplayName, r.ProgramId, p?.ExePath, detail, status));
-        var button = SmallButton("Завершить");
+        var button = SmallButton(L.T("Завершить", "End"));
         button.Margin = new Thickness(54, -6, 0, 8);
         button.HorizontalAlignment = HorizontalAlignment.Left;
-        ToolTipService.SetToolTip(button, "Завершим сейчас и запомним, что её можно завершать");
+        ToolTipService.SetToolTip(button, L.T("Завершим сейчас и запомним, что её можно завершать", "We'll end it now and remember that it's OK to end it"));
         button.Click += (_, _) =>
         {
             TerminateRequested?.Invoke(r.ProgramId, false);
             button.Visibility = Visibility.Collapsed;
-            SetStatus(status, "завершена", Good);
+            SetStatus(status, L.T("завершена", "ended"), Good);
         };
         box.Children.Add(button);
         return box;
@@ -761,7 +764,7 @@ public sealed class SwitcherWindow : Window
         box.Children.Add(Row(r.DisplayName, r.ProgramId, p?.ExePath, detail, status));
         var content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
         content.Children.Add(Bang(16));
-        content.Children.Add(Text("Завершить принудительно — несохранённое пропадёт", 12.5, Hex("#F2B3A0"), FontWeights.SemiBold));
+        content.Children.Add(Text(L.T("Завершить принудительно — несохранённое пропадёт", "Force end — unsaved work will be lost"), 12.5, Hex("#F2B3A0"), FontWeights.SemiBold));
         var button = new Button
         {
             Content = content, Margin = new Thickness(54, -6, 0, 8), Padding = new Thickness(10, 5, 12, 5), CornerRadius = new CornerRadius(8),
@@ -773,7 +776,7 @@ public sealed class SwitcherWindow : Window
         {
             TerminateRequested?.Invoke(r.ProgramId, true);
             button.Visibility = Visibility.Collapsed;
-            SetStatus(status, "завершена · запомнили на будущее", Good);
+            SetStatus(status, L.T("завершена · запомнили на будущее", "ended · remembered for next time"), Good);
         };
         box.Children.Add(button);
         return box;
@@ -785,28 +788,29 @@ public sealed class SwitcherWindow : Window
     {
         if (_mode != Mode.Plan) return;
         var close = Programs.Where(p => p.Action == ProgramAction.Close && !p.IsElevated).ToList();
-        _ramTitle.Text = "Освободится памяти";
+        _ramTitle.Text = L.T("Освободится памяти", "Memory to free");
         _ramValue.Text = close.Count > 0 ? "≈" + Sizes.Format(close.Sum(p => p.PrivateBytes)) : "—";
         _ramValue.Foreground = Brush(Hex("#F3C58C"));
-        ToolTipService.SetToolTip(_ramValue, "Примерно освободится. Точную цифру покажем после перехода.");
-        _dndTitle.Text = "Уведомления";
-        _dndValue.Text = DoNotDisturb ? "Не беспокоить" : "Как сейчас";
-        _tilesTitle.Text = "Плитки";
+        ToolTipService.SetToolTip(_ramValue, L.T("Примерно освободится. Точную цифру покажем после перехода.", "An estimate. We'll show the exact amount after switching."));
+        _dndTitle.Text = L.T("Уведомления", "Notifications");
+        _dndValue.Text = DoNotDisturb ? L.T("Не беспокоить", "Do not disturb") : L.T("Как сейчас", "As now");
+        _tilesTitle.Text = L.T("Плитки", "Tiles");
 
         var tiles = TilePlan.Ordered(Programs).ToList();
-        _tilesValue.Text = !_hasSecondMonitor ? "нет монитора" : $"{tiles.Count} из {TilePlan.Max}";
+        _tilesValue.Text = !_hasSecondMonitor ? L.T("нет монитора", "no monitor") : MaxTiles == 0 ? L.T("выключены", "off") : L.T($"{Math.Min(tiles.Count, MaxTiles)} из {MaxTiles}", $"{Math.Min(tiles.Count, MaxTiles)} of {MaxTiles}");
         var second = Programs.Count(p => p.Action == ProgramAction.SecondMonitor);
         var keep = Programs.Count(p => p.Action == ProgramAction.Keep || p.IsElevated);
-        _panelSummary.Text = $"закроются {close.Count} · на второй монитор {second} · не трогаем {keep}";
+        _panelSummary.Text = L.T($"закроются {close.Count} · на второй монитор {second} · не трогаем {keep}", $"{close.Count} to close · {second} to second monitor · {keep} left alone");
 
         _secondCaption.Inlines.Clear();
-        AddCaption(_secondCaption, "Второй", "Живые плитки");
-        if (!_hasSecondMonitor)
+        AddCaption(_secondCaption, L.T("Второй", "Second"), L.T("Живые плитки", "Live tiles"));
+        if (!TilesAvailable)
         {
             _secondScreen.Children.Clear();
             var box = new StackPanel { Spacing = 6, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(14) };
-            box.Children.Add(Text("Второй монитор не подключён", 13, TextMain, FontWeights.SemiBold));
-            box.Children.Add(Text("Отдых работает и без него. Плитки появятся, когда подключите.", 11.5, TextMuted, wrap: true));
+            box.Children.Add(Text(_hasSecondMonitor ? L.T("Плитки выключены", "Tiles are off") : L.T("Второй монитор не подключён", "Second monitor isn't connected"), 13, TextMain, FontWeights.SemiBold));
+            box.Children.Add(Text(_hasSecondMonitor ? L.T("Включить можно в настройках. Окна на втором мониторе останутся как есть.", "You can turn them on in Settings. Windows on the second monitor stay as they are.")
+                : L.T("Отдых работает и без него. Плитки появятся, когда подключите.", "Rest works without it too. Tiles will appear once you connect one."), 11.5, TextMuted, wrap: true));
             Grid.SetRowSpan(box, 2);
             Grid.SetColumnSpan(box, 2);
             _secondScreen.Children.Add(box);
@@ -814,7 +818,7 @@ public sealed class SwitcherWindow : Window
             return;
         }
         RenderSecondScreen(tiles, interactive: true);
-        _secondHint.Text = tiles.Count == 0 ? "Пусто. «+» — поставить программу" : "Перетащите плитку или щёлкните две, чтобы поменять местами";
+        _secondHint.Text = tiles.Count == 0 ? L.T("Пусто. «+» — поставить программу", "Empty. Use “+” to add an app") : L.T("Перетащите плитку или щёлкните две, чтобы поменять местами", "Drag a tile, or click two to swap them");
     }
 
     private int _picked = -1; // плитка, выбранная первым щелчком (для обмена местами)
@@ -825,7 +829,10 @@ public sealed class SwitcherWindow : Window
         _secondScreen.Children.Clear();
         for (var slot = 0; slot < TilePlan.Max; slot++)
         {
-            FrameworkElement cell = slot < tiles.Count ? TileCell(tiles[slot], slot, interactive) : EmptyCell(interactive);
+            // Места сверх разрешённого настройками — пустые и неактивные.
+            FrameworkElement cell = slot >= MaxTiles ? EmptyCell(false)
+                : slot < tiles.Count ? TileCell(tiles[slot], slot, interactive) : EmptyCell(interactive);
+            if (slot >= MaxTiles) cell.Opacity = 0.35;
             Grid.SetRow(cell, slot / 2);
             Grid.SetColumn(cell, slot % 2);
             _secondScreen.Children.Add(cell);
@@ -854,7 +861,7 @@ public sealed class SwitcherWindow : Window
                 Background = Brush(Colors.Transparent), BorderThickness = new Thickness(0),
                 HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, -4, -2, 0),
             };
-            ToolTipService.SetToolTip(remove, "Убрать со второго монитора");
+            ToolTipService.SetToolTip(remove, L.T("Убрать со второго монитора", "Remove from second monitor"));
             remove.Click += (_, _) => { _picked = -1; SetAction(p, ProgramAction.Keep); RenderPlanList(); };
             content.Children.Add(remove);
         }
@@ -918,9 +925,9 @@ public sealed class SwitcherWindow : Window
         plus.Resources["ButtonBackgroundPointerOver"] = Brush(Color.FromArgb(16, 238, 179, 108));
         plus.Resources["ButtonBackgroundPressed"] = Brush(Color.FromArgb(28, 238, 179, 108));
         plus.Resources["ButtonBackgroundDisabled"] = Brush(Colors.Transparent);
-        ToolTipService.SetToolTip(plus, "Добавить на второй монитор");
+        ToolTipService.SetToolTip(plus, L.T("Добавить на второй монитор", "Add to second monitor"));
         var menu = new MenuFlyout();
-        menu.Items.Add(new MenuFlyoutItem { Text = "Добавить на второй монитор", IsEnabled = false });
+        menu.Items.Add(new MenuFlyoutItem { Text = L.T("Добавить на второй монитор", "Add to second monitor"), IsEnabled = false });
         foreach (var p in candidates)
         {
             var item = new MenuFlyoutItem { Text = p.DisplayName };
@@ -990,7 +997,7 @@ public sealed class SwitcherWindow : Window
             var clock = Text(DateTime.Now.ToString("HH:mm"), 15, Hex("#F4EDE6"), FontWeights.Normal);
             clock.Margin = new Thickness(8, 6, 0, 0);
             _mainScreen.Children.Add(clock);
-            AddCaption(_mainCaption, "Основной", "Тихий экран");
+            AddCaption(_mainCaption, L.T("Основной", "Main"), L.T("Тихий экран", "Quiet screen"));
         }
         else
         {
@@ -1000,8 +1007,8 @@ public sealed class SwitcherWindow : Window
             var dock = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, 5) };
             for (var i = 0; i < 4; i++) dock.Children.Add(new Border { Width = 5, Height = 5, CornerRadius = new CornerRadius(1), Background = Brush(Color.FromArgb(120, 255, 255, 255)) });
             _mainScreen.Children.Add(dock);
-            AddCaption(_mainCaption, "Основной", "Рабочий стол");
-            _dndValue.Text = DoNotDisturb ? "Не беспокоить" : "Как сейчас";
+            AddCaption(_mainCaption, L.T("Основной", "Main"), L.T("Рабочий стол", "Desktop"));
+            _dndValue.Text = DoNotDisturb ? L.T("Не беспокоить", "Do not disturb") : L.T("Как сейчас", "As now");
         }
     }
 
@@ -1165,41 +1172,7 @@ public sealed class SwitcherWindow : Window
         return w.Length >= 2 ? $"{char.ToUpper(w[0])}{(char.IsLetter(w[1]) ? char.ToLower(w[1]) : w[1])}" : w.ToUpper();
     }
 
-    private static LinearGradientBrush Vertical(Color top, Color bottom)
-    {
-        var g = new LinearGradientBrush { StartPoint = new(0, 0), EndPoint = new(0, 1) };
-        g.GradientStops.Add(new GradientStop { Color = top, Offset = 0 });
-        g.GradientStops.Add(new GradientStop { Color = bottom, Offset = 1 });
-        return g;
-    }
-
     private static Brush WindowBackground() => Vertical(Hex("#1B1E28"), Hex("#101217"));
-
-    /// <summary>Мягкое пятно света в углу (cx, cy — центр в долях окна).</summary>
-    private static RadialGradientBrush Glow(double cx, double cy, double rx, double ry, Color color)
-    {
-        var g = new RadialGradientBrush { Center = new(cx, cy), GradientOrigin = new(cx, cy), RadiusX = rx, RadiusY = ry };
-        g.GradientStops.Add(new GradientStop { Color = color, Offset = 0 });
-        g.GradientStops.Add(new GradientStop { Color = Color.FromArgb(0, color.R, color.G, color.B), Offset = 1 });
-        return g;
-    }
-
-    /// <summary>Заголовок окна — в тон тёмному окну.</summary>
-    private void DarkTitleBar()
-    {
-        try
-        {
-            var bar = AppWindow.TitleBar;
-            bar.BackgroundColor = bar.InactiveBackgroundColor = Hex("#1B1E28");
-            bar.ButtonBackgroundColor = bar.ButtonInactiveBackgroundColor = Hex("#1B1E28");
-            bar.ForegroundColor = bar.ButtonForegroundColor = Hex("#C9C5BE");
-            bar.InactiveForegroundColor = bar.ButtonInactiveForegroundColor = Hex("#6E727C");
-            bar.ButtonHoverBackgroundColor = Hex("#2A2D38");
-            bar.ButtonHoverForegroundColor = Hex("#F6F2EA");
-            bar.ButtonPressedBackgroundColor = Hex("#343846");
-        }
-        catch (Exception ex) when (ex is COMException or InvalidOperationException) { }
-    }
 
     /// <summary>Размер по макету (1440×900 при 100%), с учётом масштаба монитора, по центру.</summary>
     public void SizeToDesign(bool fitScreen = true)

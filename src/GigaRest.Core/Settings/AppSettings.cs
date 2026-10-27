@@ -38,6 +38,8 @@ public sealed class AppSettings
     public int Version { get; set; } = 1;
     /// <summary>Первая настройка пройдена. Пока нет — при запуске открывается «Первая настройка».</summary>
     public bool SetupDone { get; set; }
+    /// <summary>Язык интерфейса: auto (как у Windows), ru, en. Меняется после перезапуска.</summary>
+    public string Language { get; set; } = Text.L.Auto;
     /// <summary>Горячая клавиша «Работа ↔ Отдых».</summary>
     public string Hotkey { get; set; } = "Ctrl+Alt+Home";
     /// <summary>Клавиша «обратно в плитки» во время отдыха. Ctrl+Alt+Пробел занят быстрым вызовом Claude.</summary>
@@ -49,6 +51,17 @@ public sealed class AppSettings
     public string? MyScenesFolder { get; set; }
     /// <summary>Когда игру запускали из «Играть» (код игры → время, UTC): Epic и GOG сами этого не хранят.</summary>
     public Dictionary<string, DateTime> GamesPlayed { get; set; } = [];
+    /// <summary>Игры без магазина, добавленные вручную.</summary>
+    public List<Games.CustomGame> CustomGames { get; set; } = [];
+    /// <summary>Звуки природы: последний выбранный (для «Продолжить») и громкость 0–1.</summary>
+    public Sounds.NatureSound? LastNatureSound { get; set; }
+    public double NatureVolume { get; set; } = 0.5;
+    /// <summary>Последний ролик YouTube, открытый в GigaRest, — для «Продолжить».</summary>
+    /// <summary>Сайты в «Смотреть» и «Слушать». null — ещё не настраивали: YouTube и Яндекс Музыка.</summary>
+    public List<Media.WebService>? WebServices { get; set; }
+    public string? LastYouTubeUrl { get; set; }
+    public string? LastYouTubeTitle { get; set; }
+    public DateTime? LastYouTubeUtc { get; set; }
     /// <summary>Папка с фильмами для «Смотреть»; пусто — «Видео» пользователя.</summary>
     public string? FilmsFolder { get; set; }
     /// <summary>Какие фильмы открывали из «Смотреть» (путь → время, UTC) — для «Продолжить».</summary>
@@ -63,6 +76,13 @@ public sealed class AppSettings
     public string UpdateChannel { get; set; } = Updates.UpdateChannels.Auto;
     /// <summary>Один раз перевели Яндекс Музыку со второго монитора в «Оставить» (ей управляет «Слушать», просьба Романа).</summary>
     public bool MusicOnMainScreen { get; set; }
+    /// <summary>Защита OLED: через сколько минут простоя «Тихий» экран темнеет.</summary>
+    public int DimMinutes { get; set; } = 15;
+    /// <summary>Через сколько минут простоя выключать экран (с отсчётом 60 с); 0 — не выключать.</summary>
+    public int ScreenOffMinutes { get; set; } = 60;
+    /// <summary>Плитки на втором мониторе: включены ли и сколько (1–4).</summary>
+    public bool TilesEnabled { get; set; } = true;
+    public int TilesCount { get; set; } = 4;
     /// <summary>На время отдыха включать «Не беспокоить» (только приоритетные уведомления).</summary>
     public bool DoNotDisturb { get; set; } = true;
     /// <summary>Показывать окно «Переход в отдых». false — переходить сразу, без вопросов.</summary>

@@ -15,7 +15,7 @@ public static partial class TileCaptions
         if (IsMessenger(programId))
         {
             var unread = Unread(windowTitle);
-            return unread is > 0 ? Sizes.Plural(unread.Value, "непрочитанное", "непрочитанных", "непрочитанных") : "нет новых сообщений";
+            return unread is > 0 ? L.Plural(unread.Value, "непрочитанное", "непрочитанных", "непрочитанных", "unread", "unread") : L.T("нет новых сообщений", "no new messages");
         }
         var title = CleanTitle(windowTitle, displayName);
         return title;
@@ -63,7 +63,7 @@ public static partial class TileCaptions
     {
         if (string.IsNullOrWhiteSpace(aumid)) return "";
         var s = Squash(aumid);
-        if ((s.Contains("yandex") && s.Contains("music")) || s.Contains("яндексмузык")) return "Яндекс Музыка";
+        if ((s.Contains("yandex") && s.Contains("music")) || s.Contains("яндексмузык")) return L.T("Яндекс Музыка", "Yandex Music");
         if (s.Contains("gigarest") || s.Contains("msedgewebview2")) return "GigaRest"; // встроенная Яндекс Музыка или плеер
         if (s.Contains("chrome")) return "Chrome";
         if (s.Contains("zen")) return "Zen";

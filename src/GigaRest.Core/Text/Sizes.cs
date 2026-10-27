@@ -4,16 +4,14 @@ namespace GigaRest.Core.Text;
 
 public static class Sizes
 {
-    private static readonly CultureInfo Ru = CultureInfo.GetCultureInfo("ru-RU");
-
     /// <summary>1288490188 → «1,2 ГБ», 671088640 → «640 МБ».</summary>
     public static string Format(long bytes)
     {
         if (bytes < 0) bytes = 0;
         const double mb = 1024 * 1024, gb = mb * 1024;
         if (bytes >= gb)
-            return (bytes / gb).ToString("0.0", Ru) + " ГБ";
-        return Math.Round(bytes / mb).ToString("0", Ru) + " МБ";
+            return (bytes / gb).ToString("0.0", L.Culture) + L.T(" ГБ", " GB");
+        return Math.Round(bytes / mb).ToString("0", L.Culture) + L.T(" МБ", " MB");
     }
 
     /// <summary>«1 программа», «3 программы», «5 программ».</summary>

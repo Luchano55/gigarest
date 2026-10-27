@@ -28,6 +28,26 @@ public static class Apps
         (["mpv", "mpv.exe"], "mpv"),
     ];
 
+    // Браузеры: ярлык в «Пуске» или имя exe. Яндекс Браузер — по названию ярлыка (его exe — просто browser.exe).
+    private static readonly (string[] Keys, string Name)[] Browsers =
+    [
+        (["google chrome", "chrome.exe"], "Chrome"),
+        (["microsoft edge", "msedge.exe"], "Edge"),
+        (["firefox", "mozilla firefox", "firefox.exe"], "Firefox"),
+        (["yandex", "yandex browser", "яндекс браузер", "яндекс.браузер"], "Яндекс Браузер"),
+        (["opera browser", "opera"], "Opera"),
+        (["opera gx browser", "opera gx"], "Opera GX"),
+        (["brave", "brave.exe"], "Brave"),
+        (["vivaldi", "vivaldi.exe"], "Vivaldi"),
+        (["zen browser", "zen", "zen.exe"], "Zen"),
+        (["arc", "arc.exe"], "Arc"),
+        (["librewolf", "librewolf.exe"], "LibreWolf"),
+        (["floorp", "floorp.exe"], "Floorp"),
+        (["waterfox", "waterfox.exe"], "Waterfox"),
+    ];
+
+    public static List<AppChoice> FindBrowsers(IEnumerable<ShortcutInfo> shortcuts) => Find(shortcuts, Browsers);
+
     public static AppChoice? FindMusic(IEnumerable<ShortcutInfo> shortcuts) => Find(shortcuts, Music).FirstOrDefault();
 
     public static List<AppChoice> FindPlayers(IEnumerable<ShortcutInfo> shortcuts) => Find(shortcuts, Players);
@@ -40,10 +60,18 @@ public static class Apps
         {
             var hit = list.FirstOrDefault(s => keys.Any(k => string.Equals(s.Name, k, StringComparison.OrdinalIgnoreCase)
                                                          || string.Equals(System.IO.Path.GetFileName(s.TargetPath.Replace('\\', '/')), k, StringComparison.OrdinalIgnoreCase)));
-            if (hit is not null) result.Add(new AppChoice(name, hit.TargetPath));
+            if (hit is not null) result.Add(new AppChoice(Display(name), hit.TargetPath));
         }
         return result;
     }
+
+    private static string Display(string name) => name switch
+    {
+        "Яндекс Музыка" => Text.L.T(name, "Yandex Music"),
+        "VK Музыка" => Text.L.T(name, "VK Music"),
+        "Яндекс Браузер" => Text.L.T(name, "Yandex Browser"),
+        _ => name,
+    };
 
     /// <summary>Имя для своего exe: «C:\…\Аудио плеер.exe» → «Аудио плеер».</summary>
     public static string NameOf(string exePath) => System.IO.Path.GetFileNameWithoutExtension(exePath.Replace('\\', '/'));

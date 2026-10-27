@@ -3,6 +3,7 @@ using System.IO.Compression;
 using System.Net.Http;
 using System.Security.Cryptography;
 using GigaRest.Core.Logging;
+using GigaRest.Core.Text;
 using GigaRest.Core.Updates;
 
 namespace GigaRest.App;
@@ -61,15 +62,15 @@ internal sealed class Updater : IDisposable
             var zip = Path.Combine(work, manifest.Zip);
             await DownloadAsync(manifest.ZipUrl(Channel), zip, status);
 
-            status?.Report(("Проверяем архив…", -1));
+            status?.Report((L.T("Проверяем архив…", "Checking the download…"), -1));
             await using (var check = File.OpenRead(zip))
             {
                 var actual = Convert.ToHexString(await SHA256.HashDataAsync(check));
                 if (!actual.Equals(manifest.Sha256, StringComparison.OrdinalIgnoreCase))
-                    throw new InvalidOperationException("Архив обновления повреждён (не сходится контрольная сумма). Попробуйте ещё раз.");
+                    throw new InvalidOperationException(L.T("Архив обновления повреждён (не сходится контрольная сумма). Попробуйте ещё раз.", "The update download is damaged (checksum doesn't match). Please try again."));
             }
 
-            status?.Report(("Раскладываем файлы…", -1));
+            status?.Report((L.T("Раскладываем файлы…", "Putting files in place…"), -1));
             var unpack = Path.Combine(work, "unpack");
             ZipFile.ExtractToDirectory(zip, unpack, overwriteFiles: true);
             var root = Directory.Exists(Path.Combine(unpack, "GigaRest")) ? Path.Combine(unpack, "GigaRest") : unpack;
@@ -87,7 +88,7 @@ internal sealed class Updater : IDisposable
             var psi = new ProcessStartInfo(Path.Combine(AppDir, "GigaRest.exe")) { UseShellExecute = false, WorkingDirectory = AppDir };
             psi.ArgumentList.Add("--after-update");
             Process.Start(psi)?.Dispose();
-            status?.Report(("Готово — перезапускаемся…", 100));
+            status?.Report((L.T("Готово — перезапускаемся…", "Done, restarting…"), 100));
             quit();
         }
         finally
@@ -112,7 +113,7 @@ internal sealed class Updater : IDisposable
             using var stall = new CancellationTokenSource(StallTimeout);
             int read;
             try { read = await source.ReadAsync(buffer, stall.Token); }
-            catch (OperationCanceledException) { throw new IOException("Загрузка остановилась: нет данных больше минуты. Проверьте интернет и повторите."); }
+            catch (OperationCanceledException) { throw new IOException(L.T("Загрузка остановилась: нет данных больше минуты. Проверьте интернет и повторите.", "The download stalled: no data for over a minute. Check your internet connection and try again.")); }
             if (read == 0) break;
             await file.WriteAsync(buffer.AsMemory(0, read));
             done += read;
@@ -120,7 +121,7 @@ internal sealed class Updater : IDisposable
             if (percent != last && percent >= 0)
             {
                 last = percent;
-                status?.Report(($"Скачиваем: {percent}% ({done / 1048576} из {total / 1048576} МБ)", percent));
+                status?.Report((L.T($"Скачиваем: {percent}% ({done / 1048576} из {total / 1048576} МБ)", $"Downloading: {percent}% ({done / 1048576} of {total / 1048576} MB)"), percent));
             }
         }
     }

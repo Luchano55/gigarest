@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using GigaRest.Core.Programs;
 using GigaRest.Core.Settings;
+using GigaRest.Core.Text;
 using Microsoft.UI;
 using Microsoft.UI.Text;
 using Microsoft.UI.Windowing;
@@ -34,15 +35,15 @@ public sealed class ProgramsWindow : Window
 
     public ProgramsWindow()
     {
-        Title = "GigaRest — рабочие программы";
-        _root = new Grid { Background = Brush(PageBg), Padding = new Thickness(48, 40, 48, 32), RowSpacing = 18, RequestedTheme = ElementTheme.Light };
+        Title = L.T("GigaRest — рабочие программы", "GigaRest — Work programs");
+        _root = new Grid { Padding = new Thickness(48, 40, 48, 32), RowSpacing = 18 };
         _root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         _root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         _root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         _root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
         var head = new StackPanel { Spacing = 8 };
-        _title = Text("Рабочие программы", 32, Ink, FontWeights.ExtraBold, wrap: true);
+        _title = Text(L.T("Рабочие программы", "Work programs"), 32, Ink, FontWeights.ExtraBold, wrap: true);
         _lead = Text("", 15, Lead, wrap: true);
         head.Children.Add(_title);
         head.Children.Add(_lead);
@@ -51,17 +52,19 @@ public sealed class ProgramsWindow : Window
         var tools = new Grid { ColumnSpacing = 12 };
         tools.ColumnDefinitions.Add(new ColumnDefinition());
         tools.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        _search = new TextBox { PlaceholderText = "Найти программу…", FontSize = 15, CornerRadius = new CornerRadius(10), Padding = new Thickness(12, 8, 12, 8) };
+        _search = new TextBox { PlaceholderText = L.T("Найти программу…", "Find a program…"), FontSize = 15, CornerRadius = new CornerRadius(10), Padding = new Thickness(12, 8, 12, 8) };
         _search.TextChanged += (_, _) => Render();
         tools.Children.Add(_search);
-        var suggest = new Button { Content = "Подсказать автоматически", CornerRadius = new CornerRadius(10), Padding = new Thickness(14, 8, 14, 8) };
-        ToolTipService.SetToolTip(suggest, "Почта, Битрикс, офис, 1С, звонки — закрыть; мессенджеры, музыка, личный браузер — на второй монитор; игры — оставить. " +
-                                           "Меняются только программы, для которых вы ещё ничего не выбрали.");
+        var suggest = new Button { Content = L.T("Подсказать автоматически", "Suggest automatically"), CornerRadius = new CornerRadius(10), Padding = new Thickness(14, 8, 14, 8) };
+        ToolTipService.SetToolTip(suggest, L.T("Почта, Битрикс, офис, 1С, звонки — закрыть; мессенджеры, музыка, личный браузер — на второй монитор; игры — оставить. " +
+                                           "Меняются только программы, для которых вы ещё ничего не выбрали.",
+                                           "Mail, Bitrix, office apps, 1C, calls — close; messengers, music, personal browser — second monitor; games — keep. " +
+                                           "Only programs you haven't set yet are changed."));
         suggest.Click += (_, _) =>
         {
             var n = ProgramHints.Apply(_rows);
             Render();
-            _summary.Text = (n > 0 ? $"Подсказано для {n} — проверьте и поправьте. " : "Подсказывать нечего — всё уже выбрано. ") + _summary.Text;
+            _summary.Text = (n > 0 ? L.T($"Подсказано для {n} — проверьте и поправьте. ", $"Suggested for {n} — check and adjust. ") : L.T("Подсказывать нечего — всё уже выбрано. ", "Nothing to suggest — everything is already set. ")) + _summary.Text;
         };
         Grid.SetColumn(suggest, 1);
         tools.Children.Add(suggest);
@@ -80,10 +83,10 @@ public sealed class ProgramsWindow : Window
         _summary = Text("", 14, Muted, wrap: true);
         _summary.VerticalAlignment = VerticalAlignment.Center;
         footer.Children.Add(_summary);
-        _doneText = Text("Готово", 16, Colors.White, FontWeights.Bold);
-        _done = ColoredButton(_doneText, Accent, AccentDark, Colors.White);
+        _done = WarmButton(L.T("Готово", "Done"), 16);
+        _doneText = (TextBlock)_done.Content;
         _done.HorizontalAlignment = HorizontalAlignment.Right;
-        _done.Padding = new Thickness(36, 12, 36, 12);
+        _done.Padding = new Thickness(40, 12, 40, 12);
         _done.Click += (_, _) => { Saved?.Invoke(_rows); AppWindow.Hide(); };
         Grid.SetColumn(_done, 1);
         footer.Children.Add(_done);
@@ -91,6 +94,7 @@ public sealed class ProgramsWindow : Window
         _root.Children.Add(footer);
 
         Content = _root;
+        DarkWindow(AppWindow, _root);
         AppWindow.SetIcon(Path.Combine(AppContext.BaseDirectory, "Assets", "GigaRest.ico"));
         AppWindow.Closing += (sender, e) =>
         {
@@ -107,20 +111,23 @@ public sealed class ProgramsWindow : Window
     public void SetSetupMode(bool setup)
     {
         IsSetup = setup;
-        Title = setup ? "GigaRest — первая настройка" : "GigaRest — рабочие программы";
-        _title.Text = setup ? "Первая настройка" : "Рабочие программы";
+        Title = setup ? L.T("GigaRest — первая настройка", "GigaRest — First setup") : L.T("GigaRest — рабочие программы", "GigaRest — Work programs");
+        _title.Text = setup ? L.T("Первая настройка", "First setup") : L.T("Рабочие программы", "Work programs");
         _lead.Text = setup
-            ? "Отметьте, что закрывать при переходе в отдых, а что — на второй монитор. Мы уже подсказали по видам программ — " +
-              "проверьте и поправьте. Потом это можно изменить в меню значка → «Рабочие программы»."
-            : "Выберите, что делать с каждой программой при переходе в отдых. Можно настроить и те, что сейчас не запущены.";
-        if (_doneText is not null) _doneText.Text = setup ? "Сохранить и начать" : "Готово";
+            ? L.T("Отметьте, что закрывать при переходе в отдых, а что — на второй монитор. Мы уже подсказали по видам программ — " +
+              "проверьте и поправьте. Потом это можно изменить в меню значка → «Рабочие программы».",
+              "Mark what to close when you switch to rest, and what goes to the second monitor. We've already made suggestions by program type — " +
+              "check and adjust. You can change this later from the tray icon menu → Work programs.")
+            : L.T("Выберите, что делать с каждой программой при переходе в отдых. Можно настроить и те, что сейчас не запущены.",
+              "Choose what happens to each program when you switch to rest. You can set up programs that aren't running right now, too.");
+        if (_doneText is not null) _doneText.Text = setup ? L.T("Сохранить и начать", "Save and start") : L.T("Готово", "Done");
     }
 
     public void ShowLoading()
     {
         _list.Children.Clear();
         _list.Children.Add(new ProgressRing { IsActive = true, Width = 32, Height = 32, Margin = new Thickness(24) });
-        _summary.Text = "Ищем установленные программы…";
+        _summary.Text = L.T("Ищем установленные программы…", "Looking for installed programs…");
     }
 
     public void SetRows(List<SelectorRow> rows)
@@ -141,25 +148,27 @@ public sealed class ProgramsWindow : Window
         var rest = shown.Where(r => r.Action == ProgramAction.Keep).ToList();
         if (chosen.Count > 0)
         {
-            _list.Children.Add(SectionTitle("Выбраны"));
+            _list.Children.Add(SectionTitle(L.T("Выбраны", "Chosen")));
             foreach (var r in chosen) _list.Children.Add(Row(r));
         }
         if (rest.Count > 0)
         {
-            _list.Children.Add(SectionTitle(chosen.Count > 0 ? "Остальные — не трогаем" : "Все программы — не трогаем"));
+            _list.Children.Add(SectionTitle(chosen.Count > 0 ? L.T("Остальные — не трогаем", "The rest — left alone") : L.T("Все программы — не трогаем", "All programs — left alone")));
             foreach (var r in rest) _list.Children.Add(Row(r));
         }
         if (background.Count > 0)
         {
-            _list.Children.Add(SectionTitle("Фоновые процессы — без окон"));
-            var note = Text("Можно завершать на время отдыха — освободится память. При возврате запустим их снова той же командой. " +
-                            "Системное, драйверы, антивирус и то, что не сможем запустить обратно, здесь не показываем.", 12, Muted, wrap: true);
+            _list.Children.Add(SectionTitle(L.T("Фоновые процессы — без окон", "Background processes — no windows")));
+            var note = Text(L.T("Можно завершать на время отдыха — освободится память. При возврате запустим их снова той же командой. " +
+                            "Системное, драйверы, антивирус и то, что не сможем запустить обратно, здесь не показываем.",
+                            "These can be ended during rest to free up memory. When you return, we start them again with the same command. " +
+                            "System components, drivers, antivirus and anything we can't start again aren't shown here."), 12, Muted, wrap: true);
             note.Margin = new Thickness(14, 0, 14, 6);
             _list.Children.Add(note);
             foreach (var r in background) _list.Children.Add(Row(r));
         }
         if (shown.Count + background.Count == 0)
-            _list.Children.Add(Text("Ничего не нашлось.", 14, Muted));
+            _list.Children.Add(Text(L.T("Ничего не нашлось.", "Nothing found."), 14, Muted));
         UpdateSummary();
     }
 
@@ -168,7 +177,8 @@ public sealed class ProgramsWindow : Window
         var close = _rows.Count(r => r.Action == ProgramAction.Close && !r.IsBackground);
         var second = _rows.Count(r => r.Action == ProgramAction.SecondMonitor);
         var bg = _rows.Where(r => r.IsBackground && r.Action == ProgramAction.Close).ToList();
-        _summary.Text = $"Закрывать: {close} · на второй монитор: {second} · фоновых завершать: {bg.Count}" +
+        _summary.Text = L.T($"Закрывать: {close} · на второй монитор: {second} · фоновых завершать: {bg.Count}",
+                            $"Close: {close} · second monitor: {second} · background to end: {bg.Count}") +
                         (bg.Count > 0 ? $" (≈{GigaRest.Core.Text.Sizes.Format(bg.Sum(r => r.PrivateBytes))})" : "");
     }
 
@@ -188,50 +198,48 @@ public sealed class ProgramsWindow : Window
         grid.ColumnDefinitions.Add(new ColumnDefinition());
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
-        var avatar = new Border
-        {
-            Width = 36, Height = 36, CornerRadius = new CornerRadius(10), Background = Brush(ProgramColor(r.Id)),
-            VerticalAlignment = VerticalAlignment.Center,
-            Child = new TextBlock
-            {
-                Text = r.DisplayName.Length > 0 ? char.ToUpper(r.DisplayName[0]).ToString() : "?", FontSize = 16,
-                FontWeight = FontWeights.Bold, Foreground = Brush(Colors.White),
-                HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
-            },
-        };
+        var avatar = AppIcon(r.DisplayName, r.Id, r.ExePath, 32);
+        avatar.VerticalAlignment = VerticalAlignment.Center;
         grid.Children.Add(avatar);
 
         var names = new StackPanel { Spacing = 2, VerticalAlignment = VerticalAlignment.Center };
-        names.Children.Add(Text(r.DisplayName, 15, Ink, FontWeights.Bold, wrap: true));
+        names.Children.Add(Text(r.DisplayName, 14.5, Ink, FontWeights.SemiBold, wrap: true));
         if (r.IsBackground)
         {
-            var info = $"≈{GigaRest.Core.Text.Sizes.Format(r.PrivateBytes)}" + (r.Hint is null ? "" : " · " + r.Hint) + $" · запустим обратно: {r.RelaunchInfo}";
+            var info = $"≈{GigaRest.Core.Text.Sizes.Format(r.PrivateBytes)}" + (r.Hint is null ? "" : " · " + r.Hint) + L.T($" · запустим обратно: {r.RelaunchInfo}", $" · will restart: {r.RelaunchInfo}");
             names.Children.Add(Text(info, 12, Muted, wrap: true));
         }
         else
         {
-            var status = r.IsRunning ? "запущена" : "сейчас не запущена";
+            var status = r.IsRunning ? L.T("запущена", "running") : L.T("сейчас не запущена", "not running now");
             if (r.Hint is not null) status += " · " + r.Hint;
-            names.Children.Add(Text(status, 12, r.IsRunning ? Hex("#1E7A44") : Muted, wrap: true));
+            names.Children.Add(Text(status, 12, r.IsRunning ? Good : Muted, wrap: true));
         }
         Grid.SetColumn(names, 1);
         grid.Children.Add(names);
 
-        var seg = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, VerticalAlignment = VerticalAlignment.Center };
+        var seg = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
         var choices = r.IsBackground
-            ? new[] { (ProgramAction.Close, "Завершать в отдыхе"), (ProgramAction.Keep, "Не трогать") }
-            : new[] { (ProgramAction.Close, "Закрыть"), (ProgramAction.SecondMonitor, "Второй монитор"), (ProgramAction.Keep, "Оставить") };
+            ? new[] { (ProgramAction.Close, L.T("Завершать в отдыхе", "End during rest")), (ProgramAction.Keep, L.T("Не трогать", "Leave alone")) }
+            : new[] { (ProgramAction.Close, L.T("Закрыть", "Close")), (ProgramAction.SecondMonitor, L.T("Второй монитор", "Second monitor")), (ProgramAction.Keep, L.T("Оставить", "Keep")) };
         foreach (var (action, label) in choices)
             seg.Children.Add(Segment(r, action, label, box));
-        Grid.SetColumn(seg, 2);
-        grid.Children.Add(seg);
+        // Тёмная дорожка, выбранное — подсвечено (как в окне перехода).
+        var track = new Border
+        {
+            Child = seg, Padding = new Thickness(3), CornerRadius = new CornerRadius(10), VerticalAlignment = VerticalAlignment.Center,
+            Background = Vertical(global::Windows.UI.Color.FromArgb(107, 0, 0, 0), global::Windows.UI.Color.FromArgb(71, 0, 0, 0)),
+            BorderBrush = Brush(global::Windows.UI.Color.FromArgb(14, 255, 255, 255)), BorderThickness = new Thickness(1),
+        };
+        Grid.SetColumn(track, 2);
+        grid.Children.Add(track);
         box.Children.Add(grid);
 
         if (r.Action == ProgramAction.Close && !r.IsBackground)
         {
             var forever = new CheckBox
             {
-                Content = Text("закрыть насовсем — не открывать снова после отдыха", 13, Lead, wrap: true),
+                Content = Text(L.T("закрыть насовсем — не открывать снова после отдыха", "close for good — don't reopen after rest"), 13, Lead, wrap: true),
                 IsChecked = r.NoRelaunch, Margin = new Thickness(64, -6, 0, 4), MinHeight = 28,
             };
             forever.Checked += (_, _) => r.NoRelaunch = true;
@@ -242,10 +250,11 @@ public sealed class ProgramsWindow : Window
         {
             var force = new CheckBox
             {
-                Content = Text("завершать принудительно, даже если есть несохранённое — оно пропадёт", 13, Hex("#B42318"), wrap: true),
+                Content = Text(L.T("завершать принудительно, даже если есть несохранённое — оно пропадёт", "force close even with unsaved work — it will be lost"), 13, Bad, wrap: true),
                 IsChecked = r.ForceKill, Margin = new Thickness(64, -6, 0, 4), MinHeight = 28,
             };
-            ToolTipService.SetToolTip(force, "Для программ вроде ShareX: сначала попросим закрыться, через 5 секунд завершим. Вопрос «Сохранить?» ждать не будем.");
+            ToolTipService.SetToolTip(force, L.T("Для программ вроде ShareX: сначала попросим закрыться, через 5 секунд завершим. Вопрос «Сохранить?» ждать не будем.",
+                "For programs like ShareX: we ask it to close first, then end it after 5 seconds. We won't wait for a “Save?” question."));
             force.Checked += (_, _) => r.ForceKill = true;
             force.Unchecked += (_, _) => r.ForceKill = false;
             box.Children.Add(force);
@@ -254,7 +263,7 @@ public sealed class ProgramsWindow : Window
         {
             var check = new CheckBox
             {
-                Content = Text("если вместо закрытия уйдёт в значок у часов — завершить", 13, Lead, wrap: true),
+                Content = Text(L.T("если вместо закрытия уйдёт в значок у часов — завершить", "if it hides to the tray instead of closing — end it"), 13, Lead, wrap: true),
                 IsChecked = r.AllowTerminate, Margin = new Thickness(64, -6, 0, 4), MinHeight = 28,
             };
             check.Checked += (_, _) => r.AllowTerminate = true;
@@ -267,23 +276,29 @@ public sealed class ProgramsWindow : Window
     private Button Segment(SelectorRow r, ProgramAction action, string label, StackPanel box)
     {
         var selected = r.Action == action;
-        var (bg, fg) = !selected ? ("#F1F2F6", "#4A4D5C") : action switch
+        var (top, bottom, edge, fg) = !selected ? ("#00000000", "#00000000", "#00000000", "#9AA0AC") : action switch
         {
-            ProgramAction.Close => ("#FDE8E8", "#B42318"),
-            ProgramAction.SecondMonitor => ("#E6EDFF", "#2948B8"),
-            _ => ("#EAF5EE", "#1E7A44"),
+            ProgramAction.Close => ("#52F6C787", "#29EAA560", "#61EEB36C", "#F8D3A0"),
+            ProgramAction.SecondMonitor => ("#6E627CB2", "#46465C8C", "#6E8FB4F0", "#DCE7FF"),
+            _ => ("#2EFFFFFF", "#1AFFFFFF", "#28FFFFFF", "#F1EEE8"),
         };
-        var b = ColoredButton(Text(label, 12, Hex(fg), selected ? FontWeights.Bold : FontWeights.Normal), Hex(bg), Hex(selected ? bg : "#E6E8EF"), Hex(fg));
-        b.HorizontalAlignment = HorizontalAlignment.Left;
-        b.Padding = new Thickness(12, 6, 12, 6);
-        b.CornerRadius = new CornerRadius(999);
-        b.FontSize = 12;
+        var fill = Vertical(Hex(top), Hex(bottom));
+        var b = new Button
+        {
+            Content = Text(label, 12.5, Hex(fg), selected ? FontWeights.SemiBold : FontWeights.Medium),
+            Height = 30, Padding = new Thickness(12, 0, 12, 0), CornerRadius = new CornerRadius(7),
+            Background = fill, BorderBrush = Brush(Hex(edge)), BorderThickness = new Thickness(selected ? 1 : 0),
+        };
+        b.Resources["ButtonBackgroundPointerOver"] = selected ? fill : Brush(global::Windows.UI.Color.FromArgb(18, 255, 255, 255));
+        b.Resources["ButtonBackgroundPressed"] = selected ? fill : Brush(global::Windows.UI.Color.FromArgb(26, 255, 255, 255));
+        b.Resources["ButtonBorderBrushPointerOver"] = Brush(Hex(edge));
+        b.Resources["ButtonBorderBrushPressed"] = Brush(Hex(edge));
         b.Click += (_, _) =>
         {
             if (r.Action == action) return;
             r.Action = action;
             // Строка остаётся на месте, пока окно открыто: перерисовываем только её.
-            var parent = (StackPanel)box.Parent;
+            var parent = (Panel)box.Parent;
             var index = parent.Children.IndexOf(box);
             if (index >= 0) parent.Children[index] = Row(r);
             UpdateSummary();

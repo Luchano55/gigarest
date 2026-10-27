@@ -4,6 +4,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using GigaRest.Core.Desktop;
 using GigaRest.Core.Logging;
+using GigaRest.Core.Text;
 using static GigaRest.Windows.Native;
 
 namespace GigaRest.Windows;
@@ -353,7 +354,7 @@ public sealed class WindowsDesktop : IDesktop
             }
             else
             {
-                if (!File.Exists(spec.FileName)) return "нет файла программы";
+                if (!File.Exists(spec.FileName)) return L.T("нет файла программы", "program file not found");
                 psi = new ProcessStartInfo(spec.FileName) { UseShellExecute = false };
                 foreach (var a in spec.Arguments) psi.ArgumentList.Add(a);
                 if (spec.WorkingDirectory is { } dir && Directory.Exists(dir)) psi.WorkingDirectory = dir;

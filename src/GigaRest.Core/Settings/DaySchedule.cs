@@ -1,4 +1,5 @@
 using System.Globalization;
+using GigaRest.Core.Text;
 
 namespace GigaRest.Core.Settings;
 
@@ -46,15 +47,15 @@ public sealed class DaySchedule
     /// <summary>«по будням в 09:00», «пн, ср в 08:30», «каждый день в 10:00».</summary>
     public string Describe()
     {
-        if (!Enabled || Days.Count == 0) return "выключено";
+        if (!Enabled || Days.Count == 0) return L.T("выключено", "off");
         var set = Days.ToHashSet();
         var weekdays = new[] { DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Thursday, DayOfWeek.Friday };
         string days;
-        if (set.Count == 7) days = "каждый день";
-        else if (set.SetEquals(weekdays)) days = "по будням";
-        else if (set.SetEquals([DayOfWeek.Saturday, DayOfWeek.Sunday])) days = "по выходным";
+        if (set.Count == 7) days = L.T("каждый день", "every day");
+        else if (set.SetEquals(weekdays)) days = L.T("по будням", "on weekdays");
+        else if (set.SetEquals([DayOfWeek.Saturday, DayOfWeek.Sunday])) days = L.T("по выходным", "on weekends");
         else days = string.Join(", ", Order.Where(set.Contains).Select(Short));
-        return $"{days} в {TimeOfDay:hh\\:mm}";
+        return L.T($"{days} в {TimeOfDay:hh\\:mm}", $"{days} at {TimeOfDay:hh\\:mm}");
     }
 
     public static readonly DayOfWeek[] Order =
@@ -62,7 +63,7 @@ public sealed class DaySchedule
 
     public static string Short(DayOfWeek d) => d switch
     {
-        DayOfWeek.Monday => "пн", DayOfWeek.Tuesday => "вт", DayOfWeek.Wednesday => "ср", DayOfWeek.Thursday => "чт",
-        DayOfWeek.Friday => "пт", DayOfWeek.Saturday => "сб", _ => "вс",
+        DayOfWeek.Monday => L.T("пн", "Mon"), DayOfWeek.Tuesday => L.T("вт", "Tue"), DayOfWeek.Wednesday => L.T("ср", "Wed"), DayOfWeek.Thursday => L.T("чт", "Thu"),
+        DayOfWeek.Friday => L.T("пт", "Fri"), DayOfWeek.Saturday => L.T("сб", "Sat"), _ => L.T("вс", "Sun"),
     };
 }

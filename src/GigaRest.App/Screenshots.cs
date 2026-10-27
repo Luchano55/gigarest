@@ -128,11 +128,16 @@ internal static class Screenshots
         var now = DateTime.UtcNow;
         quiet.SetGames(GigaRest.Core.Games.GameLibraries.Merge(
         [
-            new() { Id = "steam:1", Name = "Тихая гавань", Store = "Steam", LastPlayedUtc = now.AddDays(-1) },
+            new() { Id = "steam:1", Name = "Тихая гавань", Store = "Steam", LastPlayedUtc = now.AddDays(-1), PlayMinutes = 740, PlayMinutes2Weeks = 95 },
             new() { Id = "steam:2", Name = "Северный маршрут", Store = "Steam", LastPlayedUtc = now.AddDays(-4) },
             new() { Id = "epic:3", Name = "Дом у озера", Store = "Epic" },
             new() { Id = "gog:4", Name = "Старый маяк", Store = "GOG", LastPlayedUtc = now.AddDays(-16) },
             new() { Id = "steam:5", Name = "Звёздная ферма", Store = "Steam" },
+            new() { Id = "bnet:wow", Name = "World of Warcraft", Store = "Battle.net", LastPlayedUtc = now.AddDays(-2) },
+            new() { Id = "bnet:fenris", Name = "Diablo IV", Store = "Battle.net" },
+            new() { Id = "steam:6", Name = "Полярное сияние", Store = "Steam", LastPlayedUtc = now.AddDays(-30) },
+            new() { Id = "epic:7", Name = "Город в облаках", Store = "Epic" },
+            new() { Id = "gog:8", Name = "Ветер странствий", Store = "GOG" },
         ], new Dictionary<string, DateTime>()));
         var films = new List<GigaRest.Core.Media.Film>
         {
@@ -144,12 +149,29 @@ internal static class Screenshots
         quiet.SetMusicApp(new GigaRest.Core.Media.AppChoice("Яндекс Музыка", @"C:\Яндекс Музыка.exe"));
         quiet.SetPlayers([new GigaRest.Core.Media.AppChoice("VLC", @"C:\Program Files\VideoLAN\VLC\vlc.exe")], null);
         quiet.SetDnd(true);
+        var services = GigaRest.Core.Media.WebServices.Defaults();
+        services.Insert(1, GigaRest.Core.Media.WebServices.FromPreset(GigaRest.Core.Media.WebServices.Presets.First(p => p.Name == "VK Видео")));
+        services.Add(GigaRest.Core.Media.WebServices.FromPreset(GigaRest.Core.Media.WebServices.Presets.First(p => p.Name == "Spotify")));
+        quiet.SetServices(services);
+        quiet.SetBrowsers([new GigaRest.Core.Media.AppChoice("Chrome", @"C:\Program Files\Google\Chrome\Application\chrome.exe")]);
+        quiet.SetLastYouTube("https://www.youtube.com/watch?v=demo", "Как варить глинтвейн дома", now.AddHours(-20));
+        quiet.AudioList = () =>
+        [
+            new GigaRest.Windows.AudioDevice("1", "Наушники (Игры)", false),
+            new GigaRest.Windows.AudioDevice("2", "Наушники (Музыка)", true),
+            new GigaRest.Windows.AudioDevice("3", "Монитор LG OLED", false),
+        ];
+        quiet.AudioSetDefault = _ => true;
+        quiet.InitNature(GigaRest.Core.Sounds.NatureSound.Rain, 0.5);
         quiet.Media = () => Task.FromResult<NowPlaying.Current?>(new("Земфира — Небо Лондона", "Яндекс Музыка", true));
         await Task.Delay(2500);
         quiet.OpenWordForCapture("Играть");
         await Capture(quiet.Root, Path.Combine(dir, "17-igrat.png"));
         quiet.OpenWordForCapture("Продолжить");
         await Capture(quiet.Root, Path.Combine(dir, "18-prodolzhit.png"));
+        quiet.ShowLibrary();
+        await Capture(quiet.Root, Path.Combine(dir, "24-biblioteka.png"));
+        quiet.CloseLibraryForCapture();
         quiet.OpenWordForCapture("Слушать");
         await Capture(quiet.Root, Path.Combine(dir, "19-slushat.png"));
         quiet.OpenWordForCapture("Смотреть");
@@ -159,6 +181,8 @@ internal static class Screenshots
         quiet.Media = () => Task.FromResult<NowPlaying.Current?>(null);
         quiet.OpenWordForCapture("Слушать");
         await Capture(quiet.Root, Path.Combine(dir, "22-muzyka.png"));
+        quiet.OpenWordForCapture("Добавить сервис:" + GigaRest.Core.Media.ServiceKind.Watch);
+        await Capture(quiet.Root, Path.Combine(dir, "26-servis.png"));
 
         // Плитки на втором мониторе (на сервере сборки живых копий нет — заглушки).
         var tilesWindow = new TilesWindow();
@@ -176,11 +200,35 @@ internal static class Screenshots
         await Task.Delay(1500);
         await Capture(tilesWindow.Root, Path.Combine(dir, "12-plitki.png"));
 
+        // Статистика отдыха на правдоподобных данных.
+        var stats = new GigaRest.Core.Stats.RestStats();
+        var today = DateTime.Today;
+        foreach (var (daysAgo, from, to) in new[] { (0, 19.0, 22.5), (1, 20.0, 23.0), (2, 19.5, 21.0), (4, 18.5, 23.5), (5, 20.0, 22.0), (6, 21.0, 23.0) })
+            stats.AddRest(today.AddDays(-daysAgo).AddHours(from).ToUniversalTime(), today.AddDays(-daysAgo).AddHours(to).ToUniversalTime());
+        foreach (var (id, name, n) in new[] { ("bnet:wow", "World of Warcraft", 5), ("steam:1", "Тихая гавань", 3), ("bnet:fenris", "Diablo IV", 1) })
+            for (var i = 0; i < n; i++) stats.AddLaunch(new GigaRest.Core.Games.Game { Id = id, Name = name, Store = "Steam" }, DateTime.UtcNow.AddDays(-i));
+        var statsWindow = new StatsWindow();
+        statsWindow.UseDesignSizeForCapture();
+        statsWindow.Activate();
+        statsWindow.Show(stats, [new GigaRest.Core.Games.Game { Id = "steam:1", Name = "Тихая гавань", Store = "Steam", PlayMinutes = 740, PlayMinutes2Weeks = 95 }], DateTime.Now);
+        await Capture(statsWindow.Root, Path.Combine(dir, "25-statistika.png"));
+
         // Окно хода обновления.
         var update = new UpdateWindow("0.2.1");
         update.Activate();
         update.Report("Скачиваем: 42% (25 из 60 МБ)", 42);
         await Capture(update.Root, Path.Combine(dir, "23-obnovlenie.png"));
+
+        // Английская версия: то же окно перехода.
+        GigaRest.Core.Text.L.Use(GigaRest.Core.Text.L.English);
+        var english = new SwitcherWindow();
+        english.Present();
+        english.SizeToDesign(fitScreen: false);
+        english.UseDesignSizeForCapture();
+        english.ShowPlan(ProgramScanner.Scan(processes, windows, new AppSettings(), selfPid: 1), hasSecondMonitor: true, notice: null);
+        await Capture(english.Root, Path.Combine(dir, "27-english.png"));
+        english.CloseForGood();
+        GigaRest.Core.Text.L.Use(GigaRest.Core.Text.L.Russian);
 
         // Последнее закрытое окно завершает программу — поэтому закрываем оба только в конце.
         programsWindow.CloseForGood();
@@ -188,6 +236,7 @@ internal static class Screenshots
         quiet.CloseForGood();
         tilesWindow.CloseForGood();
         update.Close();
+        statsWindow.CloseForGood();
         window.CloseForGood();
         return true;
     }

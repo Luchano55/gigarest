@@ -23,9 +23,16 @@ public sealed class SettingsStore
     internal static void Normalize(AppSettings s)
     {
         s.Programs ??= [];
+        s.Language = Text.L.Normalize(s.Language);
         s.GamesPlayed ??= [];
         s.FilmsOpened ??= [];
+        s.CustomGames ??= [];
+        s.CustomGames.RemoveAll(g => string.IsNullOrWhiteSpace(g.Path));
         s.FilmsPosition ??= [];
+        s.WebServices = Media.WebServices.Normalize(s.WebServices);
+        s.TilesCount = Math.Clamp(s.TilesCount, 1, 4);
+        s.DimMinutes = Math.Clamp(s.DimMinutes, 1, 240);
+        s.ScreenOffMinutes = Math.Clamp(s.ScreenOffMinutes, 0, 600);
         s.UpdateChannel = Updates.UpdateChannels.Normalize(s.UpdateChannel);
         s.ReturnSchedule ??= new DaySchedule();
         s.RestOffer ??= new DaySchedule { Time = "19:00" };

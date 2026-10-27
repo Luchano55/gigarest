@@ -17,10 +17,10 @@ public sealed record RestReport(
         {
             var closed = Results.Count(r => r.IsGone);
             var parts = new List<string>();
-            if (closed > 0) parts.Add($"Закрыто: {Sizes.Plural(closed, "программа", "программы", "программ")}");
-            if (MovedWindows > 0) parts.Add($"на второй монитор: {Sizes.Plural(MovedWindows, "окно", "окна", "окон")}");
-            if (FreedBytes > 0) parts.Add($"освободилось {Sizes.Format(FreedBytes)}");
-            return parts.Count == 0 ? "Отдых. Ничего закрывать не пришлось." : string.Join(", ", parts) + ".";
+            if (closed > 0) parts.Add(L.T("Закрыто: ", "Closed: ") + L.Plural(closed, "программа", "программы", "программ", "program", "programs"));
+            if (MovedWindows > 0) parts.Add(L.T("на второй монитор: ", "to the second monitor: ") + L.Plural(MovedWindows, "окно", "окна", "окон", "window", "windows"));
+            if (FreedBytes > 0) parts.Add(L.T($"освободилось {Sizes.Format(FreedBytes)}", $"{Sizes.Format(FreedBytes)} freed"));
+            return parts.Count == 0 ? L.T("Отдых. Ничего закрывать не пришлось.", "Rest mode. Nothing needed closing.") : string.Join(", ", parts) + ".";
         }
     }
 }
@@ -28,8 +28,8 @@ public sealed record RestReport(
 public sealed record ReturnReport(IReadOnlyList<string> Launched, IReadOnlyList<string> Failed, int RestoredWindows)
 {
     public string Summary => Failed.Count == 0
-        ? "Всё вернули."
-        : $"Всё вернули. Не открылось: {string.Join(", ", Failed)} — откройте вручную.";
+        ? L.T("Всё вернули.", "Everything is back.")
+        : L.T($"Всё вернули. Не открылось: {string.Join(", ", Failed)} — откройте вручную.", $"Everything is back. Didn't open: {string.Join(", ", Failed)} — please open manually.");
 }
 
 public sealed record SwitchProgress(string Text, int Done, int Total);
@@ -56,6 +56,9 @@ public sealed class RestSwitcher
     public bool IsResting => _sessions.Exists;
 
     /// <summary>Второй монитор: не основной, лучше — справа от основного.</summary>
+    /// <summary>Сколько окон переносить на второй монитор (настройка «Плитки»: 0 — выключены, 1–4).</summary>
+    public int MaxTiles { get; set; } = TilePlan.Max;
+
     public static MonitorInfo? PickSecondMonitor(IReadOnlyList<MonitorInfo> monitors)
     {
         var primary = monitors.FirstOrDefault(m => m.IsPrimary);
@@ -82,7 +85,7 @@ public sealed class RestSwitcher
         var session = _sessions.Load() ?? new RestSession { StartedUtc = _clock.UtcNow };
 
         var toClose = programs.Where(p => p.Action == ProgramAction.Close).ToList();
-        var toMove = TilePlan.Ordered(programs).ToList(); // в порядке плиток: первая — левая верхняя
+        var toMove = TilePlan.Ordered(programs).Take(MaxTiles).ToList(); // в порядке плиток: первая — левая верхняя
 
         // 1. Запоминаем, как запустить обратно, — до закрытия. Файл переживёт сбой посередине.
         foreach (var p in toClose.Where(p => !p.IsElevated))
@@ -93,7 +96,7 @@ public sealed class RestSwitcher
                 .DistinctBy(l => l.Aumid ?? l.FileName + "\0" + string.Join("\0", l.Arguments))
                 .ToList();
             if (launch.Count == 0 && !p.NoRelaunch)
-                problems.Add($"{p.DisplayName}: не удалось узнать, как её запустить обратно");
+                problems.Add(L.T($"{p.DisplayName}: не удалось узнать, как её запустить обратно", $"{p.DisplayName}: couldn't find out how to start it again"));
             session.Closed.RemoveAll(c => c.Id == p.Id);
             session.Closed.Add(new ClosedProgram
             {
@@ -155,12 +158,12 @@ public sealed class RestSwitcher
                 else if (cp.Stage == CloseStage.Asking) asking.Add(cp.DisplayName);
                 else asking.Remove(cp.DisplayName);
                 text = asking.Count > 0
-                    ? $"{asking.First()} спрашивает — ответьте в её окне"
-                    : pending.Count > 0 ? $"Закрываем {pending[0]}…" : "Освобождаем память…";
+                    ? L.T($"{asking.First()} спрашивает — ответьте в её окне", $"{asking.First()} is asking — please answer in its window")
+                    : pending.Count > 0 ? L.T($"Закрываем {pending[0]}…", $"Closing {pending[0]}…") : L.T("Освобождаем память…", "Freeing up memory…");
             }
             progress?.Report(new SwitchProgress(text, done, total));
         }
-        progress?.Report(new SwitchProgress(total > 0 ? $"Закрываем {toClose[0].DisplayName}…" : "Готовим отдых…", 0, total));
+        progress?.Report(new SwitchProgress(total > 0 ? L.T($"Закрываем {toClose[0].DisplayName}…", $"Closing {toClose[0].DisplayName}…") : L.T("Готовим отдых…", "Getting rest ready…"), 0, total));
 
         var orchestrator = new CloseOrchestrator(_desktop, _clock) { Timeout = CloseTimeout };
         var results = await orchestrator.CloseAllAsync(toClose, new SyncProgress<CloseProgress>(OnClose), ct).ConfigureAwait(false);
@@ -206,7 +209,7 @@ public sealed class RestSwitcher
         var index = 0;
         foreach (var c in toLaunch)
         {
-            progress?.Report(new SwitchProgress($"Открываем {c.DisplayName}…", index++, toLaunch.Count));
+            progress?.Report(new SwitchProgress(L.T($"Открываем {c.DisplayName}…", $"Opening {c.DisplayName}…"), index++, toLaunch.Count));
             var errors = c.Launch.Select(_desktop.Launch).Where(e => e is not null).ToList();
             if (c.Launch.Count == 0 || errors.Count == c.Launch.Count)
             {
@@ -230,7 +233,7 @@ public sealed class RestSwitcher
         }
 
         _sessions.Clear();
-        progress?.Report(new SwitchProgress("Готово", toLaunch.Count, toLaunch.Count));
+        progress?.Report(new SwitchProgress(L.T("Готово", "Done"), toLaunch.Count, toLaunch.Count));
 
         // Окно программы, открытой заново, ставим туда, где оно было (если окно было одно). Не задерживаем итог.
         var placeable = toLaunch.Where(c => c.Placements.Count == 1 && launched.Contains(c.DisplayName)).ToList();

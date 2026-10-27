@@ -1,3 +1,5 @@
+using GigaRest.Core.Text;
+
 namespace GigaRest.Core.Closing;
 
 public enum CloseOutcome
@@ -34,12 +36,12 @@ public sealed record CloseResult(string ProgramId, string DisplayName, CloseOutc
 
     public string Message => Outcome switch
     {
-        CloseOutcome.Closed => $"{DisplayName} — закрыта",
-        CloseOutcome.Terminated => $"{DisplayName} — завершена (окна были спрятаны в трей)",
-        CloseOutcome.StillOpen => $"{DisplayName} не закрылась — закройте сами или оставьте",
-        CloseOutcome.InBackground => $"{DisplayName} спряталась в трей и работает в фоне. Чтобы закрывать её полностью, поставьте галочку «можно завершать»",
-        CloseOutcome.Elevated => $"{DisplayName} запущена от администратора — её закроете только вы",
-        CloseOutcome.Cancelled => $"{DisplayName} — переход отменён",
+        CloseOutcome.Closed => L.T($"{DisplayName} — закрыта", $"{DisplayName} — closed"),
+        CloseOutcome.Terminated => L.T($"{DisplayName} — завершена (окна были спрятаны в трей)", $"{DisplayName} — ended (its windows were hidden in the tray)"),
+        CloseOutcome.StillOpen => L.T($"{DisplayName} не закрылась — закройте сами или оставьте", $"{DisplayName} didn't close — close it yourself or leave it open"),
+        CloseOutcome.InBackground => L.T($"{DisplayName} спряталась в трей и работает в фоне. Чтобы закрывать её полностью, поставьте галочку «можно завершать»", $"{DisplayName} hid in the tray and keeps running in the background. To close it fully, tick “OK to end”"),
+        CloseOutcome.Elevated => L.T($"{DisplayName} запущена от администратора — её закроете только вы", $"{DisplayName} runs as administrator — only you can close it"),
+        CloseOutcome.Cancelled => L.T($"{DisplayName} — переход отменён", $"{DisplayName} — switch cancelled"),
         _ => DisplayName,
     };
 }

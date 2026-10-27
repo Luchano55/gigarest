@@ -38,6 +38,21 @@ public sealed class RestSwitcherTests : IDisposable
         _d.OnClose[window] = () => _d.Kill(pid);
 
     [Fact]
+    public async Task TilesOffMovesNothing()
+    {
+        AddSecondMonitor();
+        _d.AddProcess("telegram.exe", 12);
+        _d.AddWindow(12, "Telegram");
+        var switcher = Switcher();
+        switcher.MaxTiles = 0;
+
+        var report = await switcher.GoToRestAsync(Scan(), null, default);
+
+        Assert.Equal(0, report.MovedWindows);
+        Assert.Empty(_d.MovedTo);
+    }
+
+    [Fact]
     public async Task CloseForeverIsNotReopened()
     {
         _d.AddProcess("outlook.exe", 10, path: @"C:\Office\OUTLOOK.EXE");

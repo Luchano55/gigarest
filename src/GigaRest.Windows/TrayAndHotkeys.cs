@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using GigaRest.Core.Input;
 using GigaRest.Core.Logging;
+using GigaRest.Core.Text;
 
 namespace GigaRest.Windows;
 
@@ -112,8 +113,8 @@ public sealed class TrayAndHotkeys : IDisposable
         }
         var error = Marshal.GetLastWin32Error();
         return error == ERROR_HOTKEY_ALREADY_REGISTERED
-            ? $"{hotkey} уже занята другой программой — выберите другую"
-            : $"{hotkey} не удалось назначить (код {error})";
+            ? L.T($"{hotkey} уже занята другой программой — выберите другую", $"{hotkey} is already used by another program — pick a different one")
+            : L.T($"{hotkey} не удалось назначить (код {error})", $"Couldn't assign {hotkey} (code {error})");
     }
 
     public void UnregisterHotkey(int id)

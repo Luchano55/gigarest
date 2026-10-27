@@ -1,5 +1,6 @@
 using System.Text.Json;
 using GigaRest.Core.Logging;
+using GigaRest.Core.Text;
 
 namespace GigaRest.Core.Scenes;
 
@@ -20,15 +21,15 @@ public sealed record Scene(string Id, string Name, string Path, bool IsVideo, Sc
 /// </summary>
 public static class SceneCatalog
 {
-    public static readonly IReadOnlyList<(string File, string Name, SceneEffect Effect)> BuiltIn =
+    public static IReadOnlyList<(string File, string Name, SceneEffect Effect)> BuiltIn =>
     [
-        ("mountains.jpg", "Горы на рассвете", SceneEffect.Fog),
-        ("lake.jpg", "Озеро ночью", SceneEffect.Lights),
-        ("winter.jpg", "Зимние холмы", SceneEffect.Snow),
-        ("aurora.jpg", "Северное сияние", SceneEffect.None),
-        ("dunes.jpg", "Дюны на закате", SceneEffect.None),
-        ("forest.jpg", "Лес", SceneEffect.Lights),
-        ("city.jpg", "Город зимой", SceneEffect.Snow),
+        ("mountains.jpg", L.T("Горы на рассвете", "Mountains at dawn"), SceneEffect.Fog),
+        ("lake.jpg", L.T("Озеро ночью", "Lake at night"), SceneEffect.Lights),
+        ("winter.jpg", L.T("Зимние холмы", "Winter hills"), SceneEffect.Snow),
+        ("aurora.jpg", L.T("Северное сияние", "Northern lights"), SceneEffect.None),
+        ("dunes.jpg", L.T("Дюны на закате", "Dunes at sunset"), SceneEffect.None),
+        ("forest.jpg", L.T("Лес", "Forest"), SceneEffect.Lights),
+        ("city.jpg", L.T("Город зимой", "City in winter"), SceneEffect.Snow),
     ];
 
     private static readonly string[] ImageExt = [".jpg", ".jpeg", ".png", ".webp", ".avif", ".bmp"];
@@ -106,6 +107,6 @@ public static class SceneCatalog
 
     public static string EffectName(SceneEffect e) => e switch
     {
-        SceneEffect.Snow => "снег", SceneEffect.Fog => "туман", SceneEffect.Lights => "огоньки", SceneEffect.Rain => "дождь", _ => "",
+        SceneEffect.Snow => L.T("снег", "snow"), SceneEffect.Fog => L.T("туман", "fog"), SceneEffect.Lights => L.T("огоньки", "fireflies"), SceneEffect.Rain => L.T("дождь", "rain"), _ => "",
     };
 }

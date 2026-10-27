@@ -19,6 +19,11 @@ public sealed record Game
     public IReadOnlyList<string> LaunchArgs { get; init; } = [];
     /// <summary>Обложка из кэша магазина (Steam: вертикальная 600×900 или горизонтальная шапка). Из интернета не качаем.</summary>
     public string? CoverPath { get; init; }
+    /// <summary>Широкая картинка для шапки библиотеки (Steam: library_hero.jpg).</summary>
+    public string? HeroPath { get; init; }
+    /// <summary>Сколько наиграно, минут (Steam считает сам): всего и за две недели.</summary>
+    public int? PlayMinutes { get; init; }
+    public int? PlayMinutes2Weeks { get; init; }
     /// <summary>Файл, чей значок показать, если обложки нет (exe или ico игры).</summary>
     public string? IconPath { get; init; }
 }
