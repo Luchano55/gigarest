@@ -56,51 +56,51 @@
 
 Главное окно — «Работа → Отдых». Слева — оба монитора: плитки второго монитора можно перетащить или поменять местами двумя щелчками, «×» убирает, «+» добавляет. Справа — что будет с каждой программой: «Закрыть · На второй монитор · Не трогать»; у закрываемой можно выбрать «не откроется после отдыха».
 
-![Работа → Отдых](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/claude-system-management-requirements-nobkxi/1-perehod.png)
+![Работа → Отдых](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/main/1-perehod.png)
 
 Программы закрываются вежливо и по очереди — видно, какая закрывается сейчас. Если какая-то спросит «Сохранить?», GigaRest подождёт ответа.
 
-![Переход идёт](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/claude-system-management-requirements-nobkxi/2-progress.png)
+![Переход идёт](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/main/2-progress.png)
 
 Итог: сколько освободилось памяти, что закрылось, что спряталось в трей. Возврат к работе — одной кнопкой (или Ctrl+Alt+Home).
 
-![Отдых](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/claude-system-management-requirements-nobkxi/3-otdyh.png)
+![Отдых](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/main/3-otdyh.png)
 
 В отдыхе на основном мониторе — «Тихий» экран: сцена, часы и одна строка «Продолжить · Играть · Смотреть · Слушать · Сцены». Уведомления молчат («Не беспокоить»).
 
-![Тихий экран](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/claude-system-management-requirements-nobkxi/11-tihiy.png)
+![Тихий экран](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/main/11-tihiy.png)
 
 «Играть» — игры Steam, Epic, GOG и Battle.net с обложками, недавние сверху; щелчок запускает игру без окна лаунчера. «Продолжить» — последняя игра и последний фильм.
 
-![Играть](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/claude-system-management-requirements-nobkxi/17-igrat.png)
+![Играть](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/main/17-igrat.png)
 
 «Смотреть» — YouTube прямо на «Тихом» экране (главная или последний ролик; «Свернуть» — окошко в углу, ролик идёт дальше) и фильмы из вашей папки во встроенном плеере с продолжением с места остановки.
 
-![Смотреть](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/claude-system-management-requirements-nobkxi/20-smotret.png)
+![Смотреть](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/main/20-smotret.png)
 
 «Слушать» — Яндекс Музыка прямо здесь: поиск, плейлисты, «Моя волна»; что играет и кнопки «назад», «пауза», «дальше».
 
-![Слушать](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/claude-system-management-requirements-nobkxi/19-slushat.png)
+![Слушать](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/main/19-slushat.png)
 
 На втором мониторе — живые плитки разрешённых окон. Под плитками — что играет, сколько непрочитанных в Telegram, какая страница открыта в браузере. Щёлкнули — окно плавно открылось, «Свернуть» — снова плитка.
 
-![Плитки на втором мониторе](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/claude-system-management-requirements-nobkxi/12-plitki.png)
+![Плитки на втором мониторе](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/main/12-plitki.png)
 
 Утром — «Снова работа»: закрытое открылось, окна на своих местах.
 
-![Снова работа](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/claude-system-management-requirements-nobkxi/4-rabota.png)
+![Снова работа](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/main/4-rabota.png)
 
 Какие программы рабочие — выбирается в отдельном окне, в том числе те, что сейчас не запущены. При первом запуске GigaRest подсказывает сам.
 
-![Рабочие программы](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/claude-system-management-requirements-nobkxi/5-programmy.png)
+![Рабочие программы](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/main/5-programmy.png)
 
 Настройки: расписание, горячие клавиши, «Не беспокоить», папка с фильмами, канал обновлений, автозапуск.
 
-![Настройки](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/claude-system-management-requirements-nobkxi/6-nastroyki.png)
+![Настройки](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/main/6-nastroyki.png)
 
 Обновление — в один щелчок, ход видно в окошке.
 
-![Обновление](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/claude-system-management-requirements-nobkxi/23-obnovlenie.png)
+![Обновление](https://raw.githubusercontent.com/Luchano55/gigarest/screenshots/main/23-obnovlenie.png)
 
 ## Установка
 
