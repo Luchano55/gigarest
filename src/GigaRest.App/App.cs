@@ -278,6 +278,9 @@ public sealed partial class App : Application, IXamlMetadataProvider
             _quiet.PlayerChosen += ChoosePlayer;
             _quiet.PlayerPickRequested += () => _ = PickPlayerAsync();
             _quiet.MusicAppRequested += OpenMusicApp;
+            _quiet.SetServices(_settings.WebServices ??= GigaRest.Core.Media.WebServices.Defaults());
+            _quiet.ServicesChanged += SaveSettings;
+            _quiet.OpenInBrowserRequested += OpenInBrowser;
             _quiet.MusicAppPickRequested += () => _ = PickMusicAppAsync();
             LoadApps(_quiet);
             _quiet.OpenFilmsFolderRequested += () =>
@@ -480,12 +483,14 @@ public sealed partial class App : Application, IXamlMetadataProvider
                 ? new AppChoice(Apps.NameOf(musicSetting), musicSetting)
                 : Apps.FindMusic(shortcuts);
             var players = Apps.FindPlayers(shortcuts);
+            var browsers = Apps.FindBrowsers(shortcuts);
             Log.Info($"Музыка: {music?.Name ?? "не найдена"}; плееры: {(players.Count == 0 ? "нет" : string.Join(", ", players.Select(p => p.Name)))}");
             _queue.TryEnqueue(() =>
             {
                 if (_quiet != quiet) return;
                 quiet.SetMusicApp(music);
                 quiet.SetPlayers(players, player);
+                quiet.SetBrowsers(browsers);
                 _players = players;
             });
         });
@@ -603,6 +608,21 @@ public sealed partial class App : Application, IXamlMetadataProvider
     {
         if (_desktop.Launch(new LaunchSpec { FileName = app.Path, WorkingDirectory = Path.GetDirectoryName(app.Path) }) is { } error)
             _quiet?.ShowSummary($"{app.Name} не открылась: {error}", hasProblems: true);
+    }
+
+    /// <summary>Сервис, который выбрано открывать в браузере: в указанном или в браузере Windows по умолчанию.</summary>
+    private void OpenInBrowser(GigaRest.Core.Media.WebService service, string url)
+    {
+        string? error;
+        if (service.OpenIn is { } exe && exe != GigaRest.Core.Media.WebServices.DefaultBrowser && File.Exists(exe))
+        {
+            var spec = new LaunchSpec { FileName = exe, WorkingDirectory = Path.GetDirectoryName(exe) };
+            spec.Arguments.Add(url);
+            error = _desktop.Launch(spec);
+        }
+        else error = OpenShell(url);
+        if (error is not null) _quiet?.ShowSummary($"{service.Name} не открылся: {error}", hasProblems: true);
+        else Log.Info($"Сервис {service.Name} открыт в браузере");
     }
 
     /// <summary>Открыть файл или ссылку так, как открыла бы сама Windows (плеер, браузер по умолчанию).</summary>

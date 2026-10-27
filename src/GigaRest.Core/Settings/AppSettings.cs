@@ -55,6 +55,8 @@ public sealed class AppSettings
     public Sounds.NatureSound? LastNatureSound { get; set; }
     public double NatureVolume { get; set; } = 0.5;
     /// <summary>Последний ролик YouTube, открытый в GigaRest, — для «Продолжить».</summary>
+    /// <summary>Сайты в «Смотреть» и «Слушать». null — ещё не настраивали: YouTube и Яндекс Музыка.</summary>
+    public List<Media.WebService>? WebServices { get; set; }
     public string? LastYouTubeUrl { get; set; }
     public string? LastYouTubeTitle { get; set; }
     public DateTime? LastYouTubeUtc { get; set; }

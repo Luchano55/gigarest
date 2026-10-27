@@ -110,6 +110,19 @@ public sealed class QuietWindow : Window
 
     public void SetMusicApp(AppChoice? app) { _musicApp = app; Refresh("Слушать"); }
 
+    private List<WebService> _services = WebServices.Defaults();
+    private IReadOnlyList<AppChoice> _browsers = [];
+
+    /// <summary>Список сервисов поменялся (добавили, убрали, сменили браузер) — сохранить настройки.</summary>
+    public event Action? ServicesChanged;
+    /// <summary>Сервис открывается не здесь, а в браузере: сервис и адрес.</summary>
+    public event Action<WebService, string>? OpenInBrowserRequested;
+
+    /// <summary>Сайты для «Смотреть» и «Слушать» — тот же список, что в настройках (меняется на месте).</summary>
+    public void SetServices(List<WebService> services) { _services = services; Refresh("Смотреть", "Слушать"); }
+
+    public void SetBrowsers(IReadOnlyList<AppChoice> browsers) { _browsers = browsers; }
+
     public void SetPlayers(IReadOnlyList<AppChoice> players, string? current)
     {
         _players = players;
@@ -519,9 +532,11 @@ public sealed class QuietWindow : Window
         {
             _panel.Width = 520;
             _panelContent.Children.Add(Text("Слушать", 17, Hex("#E6FFFFFF"), FontWeights.Medium));
-            var web = LinkRow(!_web.ContainsKey(Music) ? "♫  Яндекс Музыка здесь" : "♫  Вернуть Яндекс Музыку", "поиск, плейлисты, «Моя волна»", ShowWebMusic, big: true);
-            web.Margin = new Thickness(-12, 6, -12, 0);
-            _panelContent.Children.Add(web);
+            var listen = _services.Where(x => x.Kind == ServiceKind.Listen).ToList();
+            var web = new StackPanel { Spacing = 2, Margin = new Thickness(-12, 6, -12, 0) };
+            foreach (var service in listen) web.Children.Add(ServiceRow(service, big: listen.Count <= 2));
+            _panelContent.Children.Add(listen.Count > 3 ? new ScrollViewer { Content = web, MaxHeight = 200, VerticalScrollBarVisibility = ScrollBarVisibility.Auto } : web);
+            _panelContent.Children.Add(AddServiceLink(ServiceKind.Listen));
             var box = new StackPanel { Spacing = 8, Margin = new Thickness(0, 8, 0, 0) };
             box.Children.Add(Text("…", 13, Hex("#99FFFFFF")));
             _panelContent.Children.Add(box);
@@ -533,8 +548,12 @@ public sealed class QuietWindow : Window
             _panel.Width = 560;
             _panelContent.Children.Add(Text("Смотреть", 17, Hex("#E6FFFFFF"), FontWeights.Medium));
             var list = new StackPanel { Spacing = 2, Margin = new Thickness(-12, 6, -12, 0) };
-            list.Children.Add(LinkRow(_web.ContainsKey(YouTube) ? "▶  Вернуться к YouTube" : "▶  YouTube", _web.ContainsKey(YouTube) ? "продолжить, где были" : "главная, прямо здесь", () => ShowYouTube(lastWatched: false)));
-            list.Children.Add(LinkRow("▶  YouTube · последний ролик", "тот, что смотрели последним", () => ShowYouTube(lastWatched: true)));
+            foreach (var service in _services.Where(x => x.Kind == ServiceKind.Watch))
+            {
+                list.Children.Add(ServiceRow(service));
+                if (WebServices.IsYouTube(service) && service.OpenIn is null)
+                    list.Children.Add(ServiceRow(service, lastWatched: true));
+            }
             if (_films is { Count: > 0 })
                 foreach (var film in _films.Take(30)) list.Children.Add(FilmRow(film));
             _panelContent.Children.Add(new ScrollViewer { Content = list, MaxHeight = 420, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
@@ -551,10 +570,15 @@ public sealed class QuietWindow : Window
             var open = QuietButton("открыть", 12);
             open.Click += (_, _) => OpenFilmsFolderRequested?.Invoke();
             footer.Children.Add(open);
+            footer.Children.Add(AddServiceLink(ServiceKind.Watch, inline: true));
             var player = QuietButton($"Плеер: {PlayerName} · сменить", 12);
             player.Click += (_, _) => { _openWord = null; OnWord("Плеер"); };
             footer.Children.Add(player);
             _panelContent.Children.Add(footer);
+        }
+        else if (word.StartsWith(AddServiceWord, StringComparison.Ordinal))
+        {
+            FillAddService(word == AddServiceWord + nameof(ServiceKind.Watch) ? ServiceKind.Watch : ServiceKind.Listen);
         }
         else if (word == "Плеер")
         {
@@ -762,6 +786,143 @@ public sealed class QuietWindow : Window
         return LinkRow(big ? $"▶  {film.Name}" : film.Name, meta, () => FilmRequested?.Invoke(film), big);
     }
 
+    // ---------- свои сервисы: сайты с видео и музыкой, добавляются как свои игры ----------
+
+    private const string AddServiceWord = "Добавить сервис:";
+
+    private string BrowserName(string? openIn) => openIn switch
+    {
+        null => "",
+        WebServices.DefaultBrowser => "браузер",
+        _ => _browsers.FirstOrDefault(b => string.Equals(b.Path, openIn, StringComparison.OrdinalIgnoreCase))?.Name ?? Apps.NameOf(openIn),
+    };
+
+    /// <summary>Строка сервиса; правый щелчок — где открывать и «Убрать». lastWatched — вторая строка YouTube.</summary>
+    private Button ServiceRow(WebService s, bool big = false, bool lastWatched = false)
+    {
+        var glyph = s.Kind == ServiceKind.Watch ? "▶  " : "♫  ";
+        var open = _web.ContainsKey(WebKey(s));
+        string title, meta;
+        if (lastWatched) (title, meta) = (glyph + s.Name + " · последний ролик", "тот, что смотрели последним");
+        else if (s.OpenIn is not null) (title, meta) = (glyph + s.Name, "откроется: " + BrowserName(s.OpenIn) + " ↗");
+        else if (open) (title, meta) = (glyph + "Вернуться к " + s.Name, "продолжить, где были");
+        else (title, meta) = (glyph + s.Name, WebServices.IsYouTube(s) ? "главная, прямо здесь" : "прямо здесь");
+        var row = LinkRow(title, meta, () => OpenService(s, lastWatched), big);
+
+        var menu = new MenuFlyout();
+        void Choice(string text, string? openIn)
+        {
+            var item = new MenuFlyoutItem { Text = (string.Equals(s.OpenIn, openIn, StringComparison.OrdinalIgnoreCase) ? "✓  " : "     ") + text };
+            item.Click += (_, _) =>
+            {
+                s.OpenIn = openIn;
+                ServicesChanged?.Invoke();
+                Refresh("Смотреть", "Слушать");
+            };
+            menu.Items.Add(item);
+        }
+        Choice("Открывать здесь, в GigaRest", null);
+        Choice("Открывать в браузере по умолчанию", WebServices.DefaultBrowser);
+        foreach (var b in _browsers) Choice("Открывать в " + b.Name, b.Path);
+        menu.Items.Add(new MenuFlyoutSeparator());
+        var remove = new MenuFlyoutItem { Text = "Убрать из списка" };
+        remove.Click += (_, _) =>
+        {
+            if (_web.ContainsKey(WebKey(s)) && _services.Count(x => WebKey(x) == WebKey(s)) == 1) CloseWeb(WebKey(s));
+            _services.Remove(s);
+            ServicesChanged?.Invoke();
+            Refresh("Смотреть", "Слушать");
+        };
+        menu.Items.Add(remove);
+        row.ContextFlyout = menu;
+        ToolTipService.SetToolTip(row, "Правый щелчок — где открывать или убрать");
+        return row;
+    }
+
+    private Button AddServiceLink(ServiceKind kind, bool inline = false)
+    {
+        var b = QuietButton(inline ? "+ сервис" : "+ Добавить сервис…", 12);
+        if (!inline) b.Margin = new Thickness(0, 2, 0, 0);
+        b.Click += (_, _) => { _openWord = null; OnWord(AddServiceWord + kind); };
+        return b;
+    }
+
+    /// <summary>Панель «Добавить сервис»: готовые одной кнопкой или свой адрес.</summary>
+    private void FillAddService(ServiceKind kind)
+    {
+        var section = kind == ServiceKind.Watch ? "Смотреть" : "Слушать";
+        _panel.Width = 560;
+        _panelContent.Children.Add(Text($"Добавить в «{section}»", 17, Hex("#E6FFFFFF"), FontWeights.Medium));
+
+        void Added(WebService service)
+        {
+            WebServices.Add(_services, service);
+            ServicesChanged?.Invoke();
+            _openWord = null;
+            OnWord(section);
+        }
+
+        var presets = WebServices.Presets.Where(p => p.Kind == kind && !_services.Any(x => x.Kind == kind && WebServices.SameSite(x.Url, p.Url))).ToList();
+        if (presets.Count > 0)
+        {
+            var label = Text("Готовые", 13, Hex("#99FFFFFF"));
+            label.Margin = new Thickness(0, 10, 0, 6);
+            _panelContent.Children.Add(label);
+            var rows = new StackPanel { Spacing = 8 };
+            foreach (var chunk in presets.Chunk(4))
+            {
+                var line = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+                foreach (var p in chunk) line.Children.Add(Chip(p.Protected ? p.Name + " ↗" : p.Name, false, () => Added(WebServices.FromPreset(p))));
+                rows.Children.Add(line);
+            }
+            _panelContent.Children.Add(rows);
+            if (presets.Any(p => p.Protected))
+            {
+                var note = Text("↗ — фильмы и музыка по подписке защищены от копирования и во встроенном окне обычно не играют. Такие сервисы откроются в вашем браузере; правым щелчком по сервису это можно поменять.", 12, Hex("#73FFFFFF"), wrap: true);
+                note.Margin = new Thickness(0, 8, 0, 0);
+                _panelContent.Children.Add(note);
+            }
+        }
+
+        var own = Text("Свой сайт", 13, Hex("#99FFFFFF"));
+        own.Margin = new Thickness(0, 16, 0, 6);
+        _panelContent.Children.Add(own);
+        var address = new TextBox { PlaceholderText = "адрес, например kino.example.ru", RequestedTheme = ElementTheme.Dark, FontSize = 14 };
+        var name = new TextBox { PlaceholderText = "название — можно не писать", RequestedTheme = ElementTheme.Dark, FontSize = 14, Margin = new Thickness(0, 8, 0, 0) };
+        var error = Text("", 12, Hex("#FFE8A05B"), wrap: true);
+        error.Visibility = Visibility.Collapsed;
+        _panelContent.Children.Add(address);
+        _panelContent.Children.Add(name);
+        _panelContent.Children.Add(error);
+        void Submit()
+        {
+            if (WebServices.NormalizeUrl(address.Text) is not { } url)
+            {
+                error.Text = "Это не похоже на адрес сайта. Пример: kino.example.ru";
+                error.Visibility = Visibility.Visible;
+                return;
+            }
+            var preset = WebServices.PresetFor(url);
+            Added(new WebService
+            {
+                Url = url, Kind = kind,
+                Name = string.IsNullOrWhiteSpace(name.Text) ? WebServices.NameFromUrl(url) : name.Text.Trim(),
+                OpenIn = preset?.Protected == true ? WebServices.DefaultBrowser : null,
+            });
+        }
+        address.KeyDown += (_, e) => { if (e.Key == global::Windows.System.VirtualKey.Enter) { e.Handled = true; Submit(); } };
+        name.KeyDown += (_, e) => { if (e.Key == global::Windows.System.VirtualKey.Enter) { e.Handled = true; Submit(); } };
+
+        var footer = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 18, Margin = new Thickness(0, 8, 0, 0) };
+        var add = QuietButton("Добавить", 13);
+        add.Click += (_, _) => Submit();
+        footer.Children.Add(add);
+        var back = QuietButton("← " + section, 12);
+        back.Click += (_, _) => { _openWord = null; OnWord(section); };
+        footer.Children.Add(back);
+        _panelContent.Children.Add(footer);
+    }
+
     /// <summary>Строка списка: название слева, пояснение справа, щелчок — действие.</summary>
     private Button LinkRow(string title, string meta, Action click, bool big = false, bool keepOpen = false)
     {
@@ -891,6 +1052,11 @@ public sealed class QuietWindow : Window
             return;
         }
         if (WebVisible) return; // клавиши — сайту
+        if (e.OriginalSource is TextBox)
+        {
+            if (e.Key == global::Windows.System.VirtualKey.Escape) { ClosePanel(); e.Handled = true; }
+            return; // стрелки — полю ввода
+        }
         if (_library is not null)
         {
             if (e.Key == global::Windows.System.VirtualKey.Escape) { CloseLibrary(); e.Handled = true; }
@@ -1250,8 +1416,7 @@ public sealed class QuietWindow : Window
 
     // ---------- сайты внутри «Тихого» экрана (Яндекс Музыка, YouTube): WebView2, свой профиль — вход запоминается ----------
 
-    private const string Music = "music", YouTube = "youtube";
-    private const string MusicUrl = "https://music.yandex.ru/";
+    private const string YouTube = "youtube";
     private const string YouTubeUrl = "https://www.youtube.com/";
     private const string YouTubeHistoryUrl = "https://www.youtube.com/feed/history";
     /// <summary>Встроенный сайт: панель, сам браузер, кнопка «Свернуть/Развернуть», состояние.</summary>
@@ -1273,7 +1438,20 @@ public sealed class QuietWindow : Window
     /// <summary>Есть развёрнутая панель — её смотрят, экран не гасим и слова не показываем.</summary>
     private bool WebVisible => _web.Values.Any(w => !w.Mini);
 
-    private void ShowWebMusic() => ShowWeb(Music, "Яндекс Музыка", MusicUrl);
+    private static string WebKey(WebService s) => WebServices.IsYouTube(s) ? YouTube : s.Url;
+
+    /// <summary>Открыть сервис: здесь (панелью) или в браузере — как выбрано у сервиса.</summary>
+    private void OpenService(WebService s, bool lastWatched = false)
+    {
+        if (s.OpenIn is not null)
+        {
+            ClosePanel();
+            OpenInBrowserRequested?.Invoke(s, WebServices.IsYouTube(s) && lastWatched ? YouTubeHistoryUrl : s.Url);
+            return;
+        }
+        if (WebServices.IsYouTube(s)) ShowYouTube(lastWatched);
+        else ShowWeb(WebKey(s), s.Name, s.Url);
+    }
 
     private void ShowYouTube(bool lastWatched)
     {

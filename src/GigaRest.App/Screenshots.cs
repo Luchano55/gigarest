@@ -149,6 +149,11 @@ internal static class Screenshots
         quiet.SetMusicApp(new GigaRest.Core.Media.AppChoice("Яндекс Музыка", @"C:\Яндекс Музыка.exe"));
         quiet.SetPlayers([new GigaRest.Core.Media.AppChoice("VLC", @"C:\Program Files\VideoLAN\VLC\vlc.exe")], null);
         quiet.SetDnd(true);
+        var services = GigaRest.Core.Media.WebServices.Defaults();
+        services.Insert(1, GigaRest.Core.Media.WebServices.FromPreset(GigaRest.Core.Media.WebServices.Presets.First(p => p.Name == "VK Видео")));
+        services.Add(GigaRest.Core.Media.WebServices.FromPreset(GigaRest.Core.Media.WebServices.Presets.First(p => p.Name == "Spotify")));
+        quiet.SetServices(services);
+        quiet.SetBrowsers([new GigaRest.Core.Media.AppChoice("Chrome", @"C:\Program Files\Google\Chrome\Application\chrome.exe")]);
         quiet.SetLastYouTube("https://www.youtube.com/watch?v=demo", "Как варить глинтвейн дома", now.AddHours(-20));
         quiet.InitNature(GigaRest.Core.Sounds.NatureSound.Rain, 0.5);
         quiet.Media = () => Task.FromResult<NowPlaying.Current?>(new("Земфира — Небо Лондона", "Яндекс Музыка", true));
@@ -169,6 +174,8 @@ internal static class Screenshots
         quiet.Media = () => Task.FromResult<NowPlaying.Current?>(null);
         quiet.OpenWordForCapture("Слушать");
         await Capture(quiet.Root, Path.Combine(dir, "22-muzyka.png"));
+        quiet.OpenWordForCapture("Добавить сервис:" + GigaRest.Core.Media.ServiceKind.Watch);
+        await Capture(quiet.Root, Path.Combine(dir, "26-servis.png"));
 
         // Плитки на втором мониторе (на сервере сборки живых копий нет — заглушки).
         var tilesWindow = new TilesWindow();

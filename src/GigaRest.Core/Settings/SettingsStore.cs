@@ -28,6 +28,7 @@ public sealed class SettingsStore
         s.CustomGames ??= [];
         s.CustomGames.RemoveAll(g => string.IsNullOrWhiteSpace(g.Path));
         s.FilmsPosition ??= [];
+        s.WebServices = Media.WebServices.Normalize(s.WebServices);
         s.TilesCount = Math.Clamp(s.TilesCount, 1, 4);
         s.DimMinutes = Math.Clamp(s.DimMinutes, 1, 240);
         s.ScreenOffMinutes = Math.Clamp(s.ScreenOffMinutes, 0, 600);

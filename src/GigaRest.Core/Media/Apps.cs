@@ -28,6 +28,26 @@ public static class Apps
         (["mpv", "mpv.exe"], "mpv"),
     ];
 
+    // Браузеры: ярлык в «Пуске» или имя exe. Яндекс Браузер — по названию ярлыка (его exe — просто browser.exe).
+    private static readonly (string[] Keys, string Name)[] Browsers =
+    [
+        (["google chrome", "chrome.exe"], "Chrome"),
+        (["microsoft edge", "msedge.exe"], "Edge"),
+        (["firefox", "mozilla firefox", "firefox.exe"], "Firefox"),
+        (["yandex", "yandex browser", "яндекс браузер", "яндекс.браузер"], "Яндекс Браузер"),
+        (["opera browser", "opera"], "Opera"),
+        (["opera gx browser", "opera gx"], "Opera GX"),
+        (["brave", "brave.exe"], "Brave"),
+        (["vivaldi", "vivaldi.exe"], "Vivaldi"),
+        (["zen browser", "zen", "zen.exe"], "Zen"),
+        (["arc", "arc.exe"], "Arc"),
+        (["librewolf", "librewolf.exe"], "LibreWolf"),
+        (["floorp", "floorp.exe"], "Floorp"),
+        (["waterfox", "waterfox.exe"], "Waterfox"),
+    ];
+
+    public static List<AppChoice> FindBrowsers(IEnumerable<ShortcutInfo> shortcuts) => Find(shortcuts, Browsers);
+
     public static AppChoice? FindMusic(IEnumerable<ShortcutInfo> shortcuts) => Find(shortcuts, Music).FirstOrDefault();
 
     public static List<AppChoice> FindPlayers(IEnumerable<ShortcutInfo> shortcuts) => Find(shortcuts, Players);
