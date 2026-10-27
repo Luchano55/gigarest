@@ -128,7 +128,7 @@ internal static class Screenshots
         var now = DateTime.UtcNow;
         quiet.SetGames(GigaRest.Core.Games.GameLibraries.Merge(
         [
-            new() { Id = "steam:1", Name = "Тихая гавань", Store = "Steam", LastPlayedUtc = now.AddDays(-1) },
+            new() { Id = "steam:1", Name = "Тихая гавань", Store = "Steam", LastPlayedUtc = now.AddDays(-1), PlayMinutes = 740, PlayMinutes2Weeks = 95 },
             new() { Id = "steam:2", Name = "Северный маршрут", Store = "Steam", LastPlayedUtc = now.AddDays(-4) },
             new() { Id = "epic:3", Name = "Дом у озера", Store = "Epic" },
             new() { Id = "gog:4", Name = "Старый маяк", Store = "GOG", LastPlayedUtc = now.AddDays(-16) },
@@ -149,6 +149,8 @@ internal static class Screenshots
         quiet.SetMusicApp(new GigaRest.Core.Media.AppChoice("Яндекс Музыка", @"C:\Яндекс Музыка.exe"));
         quiet.SetPlayers([new GigaRest.Core.Media.AppChoice("VLC", @"C:\Program Files\VideoLAN\VLC\vlc.exe")], null);
         quiet.SetDnd(true);
+        quiet.SetLastYouTube("https://www.youtube.com/watch?v=demo", "Как варить глинтвейн дома", now.AddHours(-20));
+        quiet.InitNature(GigaRest.Core.Sounds.NatureSound.Rain, 0.5);
         quiet.Media = () => Task.FromResult<NowPlaying.Current?>(new("Земфира — Небо Лондона", "Яндекс Музыка", true));
         await Task.Delay(2500);
         quiet.OpenWordForCapture("Играть");
@@ -184,6 +186,19 @@ internal static class Screenshots
         await Task.Delay(1500);
         await Capture(tilesWindow.Root, Path.Combine(dir, "12-plitki.png"));
 
+        // Статистика отдыха на правдоподобных данных.
+        var stats = new GigaRest.Core.Stats.RestStats();
+        var today = DateTime.Today;
+        foreach (var (daysAgo, from, to) in new[] { (0, 19.0, 22.5), (1, 20.0, 23.0), (2, 19.5, 21.0), (4, 18.5, 23.5), (5, 20.0, 22.0), (6, 21.0, 23.0) })
+            stats.AddRest(today.AddDays(-daysAgo).AddHours(from).ToUniversalTime(), today.AddDays(-daysAgo).AddHours(to).ToUniversalTime());
+        foreach (var (id, name, n) in new[] { ("bnet:wow", "World of Warcraft", 5), ("steam:1", "Тихая гавань", 3), ("bnet:fenris", "Diablo IV", 1) })
+            for (var i = 0; i < n; i++) stats.AddLaunch(new GigaRest.Core.Games.Game { Id = id, Name = name, Store = "Steam" }, DateTime.UtcNow.AddDays(-i));
+        var statsWindow = new StatsWindow();
+        statsWindow.UseDesignSizeForCapture();
+        statsWindow.Activate();
+        statsWindow.Show(stats, [new GigaRest.Core.Games.Game { Id = "steam:1", Name = "Тихая гавань", Store = "Steam", PlayMinutes = 740, PlayMinutes2Weeks = 95 }], DateTime.Now);
+        await Capture(statsWindow.Root, Path.Combine(dir, "25-statistika.png"));
+
         // Окно хода обновления.
         var update = new UpdateWindow("0.2.1");
         update.Activate();
@@ -196,6 +211,7 @@ internal static class Screenshots
         quiet.CloseForGood();
         tilesWindow.CloseForGood();
         update.Close();
+        statsWindow.CloseForGood();
         window.CloseForGood();
         return true;
     }

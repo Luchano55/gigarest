@@ -4,6 +4,7 @@ using GigaRest.Core.Desktop;
 using GigaRest.Core.Games;
 using GigaRest.Core.Media;
 using GigaRest.Core.Scenes;
+using GigaRest.Core.Sounds;
 using GigaRest.Windows;
 using Microsoft.UI;
 using Microsoft.UI.Text;
@@ -139,6 +140,28 @@ public sealed class QuietWindow : Window
     }
 
     /// <summary>Установленные игры: сначала недавние. Вызывать из потока окна.</summary>
+    // ---------- звуки природы и «Продолжить» ----------
+
+    private readonly NaturePlayer _nature = new();
+    private NatureSound? _lastNature;
+    private (string Url, string Title, DateTime Utc)? _lastYouTube;
+
+    /// <summary>Выбрали звук природы (null — тишина) или громкость — запомнить.</summary>
+    public event Action<NatureSound?, double>? NatureChanged;
+    /// <summary>В YouTube открыли ролик — запомнить для «Продолжить».</summary>
+    public event Action<string, string>? YouTubeWatched;
+
+    public void InitNature(NatureSound? last, double volume)
+    {
+        _lastNature = last;
+        _nature.Volume = volume;
+    }
+
+    public void SetLastYouTube(string? url, string? title, DateTime? utc)
+    {
+        _lastYouTube = url is not null && utc is { } t ? (url, title ?? "ролик", t) : null;
+    }
+
     public event Action? AddGameRequested;
     public event Action<Game>? RemoveGameRequested;
     public event Action? OpenCoversRequested;
@@ -469,14 +492,28 @@ public sealed class QuietWindow : Window
                 _panelContent.Children.Add(library);
             }
         }
-        else if (word == "Продолжить" && (_games?.FirstOrDefault(g => g.LastPlayedUtc is not null) is not null || _lastFilm is not null))
+        else if (word == "Продолжить")
         {
-            _panel.Width = 520;
+            _panel.Width = 540;
             _panelContent.Children.Add(Text("Продолжить", 17, Hex("#E6FFFFFF"), FontWeights.Medium));
             var rows = new StackPanel { Spacing = 2, Margin = new Thickness(-12, 6, -12, 0) };
             if (_games?.FirstOrDefault(g => g.LastPlayedUtc is not null) is { } last) rows.Children.Add(GameRow(last, big: true));
             if (_lastFilm is { } film) rows.Children.Add(FilmRow(film, big: true));
+            if (_lastYouTube is { } yt && DateTime.UtcNow - yt.Utc < TimeSpan.FromDays(14))
+                rows.Children.Add(LinkRow("▶  " + yt.Title, "YouTube · " + GameLibraries.LastPlayedText(yt.Utc, DateTime.Now),
+                    () => ShowWeb(YouTube, "YouTube", yt.Url, navigate: true), big: true));
+            if (_lastNature is { } sound && _nature.Current is null)
+                rows.Children.Add(LinkRow("♫  Звуки: " + NatureSounds.Name(sound), "как в прошлый раз", () => PlayNature(sound), big: true));
             _panelContent.Children.Add(rows);
+            var music = new StackPanel { Margin = new Thickness(-12, 0, -12, 0) };
+            _panelContent.Children.Add(music);
+            _ = FillContinueMusicAsync(music);
+            if (rows.Children.Count == 0)
+            {
+                var empty = Text(_games is null ? "Ищем, что продолжить…" : "Здесь будут последняя игра, фильм, ролик YouTube и музыка — как только вы их откроете в GigaRest.", 13, Hex("#99FFFFFF"), wrap: true);
+                empty.Margin = new Thickness(0, 6, 0, 4);
+                _panelContent.Children.Add(empty);
+            }
         }
         else if (word == "Слушать")
         {
@@ -489,6 +526,7 @@ public sealed class QuietWindow : Window
             box.Children.Add(Text("…", 13, Hex("#99FFFFFF")));
             _panelContent.Children.Add(box);
             _ = FillListenAsync(box);
+            _panelContent.Children.Add(NatureSection());
         }
         else if (word == "Смотреть")
         {
@@ -750,6 +788,70 @@ public sealed class QuietWindow : Window
         b.Resources["ButtonBorderBrushPressed"] = Brush(Colors.Transparent);
         b.Click += (_, _) => { if (!keepOpen) ClosePanel(); click(); };
         return b;
+    }
+
+    /// <summary>Музыка на паузе — «Продолжить: исполнитель — песня».</summary>
+    private async Task FillContinueMusicAsync(StackPanel into)
+    {
+        var current = await Media();
+        if (_openWord != "Продолжить" || current is null || current.Playing) return;
+        into.Children.Add(LinkRow("♫  " + current.Text, current.Source.Length > 0 ? current.Source + " · пауза" : "на паузе", async () =>
+        {
+            await MediaControl(MediaCommand.PlayPause);
+        }, big: true));
+    }
+
+    /// <summary>«Звуки природы»: дождь, море, костёр, ветер — один за раз, и громкость.</summary>
+    private StackPanel NatureSection()
+    {
+        var box = new StackPanel { Spacing = 8, Margin = new Thickness(0, 14, 0, 0) };
+        box.Children.Add(Text("Звуки природы", 13, Hex("#99FFFFFF"), FontWeights.SemiBold));
+        var chips = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+        foreach (var sound in Enum.GetValues<NatureSound>())
+        {
+            var s = sound;
+            chips.Children.Add(NatureChip(NatureSounds.Name(s), _nature.Current == s, () => PlayNature(s)));
+        }
+        chips.Children.Add(NatureChip("Тишина", _nature.Current is null, StopNature));
+        box.Children.Add(chips);
+        var volume = new Slider { Minimum = 0, Maximum = 100, Value = _nature.Volume * 100, Width = 260, HorizontalAlignment = HorizontalAlignment.Left };
+        volume.Resources["SliderTrackValueFill"] = Brush("#E8A05B");
+        volume.Resources["SliderTrackValueFillPointerOver"] = Brush("#F0B46C");
+        volume.Resources["SliderThumbBackground"] = Brush("#F7CA8C");
+        volume.ValueChanged += (_, e) => { _nature.Volume = e.NewValue / 100; NatureChanged?.Invoke(_nature.Current ?? _lastNature, _nature.Volume); };
+        ToolTipService.SetToolTip(volume, "Громкость звуков природы");
+        box.Children.Add(volume);
+        return box;
+    }
+
+    private static Button NatureChip(string text, bool selected, Action click)
+    {
+        var b = new Button
+        {
+            Content = Text(text, 12.5, selected ? Hex("#24170C") : Hex("#D0D3DB"), selected ? FontWeights.SemiBold : FontWeights.Normal),
+            Padding = new Thickness(12, 5, 12, 5), CornerRadius = new CornerRadius(999),
+            Background = selected ? Vertical(Hex("#F7CA8C"), Hex("#E8A05B")) : Brush("#14FFFFFF"),
+            BorderBrush = Brush(selected ? "#99784620" : "#1FFFFFFF"), BorderThickness = new Thickness(1),
+        };
+        b.Resources["ButtonBackgroundPointerOver"] = selected ? Vertical(Hex("#F9D39C"), Hex("#EDAA68")) : Brush("#24FFFFFF");
+        b.Resources["ButtonBackgroundPressed"] = Brush("#33FFFFFF");
+        b.Click += (_, _) => click();
+        return b;
+    }
+
+    private async void PlayNature(NatureSound sound)
+    {
+        _lastNature = sound;
+        NatureChanged?.Invoke(sound, _nature.Volume);
+        var reopen = _openWord;
+        await _nature.PlayAsync(sound);
+        if (reopen == "Слушать" && _openWord == "Слушать") { _openWord = null; OnWord("Слушать"); }
+    }
+
+    private void StopNature()
+    {
+        _nature.Stop();
+        if (_openWord == "Слушать") { _openWord = null; OnWord("Слушать"); }
     }
 
     /// <summary>Для скриншотов: открыть раздел нижней строки.</summary>
@@ -1094,6 +1196,7 @@ public sealed class QuietWindow : Window
         name.TextTrimming = TextTrimming.CharacterEllipsis;
         box.Children.Add(name);
         box.Children.Add(Text(GameMeta(game), 11.5, Hex("#80FFFFFF")));
+        if (game.PlayMinutes is { } minutes) box.Children.Add(Text(GameLibraries.PlaytimeText(minutes), 11.5, Hex("#66FFFFFF")));
         var b = new Button
         {
             Content = box, Padding = new Thickness(6), CornerRadius = new CornerRadius(14), VerticalAlignment = VerticalAlignment.Top,
@@ -1238,7 +1341,20 @@ public sealed class QuietWindow : Window
             web.CoreWebView2.NewWindowRequested += (_, e) => { e.Handled = true; web.CoreWebView2.Navigate(e.Uri); };
             // Кнопка «во весь экран» в самом ролике — панель на весь монитор, без рамки и полосы.
             web.CoreWebView2.ContainsFullScreenElementChanged += (_, _) => SetFull(panel, web.CoreWebView2.ContainsFullScreenElement);
-            if (key == YouTube) web.CoreWebView2.NavigationCompleted += async (_, _) => await OpenLastWatchedAsync(web);
+            if (key == YouTube)
+            {
+                web.CoreWebView2.NavigationCompleted += async (_, _) => await OpenLastWatchedAsync(web);
+                // Открыли ролик — запомнить адрес и название для «Продолжить».
+                web.CoreWebView2.DocumentTitleChanged += (_, _) =>
+                {
+                    var src = web.CoreWebView2.Source;
+                    var title = web.CoreWebView2.DocumentTitle;
+                    if (!src.Contains("/watch?v=", StringComparison.Ordinal) || string.IsNullOrWhiteSpace(title) || title == "YouTube") return;
+                    title = title.EndsWith(" - YouTube", StringComparison.Ordinal) ? title[..^10] : title;
+                    _lastYouTube = (src, title, DateTime.UtcNow);
+                    YouTubeWatched?.Invoke(src, title);
+                };
+            }
             _openLastWatched = openLastWatched;
             web.Source = new Uri(url);
         }
@@ -1475,6 +1591,7 @@ public sealed class QuietWindow : Window
 
     public void CloseForGood()
     {
+        _nature.Dispose();
         SetCursorHidden(false);
         CloseFilm(); // где остановились — запомнится
         foreach (var key in _web.Keys.ToList()) CloseWeb(key);

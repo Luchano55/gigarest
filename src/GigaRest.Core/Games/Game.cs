@@ -21,6 +21,9 @@ public sealed record Game
     public string? CoverPath { get; init; }
     /// <summary>Широкая картинка для шапки библиотеки (Steam: library_hero.jpg).</summary>
     public string? HeroPath { get; init; }
+    /// <summary>Сколько наиграно, минут (Steam считает сам): всего и за две недели.</summary>
+    public int? PlayMinutes { get; init; }
+    public int? PlayMinutes2Weeks { get; init; }
     /// <summary>Файл, чей значок показать, если обложки нет (exe или ico игры).</summary>
     public string? IconPath { get; init; }
 }

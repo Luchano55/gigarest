@@ -11,6 +11,7 @@ public sealed class AppPaths
     public string Root { get; }
     public string SettingsFile => Path.Combine(Root, "settings.json");
     public string SessionFile => Path.Combine(Root, "session.json");
+    public string StatsFile => Path.Combine(Root, "stats.json");
     public string LogsDir => Path.Combine(Root, "logs");
 
     /// <summary>Переменная GIGAREST_DATA подменяет папку (тесты, скриншоты в CI).</summary>

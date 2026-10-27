@@ -23,7 +23,7 @@ namespace GigaRest.App;
 public sealed partial class App : Application, IXamlMetadataProvider
 {
     private const int HotkeyToggle = 1, HotkeyTiles = 2;
-    private const int MenuToggle = 1, MenuShow = 2, MenuPrograms = 4, MenuTest = 5, MenuTestClose = 6, MenuAutostart = 7, MenuSettings = 8, MenuUpdate = 10, MenuLogs = 3, MenuExit = 9;
+    private const int MenuToggle = 1, MenuShow = 2, MenuPrograms = 4, MenuTest = 5, MenuTestClose = 6, MenuAutostart = 7, MenuSettings = 8, MenuUpdate = 10, MenuLogs = 3, MenuExit = 9, MenuStats = 11;
 
     private readonly XamlControlsXamlMetaDataProvider _metadata = new();
     private readonly string[] _args;
@@ -242,6 +242,16 @@ public sealed partial class App : Application, IXamlMetadataProvider
             };
             _quiet.ReturnRequested += () => _ = ReturnToWorkAsync();
             _quiet.PlayRequested += PlayGame;
+            _quiet.InitNature(_settings.LastNatureSound, _settings.NatureVolume);
+            _quiet.SetLastYouTube(_settings.LastYouTubeUrl, _settings.LastYouTubeTitle, _settings.LastYouTubeUtc);
+            _quiet.NatureChanged += (sound, volume) => { _settings.LastNatureSound = sound; _settings.NatureVolume = volume; SaveSettings(); };
+            _quiet.YouTubeWatched += (url, title) =>
+            {
+                _settings.LastYouTubeUrl = url;
+                _settings.LastYouTubeTitle = title;
+                _settings.LastYouTubeUtc = DateTime.UtcNow;
+                SaveSettings();
+            };
             _quiet.AddGameRequested += () => _ = AddGameAsync();
             _quiet.RemoveGameRequested += game =>
             {
@@ -642,6 +652,37 @@ public sealed partial class App : Application, IXamlMetadataProvider
         catch (Exception ex) { Log.Error("Добавить игру", ex); }
     }
 
+    private StatsWindow? _statsWindow;
+
+    // Статистика: сводка из stats.json, время Steam — из его настроек (в фоне).
+    private void ShowStats()
+    {
+        _statsWindow ??= new StatsWindow();
+        var stats = new GigaRest.Core.Stats.StatsStore(_paths.StatsFile).Load();
+        _statsWindow.Show(stats, [], DateTime.Now);
+        _statsWindow.Present();
+        var window = _statsWindow;
+        _ = Task.Run(() =>
+        {
+            List<GigaRest.Core.Games.Game> games;
+            try { games = GameSources.FindInstalled(); }
+            catch (Exception ex) { Log.Error("Статистика: игры", ex); return; }
+            _queue.TryEnqueue(() => window.Show(stats, games, DateTime.Now));
+        });
+    }
+
+    private void RecordStats(Action<GigaRest.Core.Stats.RestStats> change)
+    {
+        try
+        {
+            var store = new GigaRest.Core.Stats.StatsStore(_paths.StatsFile);
+            var stats = store.Load();
+            change(stats);
+            store.Save(stats);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { Log.Warn("Статистика: " + ex.Message); }
+    }
+
     private void PlayGame(GigaRest.Core.Games.Game game)
     {
         Log.Info($"Играть: {game.Name} ({game.Id})");
@@ -652,6 +693,7 @@ public sealed partial class App : Application, IXamlMetadataProvider
             return;
         }
         _settings.GamesPlayed[game.Id] = DateTime.UtcNow;
+        RecordStats(s => s.AddLaunch(game, DateTime.UtcNow));
         SaveSettings();
     }
 
@@ -881,6 +923,7 @@ public sealed partial class App : Application, IXamlMetadataProvider
         new TrayMenuItem(MenuTestClose, "Закрыть тестовые окна", !_busy),
         null,
         new TrayMenuItem(MenuSettings, "Настройки…"),
+        new TrayMenuItem(MenuStats, "Статистика отдыха…"),
         _updater?.Available is { } update
             ? new TrayMenuItem(MenuUpdate, $"Обновить до {update.Version}", Bold: false)
             : new TrayMenuItem(MenuUpdate, "Проверить обновления"),
@@ -900,6 +943,7 @@ public sealed partial class App : Application, IXamlMetadataProvider
             case MenuTest: _ = StartTestAsync(); break;
             case MenuTestClose: CloseTestWindows(); break;
             case MenuSettings: ShowSettings(); break;
+            case MenuStats: ShowStats(); break;
             case MenuUpdate: _ = UpdateFromMenuAsync(); break;
             case MenuAutostart:
                 var enable = !Autostart.IsEnabled(ExePath);
@@ -1118,7 +1162,9 @@ public sealed partial class App : Application, IXamlMetadataProvider
             w.ShowReturning();
             w.Present();
             var progress = new Progress<SwitchProgress>(w.UpdateProgress);
+            var restStarted = new SessionStore(_paths.SessionFile).Load()?.StartedUtc;
             var report = await Task.Run(() => _switcher.ReturnToWork(progress, CancellationToken.None));
+            if (restStarted is { } started && started > DateTime.MinValue) RecordStats(s => s.AddRest(started, DateTime.UtcNow));
             w.ShowWork(report);
             _tray?.SetTip(TrayTip);
             _tray?.ShowBalloon("Работа", report.Summary);
@@ -1142,6 +1188,7 @@ public sealed partial class App : Application, IXamlMetadataProvider
         _window?.CloseForGood();
         _programs?.CloseForGood();
         _settingsWindow?.CloseForGood();
+        _statsWindow?.CloseForGood();
         ExitRestScreens();
         _windowEvents?.Dispose();
         _scheduleTimer?.Stop();

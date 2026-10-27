@@ -51,6 +51,13 @@ public sealed class AppSettings
     public Dictionary<string, DateTime> GamesPlayed { get; set; } = [];
     /// <summary>Игры без магазина, добавленные вручную.</summary>
     public List<Games.CustomGame> CustomGames { get; set; } = [];
+    /// <summary>Звуки природы: последний выбранный (для «Продолжить») и громкость 0–1.</summary>
+    public Sounds.NatureSound? LastNatureSound { get; set; }
+    public double NatureVolume { get; set; } = 0.5;
+    /// <summary>Последний ролик YouTube, открытый в GigaRest, — для «Продолжить».</summary>
+    public string? LastYouTubeUrl { get; set; }
+    public string? LastYouTubeTitle { get; set; }
+    public DateTime? LastYouTubeUtc { get; set; }
     /// <summary>Папка с фильмами для «Смотреть»; пусто — «Видео» пользователя.</summary>
     public string? FilmsFolder { get; set; }
     /// <summary>Какие фильмы открывали из «Смотреть» (путь → время, UTC) — для «Продолжить».</summary>

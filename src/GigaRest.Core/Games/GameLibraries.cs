@@ -31,6 +31,7 @@ public static class GameLibraries
         }
 
         var seen = new HashSet<string>();
+        Dictionary<string, (int Total, int TwoWeeks)>? playtime = null;
         foreach (var lib in libraries.Distinct(StringComparer.OrdinalIgnoreCase))
         {
             var apps = Path.Combine(lib, "steamapps");
@@ -51,9 +52,12 @@ public static class GameLibraries
                     // StateFlags: 4 — установлена полностью (бывают и вместе с другими флагами, например обновление).
                     if (int.TryParse(state!["StateFlags"], out var flags) && (flags & 4) == 0) continue;
                     DateTime? last = long.TryParse(state["LastPlayed"], out var unix) && unix > 0 ? DateTimeOffset.FromUnixTimeSeconds(unix).UtcDateTime : null;
+                    playtime ??= SteamPlaytime(steamRoot);
+                    var played = playtime.TryGetValue(id, out var pt) ? pt : (0, 0);
                     games.Add(new Game
                     {
                         Id = "steam:" + id, Name = name.Trim(), Store = "Steam", LastPlayedUtc = last, LaunchUri = "steam://rungameid/" + id,
+                        PlayMinutes = played.Item1 > 0 ? played.Item1 : null, PlayMinutes2Weeks = played.Item2 > 0 ? played.Item2 : null,
                         CoverPath = SteamCover(steamRoot, id),
                         HeroPath = SteamCacheFile(steamRoot, id, "library_hero.jpg"),
                     });
@@ -94,6 +98,40 @@ public static class GameLibraries
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
         return null;
     }
+
+    /// <summary>
+    /// Сколько наиграно в Steam: userdata\&lt;id&gt;\config\localconfig.vdf → apps → &lt;appid&gt; → Playtime, Playtime2wks (минуты).
+    /// Если на компьютере несколько учётных записей Steam — берём наибольшее.
+    /// </summary>
+    public static Dictionary<string, (int Total, int TwoWeeks)> SteamPlaytime(string steamRoot)
+    {
+        var result = new Dictionary<string, (int, int)>();
+        var userdata = Path.Combine(steamRoot, "userdata");
+        if (!Directory.Exists(userdata)) return result;
+        try
+        {
+            foreach (var user in Directory.GetDirectories(userdata))
+            {
+                var file = Path.Combine(user, "config", "localconfig.vdf");
+                if (!File.Exists(file)) continue;
+                var apps = VdfNode.Parse(File.ReadAllText(file)).Child("UserLocalConfigStore")?.Child("Software")?.Child("Valve")?.Child("Steam")?.Child("apps");
+                if (apps is null) continue;
+                foreach (var (id, app) in apps.Children)
+                {
+                    int.TryParse(app["Playtime"], out var total);
+                    int.TryParse(app["Playtime2wks"], out var two);
+                    if (total == 0 && two == 0) continue;
+                    var had = result.TryGetValue(id, out var h) ? h : (0, 0);
+                    result[id] = (Math.Max(had.Item1, total), Math.Max(had.Item2, two));
+                }
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { Log.Warn("Steam, время в играх: " + ex.Message); }
+        return result;
+    }
+
+    /// <summary>«12 ч в игре», «40 мин в игре».</summary>
+    public static string PlaytimeText(int minutes) => minutes >= 60 ? $"{minutes / 60} ч в игре" : $"{minutes} мин в игре";
 
     /// <summary>Файл из кэша Steam по имени — в старом («570_имя») или новом («570\\…\\имя») виде.</summary>
     public static string? SteamCacheFile(string steamRoot, string appId, string name)

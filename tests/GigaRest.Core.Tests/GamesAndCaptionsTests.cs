@@ -437,3 +437,83 @@ public class LocalGamesTests
         Assert.StartsWith("custom:", g.Id);
     }
 }
+
+public class NatureSoundsTests
+{
+    [Theory]
+    [InlineData(GigaRest.Core.Sounds.NatureSound.Rain)]
+    [InlineData(GigaRest.Core.Sounds.NatureSound.Sea)]
+    [InlineData(GigaRest.Core.Sounds.NatureSound.Fire)]
+    [InlineData(GigaRest.Core.Sounds.NatureSound.Wind)]
+    public void LoopIsAudibleUnclippedAndSeamless(GigaRest.Core.Sounds.NatureSound sound)
+    {
+        var s = GigaRest.Core.Sounds.NatureSounds.Generate(sound, seconds: 8);
+        Assert.Equal(8 * 44100 * 2, s.Length);
+        var rms = Math.Sqrt(s.Average(v => (double)v * v));
+        Assert.True(rms > 300, $"слишком тихо: {rms}");
+        Assert.True(s.Max(v => Math.Abs((int)v)) < short.MaxValue, "перегруз");
+        // Шов кольца: последний и первый отсчёты рядом (нет щелчка при повторе).
+        Assert.True(Math.Abs(s[^2] - s[0]) < 9000);
+    }
+
+    [Fact]
+    public void WavHeader()
+    {
+        var wav = GigaRest.Core.Sounds.NatureSounds.ToWav([1, -1, 2, -2]);
+        Assert.Equal("RIFF", System.Text.Encoding.ASCII.GetString(wav, 0, 4));
+        Assert.Equal(44 + 8, wav.Length);
+    }
+}
+
+public class RestStatsTests
+{
+    [Fact]
+    public void DaysWeekTopGames()
+    {
+        var tz = TimeZoneInfo.Utc;
+        var s = new GigaRest.Core.Stats.RestStats();
+        var now = new DateTime(2026, 10, 27, 23, 0, 0);
+        s.AddRest(new DateTime(2026, 10, 27, 19, 0, 0), new DateTime(2026, 10, 27, 21, 30, 0)); // сегодня 2,5 ч
+        s.AddRest(new DateTime(2026, 10, 25, 23, 0, 0), new DateTime(2026, 10, 26, 1, 0, 0));  // через полночь: 1 ч + 1 ч
+        s.AddRest(new DateTime(2026, 10, 10, 19, 0, 0), new DateTime(2026, 10, 10, 20, 0, 0)); // давно — не в неделе
+        s.AddRest(new DateTime(2026, 10, 20, 19, 0, 0), new DateTime(2026, 10, 24, 20, 0, 0)); // забытый — не считаем
+        var wow = new Game { Id = "bnet:wow", Name = "World of Warcraft", Store = "Battle.net" };
+        var d4 = new Game { Id = "bnet:fenris", Name = "Diablo IV", Store = "Battle.net" };
+        s.AddLaunch(wow, now.AddDays(-1)); s.AddLaunch(wow, now.AddDays(-2)); s.AddLaunch(d4, now.AddDays(-3));
+
+        var sum = s.Summarize(now, tz);
+
+        Assert.Equal(150, sum.Today.TotalMinutes);
+        Assert.Equal(270, sum.Week.TotalMinutes);
+        Assert.Equal(60, sum.Days[4].Minutes); // 25-е
+        Assert.Equal(60, sum.Days[5].Minutes); // 26-е
+        Assert.Equal(("World of Warcraft", 2), sum.TopGames[0]);
+        Assert.Equal(2, sum.Evenings);
+        Assert.Equal("2 ч 30 мин", GigaRest.Core.Stats.RestStats.Format(sum.Today));
+    }
+}
+
+public class SteamPlaytimeTests
+{
+    [Fact]
+    public void ReadsLocalConfig()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "gigarest steam " + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var cfg = Path.Combine(dir, "userdata", "123", "config");
+            Directory.CreateDirectory(cfg);
+            File.WriteAllText(Path.Combine(cfg, "localconfig.vdf"), """
+                "UserLocalConfigStore" { "Software" { "Valve" { "Steam" { "apps" {
+                  "570" { "LastPlayed" "1761400000" "Playtime" "740" "Playtime2wks" "95" }
+                  "10" { "LastPlayed" "1" }
+                } } } } }
+                """);
+            var pt = GameLibraries.SteamPlaytime(dir);
+            Assert.Equal((740, 95), pt["570"]);
+            Assert.False(pt.ContainsKey("10"));
+            Assert.Equal("12 ч в игре", GameLibraries.PlaytimeText(740));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+}
